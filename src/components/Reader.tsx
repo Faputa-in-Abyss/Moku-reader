@@ -353,7 +353,7 @@ export default function Reader() {
       }, 300);
     }
 
-    if (e.clientX < 60 && !sidebarOpenRef.current && !settingsOpenRef.current) {
+    if (e.clientX < 60 && e.clientY > 100 && e.clientY < window.innerHeight - 60 && !sidebarOpenRef.current && !settingsOpenRef.current) {
       setSidebarOpen(true);
     } else if (!settingsOpenRef.current && e.clientX >= 60) {
       if (sidebarOpenRef.current) {
@@ -600,7 +600,12 @@ export default function Reader() {
       }}>
         <div className="light-follow" />
         <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
-          <button className="btn" style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer" }} onClick={closeReader}>
+          <button
+            className="btn"
+            onMouseEnter={(e) => { const t = e.currentTarget; t.style.background = "rgba(var(--accent-rgb), 0.12)"; t.style.boxShadow = "0 0 20px rgba(var(--accent-rgb), 0.25)"; }}
+            onMouseLeave={(e) => { const t = e.currentTarget; t.style.background = "none"; t.style.boxShadow = "none"; }}
+            style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: 10, padding: "6px 14px", transition: "all 0.25s ease" }}
+            onClick={closeReader}>
             ← 返回书库
           </button>
           <span style={{ fontFamily: "Georgia,Noto Serif SC,serif", fontWeight: 500 }}>{book?.title}</span>

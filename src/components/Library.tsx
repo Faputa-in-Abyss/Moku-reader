@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useStore, BookData } from "../store";
 
 export default function Library() {
@@ -8,28 +8,25 @@ export default function Library() {
   const refreshKey = useStore((s) => s.refreshKey);
   const triggerRefresh = useStore((s) => s.triggerRefresh);
 
-  // 右键菜单状态
-  const [ctxMenu, setCtxMenu] = useState<{
-    book: BookData;
-    x: number;
-    y: number;
-  } | null>(null);
-
+  const [ctxMenu, setCtxMenu] = useState<{ book: BookData; x: number; y: number } | null>(null);
   const [iconPicker, setIconPicker] = useState<BookData | null>(null);
+  const animRef = useRef<number>(0);
 
   const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         const lib: BookData[] = await invoke("get_library");
-        setBooks(lib);
+        if (!cancelled) setBooks(lib);
       } catch {
-        setBooks(sampleBooks);
+        if (!cancelled) setBooks(sampleBooks);
       }
     }
     load();
+    return () => { cancelled = true; };
   }, [refreshKey]);
 
   // 点击其他地方关闭菜单
