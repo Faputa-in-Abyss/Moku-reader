@@ -1,0 +1,7 @@
+﻿node_modules/
+.vite/
+dist/
+target/
+*.log
+.DS_Store
+Thumbs.db
