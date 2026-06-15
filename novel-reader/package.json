@@ -1,0 +1,16 @@
+{
+  "name": "novel-reader",
+  "version": "1.0.0",
+  "description": "本地小说阅读器 - 柔和梦幻光晕",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "dependencies": {
+    "electron": "^33.0.0",
+    "epub": "^1.2.1",
+    "html-to-text": "^9.0.5",
+    "cheerio": "^1.0.0"
+  }
+}
