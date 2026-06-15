@@ -86,6 +86,17 @@ export default function Library() {
     } catch {}
   };
 
+  const handleReparse = async (book: BookData) => {
+    setCtxMenu(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("reparse_book_chapters", { bookId: book.id });
+      triggerRefresh();
+    } catch (e) {
+      console.error("重新解析失败:", e);
+    }
+  };
+
   if (books.length === 0) {
     return (
       <section className="library">

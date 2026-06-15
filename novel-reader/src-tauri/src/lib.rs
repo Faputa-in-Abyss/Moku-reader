@@ -86,6 +86,13 @@ fn import_book(path: String, state: State<AppState>) -> Result<Book, String> {
 
     let chapters = parse_chapters(&content);
     debug_log!("   解析章节: {} 章", chapters.len());
+    if !chapters.is_empty() {
+        debug_log!("   第一章标题: {:?}", chapters[0].title);
+    }
+    // 打印前5行内容，方便调试章节解析
+    for (idx, line) in content.lines().take(5).enumerate() {
+        debug_log!("   第{}行: {:?}", idx + 1, line);
+    }
     let title = extract_title(&path, &content);
     debug_log!("   书名: {}", &title);
     let id = generate_id();
@@ -177,6 +184,22 @@ fn remove_book(book_id: String, state: State<AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn reparse_book_chapters(book_id: String, state: State<AppState>) -> Result<(), String> {
+    debug_log!("🔄 重新解析章节: book={}", &book_id);
+    let mut lib = state.library.lock().unwrap();
+    let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
+    let new_chapters = parse_chapters(&book.content);
+    debug_log!("   旧章节数: {}, 新章节数: {}", book.chapters.len(), new_chapters.len());
+    if !new_chapters.is_empty() {
+        debug_log!("   第一章标题: {:?}", new_chapters[0].title);
+    }
+    book.chapters = new_chapters;
+    book.total_chapters = book.chapters.len();
+    save_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
 fn rename_book(book_id: String, new_title: String, state: State<AppState>) -> Result<(), String> {
     debug_log!("✏️ 重命名: book={} -> {}", &book_id, &new_title);
     let mut lib = state.library.lock().unwrap();
@@ -243,6 +266,7 @@ pub fn run() {
             get_chapter_content,
             update_progress,
             remove_book,
+            reparse_book_chapters,
             rename_book,
             toggle_favorite,
             open_file_location,

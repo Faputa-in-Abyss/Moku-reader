@@ -22,6 +22,12 @@ export interface BookData {
 type ThemeMode = "light" | "dark" | "auto";
 type ReadingMode = "scroll" | "page";
 
+/** 默认快捷键配置 */
+const DEFAULT_KEYBINDINGS = {
+  fontSizeUp: "Ctrl+=",
+  fontSizeDown: "Ctrl+-",
+};
+
 interface AppStore {
   // 主题
   theme: ThemeMode;
@@ -56,6 +62,14 @@ interface AppStore {
   // 书库刷新标记
   refreshKey: number;
   triggerRefresh: () => void;
+
+  // 窗口大小挡位 (0-4)
+  windowSize: number;
+  setWindowSize: (s: number) => void;
+
+  // 快捷键绑定
+  keybindings: { fontSizeUp: string; fontSizeDown: string };
+  setKeybinding: (action: "fontSizeUp" | "fontSizeDown", key: string) => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -110,4 +124,20 @@ export const useStore = create<AppStore>((set, get) => ({
 
   refreshKey: 0,
   triggerRefresh: () => set((s) => ({ refreshKey: s.refreshKey + 1 })),
+
+  windowSize: 2,
+  setWindowSize: (s) => set({ windowSize: Math.max(0, Math.min(4, s)) }),
+
+  // 快捷键绑定，localStorage 持久化
+  keybindings: (() => {
+    try {
+      return JSON.parse(localStorage.getItem("nr-keybindings") || "null") || DEFAULT_KEYBINDINGS;
+    } catch { return DEFAULT_KEYBINDINGS; }
+  })(),
+  setKeybinding: (action, key) => {
+    const cur = get().keybindings;
+    const next = { ...cur, [action]: key };
+    localStorage.setItem("nr-keybindings", JSON.stringify(next));
+    set({ keybindings: next });
+  },
 }));

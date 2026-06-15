@@ -22,6 +22,8 @@ let _time = 0;
 let _clr: number[] = [184, 137, 80];
 let _clr2: number[] = [200, 180, 230];
 let _animId = 0;
+let _W = 0;
+let _H = 0;
 
 function getAccentRGB(): number[] {
   const s = getComputedStyle(document.documentElement);
@@ -72,6 +74,8 @@ export default function ParticleCanvas() {
     function resize() {
       W = canvas.width = window.innerWidth;
       H = canvas.height = window.innerHeight;
+      _W = W;
+      _H = H;
       if (_particles.length === 0) initParticles(W, H);
     }
     resize();
@@ -196,6 +200,24 @@ export default function ParticleCanvas() {
       _clr = getAccentRGB();
       _clr2 = getAccentRGB2();
     };
+    // 暴露爆发粒子函数供 Reader 调用
+    window.__burstParticles = (cx: number, cy: number, count = 30) => {
+      for (let i = 0; i < count; i++) {
+        const p = createParticle(_W || window.innerWidth, _H || window.innerHeight);
+        p.x = cx;
+        p.y = cy;
+        p.s = 1 + Math.random() * 4;
+        const angle = Math.random() * 6.28;
+        const speed = 3 + Math.random() * 8;
+        p.sx = Math.cos(angle) * speed;
+        p.sy = Math.sin(angle) * speed;
+        p.bo = 0.2 + Math.random() * 0.6;
+        _particles.push(p);
+      }
+      if (_particles.length > 300) {
+        _particles.splice(0, _particles.length - 300);
+      }
+    };
 
     return () => {
       running = false;
@@ -203,6 +225,8 @@ export default function ParticleCanvas() {
       window.removeEventListener("resize", resize);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseleave", onLeave);
+      delete (window as any).__burstParticles;
+      delete (window as any).__onThemeChange;
     };
   }, []);
 
