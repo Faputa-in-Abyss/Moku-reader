@@ -474,13 +474,11 @@ fn get_comic_page(comic_id: String, page_index: usize, state: State<AppState>) -
     let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     let page = comic.pages.get(page_index).ok_or("页码超出范围")?;
 
-    // PDF 用 base64 返回完整文件字节，前端直接传给 pdf.js
+    // PDF 直接返回源文件路径，前端用 asset 协议读取
+    // pdf.js 需禁用 range 请求，因为 Tauri asset 协议不支持 content-range 头
     if comic.source_type == "pdf" {
         let pdf_path = std::path::Path::new(&comic.image_dir).join(&page.filename);
-        let data = std::fs::read(&pdf_path).map_err(|e| format!("读取 PDF 失败: {}", e))?;
-        use base64::Engine;
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
-        return Ok(format!("pdfb64:{}", b64));
+        return Ok(pdf_path.to_string_lossy().to_string());
     }
 
     comic::get_page_base64(&comic.image_dir, &page.filename)

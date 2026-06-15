@@ -902,14 +902,15 @@ function FontSearchDropdown({ fonts, current, onSelect }: {
           <div style={{ maxHeight: 140, overflowY: "auto" }}>
             {filtered.map((f) => (
               <div key={f.value} onClick={() => { onSelect(f.value); setOpen(false); setSearch(""); }}
-                style={{ padding: "8px 10px", fontSize: ".8rem", cursor: "pointer", color: f.value === current ? "var(--accent)" : "var(--text)", background: f.value === current ? "rgba(var(--accent-rgb),0.06)" : "transparent" }}>
-                {f.label}
-              </div>
-            ))}
-            {filtered.length === 0 && <div style={{ padding: "8px 10px", fontSize: ".78rem", color: "var(--text-dim)", textAlign: "center" }}>未找到匹配字体</div>}
+                style={{ padding: "8px 10px", fontSize: ".8rem",                  color: f.value === current ? "var(--accent)" : "var(--text)", background: f.value === current ? "rgba(var(--accent-rgb),0.06)" : "transparent" }}>
+                  {f.label}
+                </div>
+              ))}
+              {filtered.length === 0 && <div style={{ padding: "8px 10px", fontSize: ".78rem", color: "var(--text-dim)", textAlign: "center" }}>未找到匹配字体</div>}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
+        )}
+      </div>
+    );
+  }
+

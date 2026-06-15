@@ -122,6 +122,7 @@ export default function DebugPanel() {
             ))}
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>操作</div>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
+            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().closeMangaReader(); }}>📕 关闭漫画阅读器</button>
             {false && <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().setOnlineSearchOpen(true); }}>📚 联网搜书</button>}
             <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem" }} onClick={() => { try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
           </div>
@@ -163,3 +164,4 @@ export default function DebugPanel() {
     </div>
   );
 }
+

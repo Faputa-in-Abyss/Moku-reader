@@ -4,9 +4,8 @@ import { useStore } from "../store";
 let pdfjsLib: any = null;
 async function getPdfjs() {
   if (!pdfjsLib) {
-    const module = await import("pdfjs-dist");
-    module.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
-    pdfjsLib = module;
+    pdfjsLib = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
   }
   return pdfjsLib;
 }
@@ -56,43 +55,66 @@ export default function MangaReader() {
       setLoading(true);
       setPdfProgress(0);
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const b64data = await invoke("get_comic_page", { comicId: manga.id, pageIndex: 0 }) as string;
-        const raw = atob(b64data.replace("pdfb64:", ""));
-        const buf = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+        console.log("[墨读漫画] 开始获取 PDF 路径...");
+        const { convertFileSrc, invoke } = await import("@tauri-apps/api/core");
+        const filePath = await invoke("get_comic_page", { comicId: manga.id, pageIndex: 0 }) as string;
+        console.log("[墨读漫画] PDF 路径:", filePath);
+        const url = convertFileSrc(filePath);
+        console.log("[墨读漫画] asset URL:", url);
 
+        try {
+          const testResp = await fetch(url, { method: "HEAD" });
+          console.log("[墨读漫画] fetch HEAD 响应:", testResp.status, testResp.headers.get("content-type"));
+        } catch (fetchErr) {
+          console.warn("[墨读漫画] fetch HEAD 失败:", fetchErr);
+        }
+
+        console.log("[墨读漫画] 加载 pdfjs...");
         const pdfjs = await getPdfjs();
-        const loadingTask = pdfjs.getDocument({ data: buf });
-        pdfDoc = await loadingTask.promise;
+        console.log("[墨读漫画] pdfjs 已加载，版本:", pdfjs.version);
+        console.log("[墨读漫画] workerSrc:", pdfjs.GlobalWorkerOptions.workerSrc);
+
+        console.log("[墨读漫画] 开始 getDocument(), disableRange=true");
+        const loadingTask = pdfjs.getDocument({ url, disableRange: true, disableAutoFetch: true, disableStream: true, useSystemFonts: true, disableFontFace: true, cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/cmaps/", cMapPacked: true });
+        console.log("[墨读漫画] getDocument() 返回, 等待 promise...");
+        console.log("[墨读漫画] 当前时间:", new Date().toISOString());
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("PDF 解析超时（30s）")), 30000)
+        );
+        pdfDoc = await Promise.race([loadingTask.promise, timeoutPromise]);
+        console.log("[墨读漫画] PDF 解析成功，页数:", pdfDoc.numPages);
         if (cancelled) return;
         const total = pdfDoc.numPages;
         setPdfTotal(total);
-        setPdfProgress(1);
-        const pages: Record<number, string> = {};
-        const scale = 1.5;
-        for (let i = 1; i <= total; i++) {
-          if (cancelled) return;
-          const page = await pdfDoc.getPage(i);
-          const viewport = page.getViewport({ scale });
-          const canvas = document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext("2d")!;
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          pages[i - 1] = canvas.toDataURL("image/jpeg", 0.9);
-          setPdfProgress(i);
-        }
-        if (!cancelled) {
-          setLoadedPages(pages);
-          setPdfProgress(0);
-          setPdfTotal(0);
-        }
-      } catch (e) {
-        console.error("PDF 渲染失败:", e);
-        showTip(`PDF 渲染失败: ${e instanceof Error ? e.message : String(e)}`);
-        setPdfTotal(0);
         setPdfProgress(0);
+        const pages: Record<number, string> = {};
+        const scale = 1.0;
+        const BATCH = 4;
+        for (let start = 1; start <= total; start += BATCH) {
+          if (cancelled) return;
+          const batchEnd = Math.min(start + BATCH - 1, total);
+          const batchPromises = [];
+          for (let i = start; i <= batchEnd; i++) {
+            const pageIdx = i;
+            batchPromises.push(
+              pdfDoc.getPage(pageIdx).then((page: any) => {
+                const vp = page.getViewport({ scale });
+                const cvs = document.createElement("canvas");
+                cvs.width = vp.width;
+                cvs.height = vp.height;
+                const ctx = cvs.getContext("2d")!;
+                return page.render({ canvasContext: ctx, viewport: vp }).promise.then(() => {
+                  pages[pageIdx - 1] = cvs.toDataURL("image/jpeg", 0.85);
+                });
+              })
+            );
+          }
+          await Promise.all(batchPromises);
+          // 用新的对象引用强制 React 重新渲染
+          const newProgress = Math.min(start + BATCH - 1, total);
+          setPdfProgress(newProgress);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -250,15 +272,17 @@ export default function MangaReader() {
 
   return (
     <div style={mainStyle} onMouseMove={handleMouseMove} onWheel={handleWheel} onClick={handleClick}>
+      {/* Toolbar — PDF 加载时也始终可见返回按钮 */}
       <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, zIndex: 210,
+        position: "absolute", top: 0, left: 0, right: 0, zIndex: 310,
         padding: "10px 20px", display: "flex", alignItems: "center",
         justifyContent: "space-between",
-        background: toolbarVisible ? "linear-gradient(180deg, var(--glass-bg) 60%, transparent)" : "transparent",
-        backdropFilter: toolbarVisible ? "blur(24px) saturate(1.4)" : "none",
-        borderBottom: toolbarVisible ? "1px solid var(--border-glass)" : "1px solid transparent",
-        transition: "all 0.35s ease",
-        opacity: toolbarVisible ? 1 : 0, pointerEvents: toolbarVisible ? "auto" : "none",
+        background: toolbarVisible || !pdfReady ? "linear-gradient(180deg, var(--glass-bg) 60%, transparent)" : "transparent",
+        backdropFilter: toolbarVisible || !pdfReady ? "blur(24px) saturate(1.4)" : "none",
+        borderBottom: toolbarVisible || !pdfReady ? "1px solid var(--border-glass)" : "1px solid transparent",
+        transition: "opacity 0.35s ease",
+        opacity: toolbarVisible || !pdfReady ? 1 : 0,
+        pointerEvents: "auto",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button className="btn" onClick={(e) => { e.stopPropagation(); closeMangaReader(); }}>← 返回</button>
@@ -304,7 +328,7 @@ export default function MangaReader() {
         : mangaViewMode === "scroll" ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "60px 0 40px" }}>
             {Array.from({ length: totalPages }, (_, idx) => (
-              <PageImg key={idx} src={loadedPages[idx]} style={{ maxWidth: `min(100%, ${800 * mangaZoom}px)`, width: "100%" }} />
+              <PageImg key={idx} src={loadedPages[idx]} style={{ maxWidth: "min(100%, " + (800 * mangaZoom) + "px)", width: "100%" }} />
             ))}
           </div>
         ) : mangaViewMode === "double" && doublePages ? (
@@ -332,17 +356,17 @@ export default function MangaReader() {
 
       {loading && manga.source_type === "pdf" ? (
         <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 300,
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 299,
           display: "flex", flexDirection: "column", alignItems: "center",
-          gap: 6, padding: "40px 20px 20px",
+          gap: 6, padding: "60px 20px 20px",
           background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
           backdropFilter: "blur(24px) saturate(1.4)",
         }}>
           <span style={{ fontSize: ".8rem", color: "var(--text-dim)" }}>
-            {pdfTotal > 0 ? `渲染中 ${pdfProgress}/${pdfTotal}` : "加载中..."}
+            {pdfTotal > 0 ? "渲染中 " + pdfProgress + "/" + pdfTotal : "加载中..."}
           </span>
           <div style={{ width: "100%", maxWidth: 300, height: 4, borderRadius: 4, background: "rgba(var(--accent-rgb),0.08)", overflow: "hidden" }}>
-            <div style={{ width: `${pdfTotal > 0 ? (pdfProgress / pdfTotal) * 100 : 0}%`, height: "100%", borderRadius: 4, background: "var(--accent)", transition: "width 0.3s ease" }} />
+            <div style={{ width: (pdfTotal > 0 ? (pdfProgress / pdfTotal) * 100 : 0) + "%", height: "100%", borderRadius: 4, background: "var(--accent)", transition: "width 0.3s ease" }} />
           </div>
         </div>
       ) : loading ? (
