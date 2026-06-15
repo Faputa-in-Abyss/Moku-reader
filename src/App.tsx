@@ -5,6 +5,8 @@ import Library from "./components/Library";
 import Reader from "./components/Reader";
 import DebugPanel, { initDebugCapture } from "./components/DebugPanel";
 import OnlineSearch from "./components/OnlineSearch";
+import MangaLibrary from "./components/MangaLibrary";
+import MangaReader from "./components/MangaReader";
 import { useStore } from "./store";
 
 initDebugCapture();
@@ -12,6 +14,8 @@ initDebugCapture();
 export default function App() {
   const theme = useStore((s) => s.theme);
   const reading = useStore((s) => s.reading);
+  const viewMode = useStore((s) => s.viewMode);
+  const mangaReading = useStore((s) => s.mangaReading);
 
   React.useEffect(() => {
     const saved = localStorage.getItem("nr-theme") || "dark";
@@ -36,8 +40,10 @@ export default function App() {
         }}
       />
       <Header />
-      <Library />
+      {viewMode === "library" && !reading && <Library />}
+      {viewMode === "manga" && !mangaReading && <MangaLibrary />}
       {reading && <Reader />}
+      {mangaReading && <MangaReader />}
       <DebugPanel />
       <OnlineSearch />
     </>

@@ -1,0 +1,277 @@
+import React, { useEffect, useState, useRef } from "react";
+import { useStore, ComicData } from "../store";
+
+export default function MangaLibrary() {
+  const comics = useStore((s) => s.comics);
+  const setComics = useStore((s) => s.setComics);
+  const openMangaReader = useStore((s) => s.openMangaReader);
+  const refreshKey = useStore((s) => s.refreshKey);
+
+  const [ctxMenu, setCtxMenu] = useState<{ comic: ComicData; x: number; y: number } | null>(null);
+  const [iconPicker, setIconPicker] = useState<ComicData | null>(null);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+
+  const ICON_LIST = ["📚", "🎴", "🗾", "⛩️", "🌸", "⚔️", "🦊", "👹", "🌀", "🌊", "🔥", "🖼️", "🎨", "📦", "⭐"];
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const lib: ComicData[] = await invoke("get_comic_library");
+        if (!cancelled) {
+          setComics(lib);
+          // 加载所有漫画的缩略图（跳过 PDF）
+          const thumbs: Record<string, string> = {};
+          await Promise.allSettled(
+            lib.map(async (c: ComicData) => {
+              if (c.source_type === "pdf") return;
+              try {
+                const b64 = await invoke("get_comic_thumbnail", { comicId: c.id }) as string;
+                thumbs[c.id] = b64;
+              } catch {
+                // thumbnail fallback to icon
+              }
+            })
+          );
+          setThumbnails(thumbs);
+        }
+      } catch {
+        if (!cancelled) setComics([]);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  useEffect(() => {
+    const close = () => setCtxMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, []);
+
+  const handleCardGlow = (e: React.MouseEvent, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
+    el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
+  };
+
+  const handleCtxMenu = (e: React.MouseEvent, comic: ComicData) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ comic, x: e.clientX, y: e.clientY });
+  };
+
+  const triggerRefresh = () => {
+    const { triggerRefresh } = useStore.getState();
+    triggerRefresh();
+  };
+
+  const handleRename = async (comic: ComicData) => {
+    setCtxMenu(null);
+    const newName = prompt("请输入新漫画名：", comic.title);
+    if (!newName || newName === comic.title) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("rename_comic", { comicId: comic.id, newTitle: newName });
+      triggerRefresh();
+    } catch {}
+  };
+
+  const handleToggleFavorite = async (comic: ComicData) => {
+    setCtxMenu(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("toggle_comic_favorite", { comicId: comic.id });
+      triggerRefresh();
+    } catch {}
+  };
+
+  const handleDelete = async (comic: ComicData) => {
+    setCtxMenu(null);
+    if (!confirm(`确定要删除「${comic.title}」吗？`)) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remove_comic", { comicId: comic.id });
+      triggerRefresh();
+    } catch {}
+  };
+
+  const handleSetDirection = async (comic: ComicData, dir: string) => {
+    setCtxMenu(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("update_comic_direction", { comicId: comic.id, direction: dir });
+      triggerRefresh();
+    } catch {}
+  };
+
+  const handleRescan = async (comic: ComicData) => {
+    setCtxMenu(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const count = await invoke("rescan_comic_folder", { comicId: comic.id });
+      triggerRefresh();
+      alert(`已重新扫描，共 ${count} 页`);
+    } catch (e) {
+      console.error("重新扫描失败:", e);
+    }
+  };
+
+  if (comics.length === 0) {
+    return (
+      <section className="library">
+        <div className="library-header">
+          <h1 className="library-title">漫画库</h1>
+          <span className="library-count">0 本漫画</span>
+        </div>
+        <div className="empty-state">
+          <div className="empty-icon">🎴</div>
+          <div className="empty-title">还没有漫画</div>
+          <div className="empty-desc">点击右上角的"导入漫画"按钮，添加你的漫画吧！支持 CBZ/ZIP、PDF、图片文件夹</div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="library">
+      <div className="library-header">
+        <h1 className="library-title">漫画库</h1>
+        <span className="library-count">{comics.length} 本漫画</span>
+      </div>
+      <div className="book-grid">
+        {comics.map((comic) => (
+          <div
+            key={comic.id}
+            className="book-card"
+            onClick={() => openMangaReader(comic)}
+            onContextMenu={(e) => handleCtxMenu(e, comic)}
+            onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
+          >
+            <div className="book-cover">
+              {thumbnails[comic.id] ? (
+                <img
+                  src={thumbnails[comic.id]}
+                  alt={comic.title}
+                  className="book-cover-img"
+                  draggable={false}
+                />
+              ) : (
+                <div className="book-cover-icon">{comic.book_icon || getMangaIcon(comic)}</div>
+              )}
+              <div className="book-title">{comic.title}</div>
+              <div className="book-progress">
+                <div className="book-progress-bar" style={{ width: "0%" }} />
+              </div>
+            </div>
+            <div className="book-info">
+              <div className="book-chapter">
+                {comic.current_page > 0
+                  ? `第${comic.current_page + 1}/${comic.total_pages}页`
+                  : `${comic.total_pages}页`}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {ctxMenu && (
+        <div
+          style={{
+            position: "fixed",
+            left: ctxMenu.x,
+            top: ctxMenu.y,
+            zIndex: 300,
+            background: "var(--surface-glass, var(--glass-bg))",
+            backdropFilter: "blur(24px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+            border: "1px solid var(--border-glass)",
+            borderRadius: 12,
+            padding: "6px 0",
+            minWidth: 200,
+            boxShadow: "0 8px 40px var(--shadow)",
+            overflow: "hidden",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <CtxMenuItem icon="✏️" label="重命名" onClick={() => handleRename(ctxMenu.comic)} />
+          <CtxMenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.comic); }} />
+          <CtxMenuItem icon="⭐" label={ctxMenu.comic.favorite ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
+          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
+          <CtxMenuItem icon="➡️" label={`阅读方向: ${ctxMenu.comic.direction === "rtl" ? "从右到左" : "从左到右"}`} onClick={() => handleSetDirection(ctxMenu.comic, ctxMenu.comic.direction === "rtl" ? "ltr" : "rtl")} />
+          {ctxMenu.comic.source_type === "folder" && (
+            <CtxMenuItem icon="🔄" label="重新扫描文件夹" onClick={() => handleRescan(ctxMenu.comic)} />
+          )}
+          <CtxMenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.comic)} />
+        </div>
+      )}
+
+      {iconPicker && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setIconPicker(null)}>
+          <div style={{ background: "var(--bg)", borderRadius: 16, border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>选择封面图标</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 }}>
+              {ICON_LIST.map((ic) => (
+                <span key={ic} onClick={() => setIconPicker({ ...iconPicker, book_icon: ic })}
+                  style={{ fontSize: "1.6rem", cursor: "pointer", padding: 6, borderRadius: 8, background: iconPicker.book_icon === ic ? "rgba(var(--accent-rgb),0.12)" : "transparent", border: iconPicker.book_icon === ic ? "1px solid var(--accent)" : "1px solid transparent" }}>{ic}</span>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={iconPicker.book_icon || ""} onChange={(e) => setIconPicker({ ...iconPicker, book_icon: e.target.value })} placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: 8, padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }} />
+              <button className="btn btn-primary" style={{ padding: "8px 20px", fontSize: ".82rem" }} onClick={async () => {
+                try {
+                  const { invoke } = await import("@tauri-apps/api/core");
+                  await invoke("set_comic_icon", { comicId: iconPicker.id, icon: iconPicker.book_icon || "" });
+                  setIconPicker(null);
+                  triggerRefresh();
+                } catch {}
+              }}>确定</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CtxMenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        padding: "10px 16px",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        cursor: "pointer",
+        fontSize: ".9rem",
+        color: hover ? "var(--accent)" : "var(--text)",
+        background: hover ? "rgba(var(--accent-rgb),0.06)" : "transparent",
+        transition: "all 0.15s ease",
+      }}
+    >
+      <span style={{ fontSize: "1rem" }}>{icon}</span>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function sourceTypeLabel(t: string): string {
+  switch (t) {
+    case "cbz": return "CBZ";
+    case "pdf": return "PDF";
+    case "folder": return "📁";
+    default: return t;
+  }
+}
+
+function getMangaIcon(comic: ComicData): string {
+  if (comic.book_icon) return comic.book_icon;
+  if (comic.source_type === "pdf") return "📕";
+  const icons: Record<string, string> = { "海贼王": "🏴‍☠️", "火影忍者": "🍥", "鬼灭之刃": "⚔️", "进击的巨人": "🧱", "咒术回战": "🌀", "龙珠": "🐉", "名侦探柯南": "🔍", "灌篮高手": "🏀", "死神": "⚔️" };
+  return icons[comic.title] || "🎴";
+}

@@ -20,11 +20,25 @@ export interface BookData {
   book_icon?: string;
 }
 
-export interface Bookmark {
-  chapterIndex: number;
-  chapterTitle: string;
-  timestamp: number;
-  note?: string;
+export interface ComicPage {
+  index: number;
+  filename: string;
+  width: number;
+  height: number;
+}
+
+export interface ComicData {
+  id: string;
+  title: string;
+  source_type: string;
+  source_path: string;
+  image_dir: string;
+  pages: ComicPage[];
+  total_pages: number;
+  current_page: number;
+  direction: string;
+  favorite?: boolean;
+  book_icon?: string;
 }
 
 type ThemeMode = "light" | "dark";
@@ -35,7 +49,17 @@ const DEFAULT_KEYBINDINGS = {
   fontSizeDown: "Ctrl+-",
 };
 
+export interface Bookmark {
+  chapterIndex: number;
+  chapterTitle: string;
+  timestamp: number;
+  note?: string;
+}
+
+type MangaViewMode = "single" | "double" | "scroll";
+
 interface AppStore {
+  // ... existing
   theme: ThemeMode;
   setTheme: (t: ThemeMode) => void;
   readingMode: ReadingMode;
@@ -77,6 +101,21 @@ interface AppStore {
   removeBookmark: (chapterIndex: number) => void;
   loadBookmarks: (bookId: string) => void;
   saveBookmarks: (bookId: string) => void;
+  // Manga state
+  viewMode: "library" | "manga";
+  setViewMode: (m: "library" | "manga") => void;
+  comics: ComicData[];
+  setComics: (comics: ComicData[]) => void;
+  mangaReading: boolean;
+  currentManga: ComicData | null;
+  mangaCurrentPage: number;
+  openMangaReader: (manga: ComicData) => void;
+  closeMangaReader: () => void;
+  setMangaPage: (idx: number) => void;
+  mangaViewMode: MangaViewMode;
+  setMangaViewMode: (m: MangaViewMode) => void;
+  mangaZoom: number;
+  setMangaZoom: (z: number) => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -182,4 +221,28 @@ export const useStore = create<AppStore>((set, get) => ({
   saveBookmarks: (bookId) => {
     localStorage.setItem(`nr-bookmarks-${bookId}`, JSON.stringify(get().bookmarks));
   },
+  // Manga state
+  viewMode: "library",
+  setViewMode: (m) => set({ viewMode: m }),
+  comics: [],
+  setComics: (comics) => set({ comics }),
+  mangaReading: false,
+  currentManga: null,
+  mangaCurrentPage: 0,
+  openMangaReader: (manga) =>
+    set({
+      mangaReading: true,
+      currentManga: manga,
+      mangaCurrentPage: manga.current_page || 0,
+    }),
+  closeMangaReader: () =>
+    set({ mangaReading: false, currentManga: null, mangaCurrentPage: 0 }),
+  setMangaPage: (idx) => set({ mangaCurrentPage: idx }),
+  mangaViewMode: (localStorage.getItem("nr-manga-view") as MangaViewMode) || "single",
+  setMangaViewMode: (m) => {
+    localStorage.setItem("nr-manga-view", m);
+    set({ mangaViewMode: m });
+  },
+  mangaZoom: 1,
+  setMangaZoom: (z) => set({ mangaZoom: Math.min(4, Math.max(0.25, z)) }),
 }));

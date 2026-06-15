@@ -8,6 +8,7 @@ use tauri::{Emitter, State};
 
 mod parser;
 mod fanqie;
+mod comic;
 use fanqie::{FanqieApi, FanqieSearchResult, FanqieBookInfo, FanqieChapter};
 use parser::{parse_chapters, read_txt_file, read_epub_file, read_html_file, extract_title, generate_id, Chapter};
 
@@ -74,6 +75,7 @@ pub struct AppState {
     pub library: Mutex<LibraryData>,
     pub data_dir: PathBuf,
     pub fanqie: FanqieApi,
+    pub comic_library: Mutex<comic::ComicLibraryData>,
 }
 
 // ===== 书库文件存储 =====
@@ -444,6 +446,126 @@ fn get_workspace_dir() -> String {
     path_str
 }
 
+// ===== 漫画命令 =====
+
+#[tauri::command]
+fn import_comic(path: String, state: State<AppState>) -> Result<comic::ComicBook, String> {
+    debug_log!("📥 导入漫画: {}", &path);
+    let book = comic::import_comic(&path, &state.data_dir)?;
+    debug_log!("   导入成功: {} ({} 页)", &book.title, book.total_pages);
+
+    let mut lib = state.comic_library.lock().unwrap();
+    lib.comics.push(book.clone());
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+
+    Ok(book)
+}
+
+#[tauri::command]
+fn get_comic_library(state: State<AppState>) -> Vec<comic::ComicBook> {
+    let lib = state.comic_library.lock().unwrap();
+    debug_log!("📚 获取漫画书库: {} 本", lib.comics.len());
+    lib.comics.clone()
+}
+
+#[tauri::command]
+fn get_comic_page(comic_id: String, page_index: usize, state: State<AppState>) -> Result<String, String> {
+    let lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    let page = comic.pages.get(page_index).ok_or("页码超出范围")?;
+
+    // PDF 用 base64 返回完整文件字节，前端直接传给 pdf.js
+    if comic.source_type == "pdf" {
+        let pdf_path = std::path::Path::new(&comic.image_dir).join(&page.filename);
+        let data = std::fs::read(&pdf_path).map_err(|e| format!("读取 PDF 失败: {}", e))?;
+        use base64::Engine;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+        return Ok(format!("pdfb64:{}", b64));
+    }
+
+    comic::get_page_base64(&comic.image_dir, &page.filename)
+}
+
+#[tauri::command]
+fn get_comic_thumbnail(comic_id: String, state: State<AppState>) -> Result<String, String> {
+    let lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    if comic.pages.is_empty() {
+        return Err("漫画没有页面".to_string());
+    }
+    // PDF thumbnail 不在此处处理
+    if comic.source_type == "pdf" {
+        return Err("PDF 不支持后端缩略图".to_string());
+    }
+    let page = &comic.pages[0];
+    comic::get_page_base64(&comic.image_dir, &page.filename)
+}
+
+#[tauri::command]
+fn update_comic_progress(comic_id: String, page_index: usize, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.current_page = page_index;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn update_comic_direction(comic_id: String, direction: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.direction = direction;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_comic(comic_id: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    lib.comics.retain(|c| c.id != comic_id);
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn rename_comic(comic_id: String, new_title: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.title = new_title;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_comic_favorite(comic_id: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.favorite = !comic.favorite;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn set_comic_icon(comic_id: String, icon: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.book_icon = icon;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn rescan_comic_folder(comic_id: String, state: State<AppState>) -> Result<usize, String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    let new_pages = comic::rescan_folder(&comic.image_dir)?;
+    let count = new_pages.len();
+    comic.pages = new_pages;
+    comic.total_pages = count;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(count)
+}
+
 // ===== 番茄小说 API 命令 =====
 
 /// 搜索番茄小说
@@ -580,6 +702,7 @@ pub fn run() {
     fs::create_dir_all(&data_dir).ok();
 
     let library = load_library(&data_dir);
+    let comic_library = comic::load_comic_library(&data_dir);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -588,6 +711,7 @@ pub fn run() {
             library: Mutex::new(library),
             data_dir,
             fanqie: fanqie::FanqieApi::new(),
+            comic_library: Mutex::new(comic_library),
         })
         .setup(|app| {
             APP_HANDLE.set(app.handle().clone()).map_err(|_| "APP_HANDLE already set")?;
@@ -607,6 +731,17 @@ pub fn run() {
             fetch_url,
             save_online_book,
             get_workspace_dir,
+            import_comic,
+            get_comic_library,
+            get_comic_page,
+            get_comic_thumbnail,
+            update_comic_progress,
+            update_comic_direction,
+            remove_comic,
+            rename_comic,
+            toggle_comic_favorite,
+            set_comic_icon,
+            rescan_comic_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

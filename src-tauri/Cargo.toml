@@ -24,6 +24,8 @@ dirs-next = "2.0"
 chrono = "0.4"
 reqwest = { version = "0.12", features = ["json", "cookies"] }
 url = "2"
+zip = "2"
+base64 = "0.22"
 
 [package.metadata]
 
