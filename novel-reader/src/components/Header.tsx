@@ -5,7 +5,6 @@ import { flashThemeFade } from "../App";
 const THEME_ICONS: Record<string, string> = {
   light: "☀️",
   dark: "🌙",
-  auto: "🔄",
 };
 
 export default function Header() {
@@ -13,6 +12,7 @@ export default function Header() {
   const setTheme = useStore((s) => s.setTheme);
   const setBooks = useStore((s) => s.setBooks);
   const triggerRefresh = useStore((s) => s.triggerRefresh);
+  const setDebugPanelOpen = useStore((s) => s.setDebugPanelOpen);
 
   const handleImport = async () => {
     try {
@@ -23,7 +23,6 @@ export default function Header() {
           { name: "小说文件", extensions: ["txt", "epub", "html", "htm"] },
         ],
       });
-      // 检查 selected 是字符串
       if (!selected) return;
       const path = typeof selected === "string" ? selected : selected.path;
       if (!path) return;
@@ -37,9 +36,7 @@ export default function Header() {
   };
 
   const cycleTheme = (e: React.MouseEvent) => {
-    const order = ["light", "dark", "auto"];
-    const idx = order.indexOf(theme);
-    const next = order[(idx + 1) % 3];
+    const next = theme === "light" ? "dark" : "light";
     setTheme(next as any);
     flashThemeFade(e.clientX, e.clientY);
   };
@@ -57,6 +54,14 @@ export default function Header() {
         </button>
         <button className="btn btn-primary" onClick={handleImport}>
           <span>+</span> 导入小说
+        </button>
+        <button
+          className="btn"
+          onClick={() => setDebugPanelOpen(true)}
+          title="高级设置"
+          style={{ fontSize: "1.1rem", padding: "8px 12px", letterSpacing: 2 }}
+        >
+          ...
         </button>
       </div>
     </header>
@@ -104,3 +109,4 @@ const logoIconStyle: React.CSSProperties = {
   fontWeight: 700,
   boxShadow: "0 2px 16px rgba(var(--accent-rgb),0.2)",
 };
+

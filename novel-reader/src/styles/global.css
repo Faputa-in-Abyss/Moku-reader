@@ -35,36 +35,6 @@
   --particle-color2: 200, 180, 230;
 }
 
-[data-theme="auto"] {
-  --bg: #d9cec0;
-  --text: #1f1812;
-  --text-dim: #8f7d6a;
-  --accent: #b88950;
-  --accent-rgb: 184, 137, 80;
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.05);
-  --glass-bg: rgba(255, 255, 255, 0.35);
-  --border-glass: rgba(255, 255, 255, 0.45);
-  --reader-bg: #e8e0d6;
-  --light-color: 255, 255, 255;
-  --particle-color2: 200, 180, 230;
-}
-
-@media (prefers-color-scheme: dark) {
-  [data-theme="auto"] {
-    --bg: #161210;
-    --text: #e8ddd0;
-    --text-dim: #8a7e6b;
-    --accent: #d4a96a;
-    --accent-rgb: 212, 169, 106;
-    --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
-    --glass-bg: rgba(30, 26, 22, 0.55);
-    --border-glass: rgba(212, 169, 106, 0.06);
-    --reader-bg: #161210;
-    --light-color: 255, 255, 255;
-    --particle-color2: 160, 130, 200;
-  }
-}
-
 html {
   font-size: 16px;
   color-scheme: light dark;
@@ -122,8 +92,7 @@ body {
   top: var(--ly, -250px);
   will-change: left, top, transform;
 }
-[data-theme="light"] .light-follow::before,
-[data-theme="auto"] .light-follow::before {
+[data-theme="light"] .light-follow::before {
   background: radial-gradient(
     circle at center,
     rgba(255, 255, 255, 0.25) 0%,

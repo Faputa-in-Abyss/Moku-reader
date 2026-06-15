@@ -1,17 +1,30 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Mutex;
-use tauri::State;
+use std::sync::{Mutex, OnceLock};
+use tauri::{Emitter, State};
 
 mod parser;
 use parser::{parse_chapters, read_txt_file, read_epub_file, read_html_file, extract_title, generate_id, Chapter};
 
-// ===== 宏：简易调试输出 =====
+/// 全局 AppHandle，用于发送日志事件到前端
+static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
+
+// ===== 宏：简易调试输出（同时通过事件推送到前端） =====
 macro_rules! debug_log {
-    ($($arg:tt)*) => {
-        println!("[墨读] {}", format!($($arg)*));
-    };
+    ($($arg:tt)*) => {{
+        let msg = format!($($arg)*);
+        println!("[墨读] {}", &msg);
+        let now = chrono::Local::now().format("%H:%M:%S%.3f").to_string();
+        let payload = crate::LogPayload {
+            level: "BACKEND".to_string(),
+            message: msg,
+            timestamp: now,
+        };
+        if let Some(handle) = crate::APP_HANDLE.get() {
+            let _ = handle.emit("debug-log", &payload);
+        }
+    }};
 }
 
 // ===== 数据结构 =====
@@ -33,6 +46,13 @@ pub struct Book {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryData {
     pub books: Vec<Book>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogPayload {
+    pub level: String,
+    pub message: String,
+    pub timestamp: String,
 }
 
 pub struct AppState {
@@ -223,7 +243,7 @@ fn toggle_favorite(book_id: String, state: State<AppState>) -> Result<(), String
 fn open_file_location(path: String) -> Result<(), String> {
     debug_log!("📂 打开文件位置: {}", &path);
     let path_obj = PathBuf::from(&path);
-    let parent = path_obj.parent().unwrap_or(&path_obj);
+    let _parent = path_obj.parent().unwrap_or(&path_obj);
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer")
@@ -242,7 +262,91 @@ fn open_file_location(path: String) -> Result<(), String> {
     Ok(())
 }
 
-// ===== 入口 =====
+// ===== 在线搜索/下载 =====
+
+/// 联网请求一个 URL，返回 HTML 文本（异步，不阻塞 UI）
+#[tauri::command]
+async fn fetch_url(url: String) -> Result<String, String> {
+    debug_log!("🌐 请求URL: {}", &url);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .danger_accept_invalid_certs(true)
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
+
+    // 添加常见的请求头模拟浏览器
+    let resp = client.get(&url)
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+        .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+        .header("Cache-Control", "no-cache")
+        .header("Pragma", "no-cache")
+        .header("Referer", "https://www.google.com/")
+        .header("DNT", "1")
+        .header("Connection", "keep-alive")
+        .header("Upgrade-Insecure-Requests", "1")
+        .send()
+        .await
+        .map_err(|e| {
+            debug_log!("   ❌ 请求失败: {}", &e);
+            format!("请求失败: {}", e)
+        })?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        let snippet = body.chars().take(200).collect::<String>();
+        debug_log!("   ❌ HTTP {} 响应片段: {}", status, &snippet);
+        return Err(format!("HTTP {} - 服务器拒绝了请求，可能需要更换书源或检查网络", status));
+    }
+
+    // 检测编码并解码
+    let bytes = resp.bytes().await.map_err(|e| format!("读取响应失败: {}", e))?;
+    let (text, _, _) = encoding_rs::Encoding::for_label(b"utf-8")
+        .unwrap_or(encoding_rs::UTF_8)
+        .decode(&bytes);
+    let text = text.to_string();
+
+    debug_log!("   响应大小: {} 字节, 状态码: {}", bytes.len(), status);
+    Ok(text)
+}
+
+/// 保存从网上下载的书籍到书库（直接传完整内容）
+#[tauri::command]
+fn save_online_book(title: String, author: String, content: String, state: State<AppState>) -> Result<Book, String> {
+    debug_log!("💾 保存在线书籍: {} - {}", &title, &author);
+
+    if content.trim().is_empty() {
+        return Err("内容为空，无法保存".to_string());
+    }
+
+    let content = content.replace("\r\n", "\n").replace('\r', "\n");
+    let chapters = parse_chapters(&content);
+    debug_log!("   解析章节: {} 章", chapters.len());
+
+    let id = generate_id();
+    let total_chapters = chapters.len();
+
+    let book = Book {
+        id,
+        title: if author.is_empty() { title.clone() } else { format!("{} - {}", title, author) },
+        file_path: String::new(),
+        file_type: "online".to_string(),
+        total_chapters,
+        current_chapter: 0,
+        progress: 0.0,
+        chapters,
+        content,
+        favorite: false,
+    };
+
+    let mut lib = state.library.lock().unwrap();
+    lib.books.push(book.clone());
+    save_library(&state.data_dir, &lib).ok();
+
+    Ok(book)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -260,6 +364,10 @@ pub fn run() {
             library: Mutex::new(library),
             data_dir,
         })
+        .setup(|app| {
+            APP_HANDLE.set(app.handle().clone()).map_err(|_| "APP_HANDLE already set")?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             import_book,
             get_library,
@@ -270,6 +378,8 @@ pub fn run() {
             rename_book,
             toggle_favorite,
             open_file_location,
+            fetch_url,
+            save_online_book,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

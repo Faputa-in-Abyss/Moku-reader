@@ -3,15 +3,18 @@ import ParticleCanvas from "./components/ParticleCanvas";
 import Header from "./components/Header";
 import Library from "./components/Library";
 import Reader from "./components/Reader";
+import DebugPanel, { initDebugCapture } from "./components/DebugPanel";
+import OnlineSearch from "./components/OnlineSearch";
 import { useStore } from "./store";
+
+initDebugCapture();
 
 export default function App() {
   const theme = useStore((s) => s.theme);
   const reading = useStore((s) => s.reading);
 
-  // 初始化主题
   React.useEffect(() => {
-    const saved = localStorage.getItem("nr-theme") || "auto";
+    const saved = localStorage.getItem("nr-theme") || "dark";
     document.documentElement.setAttribute("data-theme", saved);
     useStore.getState().setTheme(saved as any);
   }, []);
@@ -19,7 +22,6 @@ export default function App() {
   return (
     <>
       <ParticleCanvas />
-
       <div
         className="theme-fade"
         id="theme-fade"
@@ -30,18 +32,18 @@ export default function App() {
           pointerEvents: "none",
           opacity: 0,
           transition: "opacity 0.5s ease",
-          background: `radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb),0.08) 0%, transparent 60%)`,
+          background: "radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb),0.08) 0%, transparent 60%)",
         }}
       />
-
       <Header />
       <Library />
       {reading && <Reader />}
+      <DebugPanel />
+      <OnlineSearch />
     </>
   );
 }
 
-// 主题切换时播放过渡动画
 export function flashThemeFade(x?: number, y?: number) {
   const el = document.getElementById("theme-fade");
   if (!el) return;
