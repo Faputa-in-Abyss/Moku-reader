@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 
 mod parser;
 mod fanqie;
@@ -96,18 +96,20 @@ pub struct AppState {
     pub library_path: Mutex<String>,
     pub fanqie: FanqieApi,
     pub comic_library: Mutex<comic::ComicLibraryData>,
+    pub render_dpi: Mutex<u32>,
 }
 
 // ===== 设置持久化 =====
 
-fn load_settings(data_dir: &Path) -> String {
+use std::collections::HashMap;
+
+fn load_settings(data_dir: &Path) -> HashMap<String, String> {
     let path = data_dir.join("settings.json");
     if !path.exists() {
-        return String::new();
+        return HashMap::new();
     }
     let content = fs::read_to_string(&path).unwrap_or_default();
-    let map: std::collections::HashMap<String, String> = serde_json::from_str(&content).unwrap_or_default();
-    map.get("library_path").cloned().unwrap_or_default()
+    serde_json::from_str(&content).unwrap_or_default()
 }
 
 fn save_setting(data_dir: &Path, key: &str, value: &str) {
@@ -655,6 +657,22 @@ fn set_library_path(new_path: String, state: State<AppState>) -> Result<(), Stri
     Ok(())
 }
 
+/// 获取 PDF 渲染精度（DPI）
+#[tauri::command]
+fn get_render_dpi(state: State<AppState>) -> u32 {
+    *state.render_dpi.lock().unwrap()
+}
+
+/// 设置 PDF 渲染精度（DPI），仅对新导入生效
+#[tauri::command]
+fn set_render_dpi(dpi: u32, state: State<AppState>) -> Result<(), String> {
+    let dpi = dpi.clamp(72, 300);
+    *state.render_dpi.lock().unwrap() = dpi;
+    save_setting(&state.data_dir, "render_dpi", &dpi.to_string());
+    debug_log!("🖼️ PDF 渲染精度已更改为: {} DPI", dpi);
+    Ok(())
+}
+
 /// 扫描结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
@@ -678,6 +696,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
     }
 
     let data_dir = state.data_dir.clone();
+    let render_dpi = *state.render_dpi.lock().unwrap();
 
     let (lib, comic_lib) = {
         let l = state.library.lock().unwrap();
@@ -736,24 +755,28 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
             if path_obj.is_dir() {
                 match import_comic_folder_impl(&path_obj) {
                     Ok(book) => {
-                        let mut cl = comic::load_comic_library(&data_dir);
-                        cl.comics.push(book);
-                        comic::save_comic_library(&data_dir, &cl).ok();
+                        // 直接推入内存 Mutex 再写磁盘，确保 comics-refreshed 时已最新
+                        if let Ok(mut mem) = app.state::<AppState>().comic_library.lock() {
+                            mem.comics.push(book);
+                            comic::save_comic_library(&data_dir, &mem).ok();
+                        }
                         comics_imported += 1;
                         let _ = app.emit("comics-refreshed", "");
                     }
                     Err(e) => errors.push(format!("导入漫画文件夹失败 {}: {}", path, e)),
                 }
             } else {
-                let result = comic::import_comic(path, &data_dir);
+                let result = comic::import_comic(path, &data_dir, render_dpi);
                 let mut need_cleanup = false;
                 match result {
                     Ok(book) => {
                         let title = book.title.clone();
                         let total_pages = book.total_pages;
-                        let mut cl = comic::load_comic_library(&data_dir);
-                        cl.comics.push(book);
-                        comic::save_comic_library(&data_dir, &cl).ok();
+                        // 直接推入内存 Mutex 再写磁盘
+                        if let Ok(mut mem) = app.state::<AppState>().comic_library.lock() {
+                            mem.comics.push(book);
+                            comic::save_comic_library(&data_dir, &mem).ok();
+                        }
                         comics_imported += 1;
                         need_cleanup = true;
                         if let Some(handle) = crate::APP_HANDLE.get() {
@@ -781,6 +804,20 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                         }
                     }
                 }
+            }
+        }
+
+        // 将磁盘上最新的漫画库和小说库状态同步回内存（兜底）
+        {
+            let fresh_comic_lib = comic::load_comic_library(&data_dir);
+            if let Ok(mut comic_lib) = app.state::<AppState>().comic_library.lock() {
+                *comic_lib = fresh_comic_lib;
+            }
+        }
+        {
+            let fresh_novel_lib = load_library(&data_dir);
+            if let Ok(mut novel_lib) = app.state::<AppState>().library.lock() {
+                *novel_lib = fresh_novel_lib;
             }
         }
 
@@ -820,10 +857,11 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
     // mutool draw 可能耗时（几十秒），用 oneshot 通道异步等待
     let data_dir = state.data_dir.clone();
     let path_c = path.clone();
+    let render_dpi = *state.render_dpi.lock().unwrap();
     let (tx, rx) = tokio::sync::oneshot::channel();
     let app_handle = APP_HANDLE.get().cloned();
     std::thread::spawn(move || {
-        let result = comic::import_comic(&path_c, &data_dir);
+        let result = comic::import_comic(&path_c, &data_dir, render_dpi);
         // 导入完成或失败后发送事件
         if let Some(handle) = app_handle {
             match &result {
@@ -1182,7 +1220,12 @@ pub fn run() {
 
     let library = load_library(&data_dir);
     let comic_library = comic::load_comic_library(&data_dir);
-    let library_path = load_settings(&data_dir);
+    let settings = load_settings(&data_dir);
+    let library_path = settings.get("library_path").cloned().unwrap_or_default();
+    let render_dpi: u32 = settings.get("render_dpi")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(150u32)
+        .clamp(72, 300);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1193,6 +1236,7 @@ pub fn run() {
             library_path: Mutex::new(library_path),
             fanqie: fanqie::FanqieApi::new(),
             comic_library: Mutex::new(comic_library),
+            render_dpi: Mutex::new(render_dpi),
         })
         .setup(|app| {
             APP_HANDLE.set(app.handle().clone()).map_err(|_| "APP_HANDLE already set")?;
@@ -1227,6 +1271,8 @@ pub fn run() {
             get_system_resources,
             get_library_path,
             set_library_path,
+            get_render_dpi,
+            set_render_dpi,
             scan_library,
         ])
         .run(tauri::generate_context!())

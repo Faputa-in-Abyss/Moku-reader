@@ -243,7 +243,7 @@ fn find_mutool() -> Option<PathBuf> {
     None
 }
 
-fn import_pdf(path: &Path, dest_dir: &Path) -> Result<(Vec<String>, String), String> {
+fn import_pdf(path: &Path, dest_dir: &Path, dpi: u32) -> Result<(Vec<String>, String), String> {
     let title = title_from_path(path.to_string_lossy().as_ref());
     let images_dir = dest_dir.join("images");
     fs::create_dir_all(&images_dir).map_err(|e| format!("创建目录失败: {}", e))?;
@@ -253,13 +253,14 @@ fn import_pdf(path: &Path, dest_dir: &Path) -> Result<(Vec<String>, String), Str
          下载地址: https://mupdf.com/downloads/"
     )?;
 
+    let dpi_str = dpi.to_string();
     let output_pattern = images_dir.join("page%d.png");
     let output = Command::new(&mutool)
         .arg("draw")
         .arg("-o")
         .arg(output_pattern.to_string_lossy().as_ref())
         .arg("-r")
-        .arg("150")
+        .arg(&dpi_str)
         .arg(path)
         .output()
         .map_err(|e| format!("调用 mutool 失败: {}", e))?;
@@ -293,7 +294,7 @@ fn import_pdf(path: &Path, dest_dir: &Path) -> Result<(Vec<String>, String), Str
 
 // ===== 公开接口 =====
 
-pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
+pub fn import_comic(path: &str, data_dir: &Path, dpi: u32) -> Result<ComicBook, String> {
     let path_obj = Path::new(path);
     if !path_obj.exists() {
         return Err(format!("路径不存在: {}", path));
@@ -318,7 +319,7 @@ pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
         }
         "pdf" => {
             let dest = data_dir.join("comics").join(&generate_id());
-            let (f, t) = import_pdf(path_obj, &dest)?;
+            let (f, t) = import_pdf(path_obj, &dest, dpi)?;
             files = f;
             title = t;
             source_type = "pdf".to_string();

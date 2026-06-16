@@ -75,6 +75,10 @@ export default function DebugPanel() {
   const logEndRef = useRef<HTMLDivElement>(null);
   const [libraryPath, setLibraryPath] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [renderDpi, setRenderDpi] = useState(150);
+  const [dpiEditing, setDpiEditing] = useState(false);
+  const [dpiEditValue, setDpiEditValue] = useState("150");
+  const dpiInputRef = useRef<HTMLInputElement>(null);
 
   // 系统资源
   const [procMem, setProcMem] = useState(0);
@@ -113,12 +117,19 @@ export default function DebugPanel() {
     if (!debugPanelOpen) return;
     let cancelled = false;
 
-    // 首次加载时获取书库路径
+    // 首次加载时获取书库路径和渲染精度
     (async () => {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         const path: string = await invoke("get_library_path");
         if (!cancelled) setLibraryPath(path);
+      } catch {}
+    })();
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const dpi: number = await invoke("get_render_dpi");
+        if (!cancelled) setRenderDpi(dpi);
       } catch {}
     })();
 
@@ -160,6 +171,28 @@ export default function DebugPanel() {
     })();
     return () => { unlisten?.(); };
   }, []);
+
+  // 输入框聚焦时全选
+  useEffect(() => {
+    if (dpiEditing && dpiInputRef.current) {
+      dpiInputRef.current.focus();
+      dpiInputRef.current.select();
+    }
+  }, [dpiEditing]);
+
+  const commitDpi = async () => {
+    const v = Math.min(300, Math.max(72, Math.round(Number(dpiEditValue)) || 150));
+    setRenderDpi(v);
+    setDpiEditValue(String(v));
+    setDpiEditing(false);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_render_dpi", { dpi: v });
+      console.log(`[墨读] 渲染精度已设为 ${v} DPI（重启后生效，仅新导入）`);
+    } catch (err) {
+      console.error("[墨读] 设置渲染精度失败:", err);
+    }
+  };
 
   const handleScan = async () => {
     setScanning(true);
@@ -254,9 +287,56 @@ export default function DebugPanel() {
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>操作</div>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={handleSetPath}>📂 更改书库路径</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={scanning || !libraryPath} onClick={handleScan}>{scanning ? "⏳ 扫描中..." : "🔄 扫描书库"}</button>
+            <div style={{ margin: "10px 0 8px", borderTop: "1px solid var(--border-glass)", paddingTop: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", marginBottom: 4 }}>
+                <span style={{ color: "var(--text)" }}>🖼️ PDF 渲染精度</span>
+                {dpiEditing ? (
+                  <input
+                    ref={dpiInputRef}
+                    type="number" min={72} max={300}
+                    value={dpiEditValue}
+                    onChange={(e) => setDpiEditValue(e.target.value)}
+                    onBlur={() => commitDpi()}
+                    onKeyDown={(e) => { if (e.key === "Enter") commitDpi(); if (e.key === "Escape") { setDpiEditing(false); setDpiEditValue(String(renderDpi)); } }}
+                    style={{ width: 80, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--accent)", borderRadius: 6, padding: "2px 8px", fontSize: ".75rem", textAlign: "center", outline: "none" }}
+                  />
+                ) : (
+                  <span
+                    onClick={() => { setDpiEditing(true); setDpiEditValue(String(renderDpi)); }}
+                    style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed var(--accent)" }}
+                    title="点击输入精确值"
+                  >{renderDpi} DPI</span>
+                )}
+              </div>
+              <input
+                type="range" min={72} max={300} step={1} value={renderDpi}
+                onChange={async (e) => {
+                  const v = Number(e.target.value);
+                  setRenderDpi(v);
+                  setDpiEditValue(String(v));
+                  try {
+                    const { invoke } = await import("@tauri-apps/api/core");
+                    await invoke("set_render_dpi", { dpi: v });
+                    console.log(`[墨读] 渲染精度已设为 ${v} DPI（重启后生效，仅新导入）`);
+                  } catch (err) {
+                    console.error("[墨读] 设置渲染精度失败:", err);
+                  }
+                }}
+                style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
+                <span>72</span>
+                <span>|</span><span>100</span><span>|</span>
+                <span>150</span>
+                <span>|</span><span>200</span><span>|</span>
+                <span>250</span>
+                <span>|</span>
+                <span>300</span>
+              </div>
+            </div>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
             {false && <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().setOnlineSearchOpen(true); }}>📚 联网搜书</button>}
-            <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem" }} onClick={() => { try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
+            <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem" }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0, gap: 12 }}>
