@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useStore, ComicData, ComicMeta } from "../store";
 
 export default function MangaLibrary() {
@@ -14,13 +14,42 @@ export default function MangaLibrary() {
   const [iconPicker, setIconPicker] = useState<ComicData | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleLockRef = useRef<Set<string>>(new Set());
+  type SortField = "name" | "type" | "pages";
+  const [sortField, setSortField] = useState<SortField>(() => (localStorage.getItem("nr-manga-sort-field") as SortField) || "name");
+  const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-manga-sort-asc") !== "false");
+
+  const setSort = (field: SortField) => {
+    if (sortField === field) {
+      const next = !sortAsc;
+      setSortAsc(next);
+      localStorage.setItem("nr-manga-sort-asc", String(next));
+    } else {
+      setSortField(field);
+      localStorage.setItem("nr-manga-sort-field", field);
+      localStorage.setItem("nr-manga-sort-asc", "true");
+      setSortAsc(true);
+    }
+  };
 
   const ICON_LIST = ["📚", "🎴", "🗾", "⛩️", "🌸", "⚔️", "🦊", "👹", "🌀", "🌊", "🔥", "🖼️", "🎨", "📦", "⭐"];
 
   // 优先用 full data，否则用 localStorage meta；二者都空时先展示一个 loading 状态
-  const displayList: ComicMeta[] = comics.length > 0
+  const rawList: ComicMeta[] = comics.length > 0
     ? comics.map((c): ComicMeta => ({ id: c.id, title: c.title, source_type: c.source_type, total_pages: c.total_pages, current_page: c.current_page, direction: c.direction, favorite: c.favorite, book_icon: c.book_icon }))
     : comicsMeta;
+
+  const displayList = useMemo(() => {
+    const list = rawList.slice();
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
+      else if (sortField === "type") cmp = (a.source_type || "").localeCompare(b.source_type || "");
+      else if (sortField === "pages") cmp = a.total_pages - b.total_pages;
+      return sortAsc ? cmp : -cmp;
+    });
+    return list;
+  }, [rawList, sortField, sortAsc]);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +70,29 @@ export default function MangaLibrary() {
     return () => { cancelled = true; };
   }, [refreshKey]);
 
+  // 监听 comics-refreshed 事件，渲染完成一本就刷新漫画库
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen("comics-refreshed", async () => {
+          // 重新加载漫画库
+          try {
+            const { invoke } = await import("@tauri-apps/api/core");
+            const lib: ComicData[] = await invoke("get_comic_library");
+            const { setComics, setComicsMeta, triggerRefresh } = useStore.getState();
+            setComics(lib);
+            const meta = lib.map((c): ComicMeta => ({ id: c.id, title: c.title, source_type: c.source_type, total_pages: c.total_pages, current_page: c.current_page, direction: c.direction, favorite: c.favorite, book_icon: c.book_icon }));
+            setComicsMeta(meta);
+            triggerRefresh();
+          } catch {}
+        });
+      } catch {}
+    })();
+    return () => { unlisten?.(); };
+  }, []);
+
   useEffect(() => {
     const close = () => setCtxMenu(null);
     window.addEventListener("click", close);
@@ -57,7 +109,8 @@ export default function MangaLibrary() {
     e.preventDefault();
     e.stopPropagation();
     const full = comics.find(c => c.id === comic.id);
-    if (full) setCtxMenu({ comic: full, x: e.clientX, y: e.clientY });
+    const latest = full || useStore.getState().comics.find(c => c.id === comic.id);
+    if (latest) setCtxMenu({ comic: latest, x: e.clientX, y: e.clientY });
     else setCtxMenu({ comic: comic as any, x: e.clientX, y: e.clientY });
   };
 
@@ -77,18 +130,34 @@ export default function MangaLibrary() {
     } catch {}
   };
 
+  const [optimisticFav, setOptimisticFav] = useState<Record<string, boolean>>({});
+  const [bursting, setBursting] = useState<Set<string>>(new Set());
+
   const handleToggleFavorite = async (comic: ComicData) => {
     setCtxMenu(null);
-    const wasFavorited = comic.favorite;
-    // 添加或取消收藏都播放动画
-    setAnimStars((p) => ({ ...p, [comic.id]: true }));
-    await new Promise((r) => setTimeout(r, 400));
-    setAnimStars((p) => { const n = { ...p }; delete n[comic.id]; return n; });
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("toggle_comic_favorite", { comicId: comic.id });
+    const bid = comic.id;
+    const currentFav = optimisticFav[bid] ?? comic.favorite;
+
+    if (currentFav) {
+      setBursting((prev) => new Set(prev).add(bid));
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("toggle_comic_favorite", { comicId: bid });
+      } catch {}
+      setOptimisticFav((prev) => ({ ...prev, [bid]: false }));
+      setBursting((prev) => { const n = new Set(prev); n.delete(bid); return n; });
       triggerRefresh();
-    } catch {}
+    } else {
+      setOptimisticFav((prev) => ({ ...prev, [bid]: true }));
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("toggle_comic_favorite", { comicId: bid });
+        triggerRefresh();
+      } catch {
+        setOptimisticFav((prev) => ({ ...prev, [bid]: false }));
+      }
+    }
   };
 
   const handleDelete = async (comic: ComicData) => {
@@ -98,8 +167,6 @@ export default function MangaLibrary() {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("remove_comic", { comicId: comic.id });
       triggerRefresh();
-      // 删除后自动扫描书库
-      invoke("scan_library").catch(() => {});
     } catch {}
   };
 
@@ -117,8 +184,33 @@ export default function MangaLibrary() {
       }
       setSelectedIds(new Set());
       triggerRefresh();
-      // 删除后自动扫描书库
-      invoke("scan_library").catch(() => {});
+    } catch {}
+  };
+
+  // 批量收藏
+  const handleBatchFavorite = async () => {
+    if (selectedIds.size === 0) return;
+    setCtxMenu(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const favs: Record<string, boolean> = {};
+      const comicsData = useStore.getState().comics;
+      const anyUnfav = Array.from(selectedIds).some(id => {
+        const c = comicsData.find(b => b.id === id);
+        return !c || !(optimisticFav[id] ?? c.favorite);
+      });
+      const newFav = anyUnfav;
+      for (const id of selectedIds) {
+        favs[id] = newFav;
+        const c = comicsData.find(b => b.id === id);
+        if ((optimisticFav[id] ?? c?.favorite) !== newFav) {
+          await invoke("toggle_comic_favorite", { comicId: id }).catch(() => {});
+        }
+      }
+      setOptimisticFav((prev) => ({ ...prev, ...favs }));
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      triggerRefresh();
     } catch {}
   };
 
@@ -174,6 +266,18 @@ export default function MangaLibrary() {
         <h1 className="library-title">漫画库</h1>
         <span className="library-count">{displayList.length} 本漫画</span>
       </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        {(["name", "type", "pages"] as const).map((field) => (
+          <button key={field} className="btn" onClick={() => setSort(field)} style={{
+            fontSize: ".78rem", padding: "4px 12px",
+            background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
+            borderColor: sortField === field ? "var(--accent)" : undefined,
+          }}>
+            {field === "name" ? "📄 名称" : field === "type" ? "📦 类型" : "📄 页数"}
+            {sortField === field && (sortAsc ? " ↑" : " ↓")}
+          </button>
+        ))}
+      </div>
       <div className="book-grid">
         {displayList.map((comic) => {
           // 点击时如果 Full data 已加载则直接用 full data；否则即时加载
@@ -217,11 +321,11 @@ export default function MangaLibrary() {
               </div>
             )}
             <div className={`book-cover${selectedIds.has(comic.id) ? " cover-selected" : ""}`}>
-              {comic.favorite && <span key={"s-"+comic.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none" }}>⭐</span>}
+              {((optimisticFav[comic.id] ?? comic.favorite)) && <span style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: bursting.has(comic.id) ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
               <div className="book-cover-icon">{comic.book_icon || getMangaIcon(comic)}</div>
               <div className="book-title">{comic.title}</div>
               <div className="book-progress">
-                <div className="book-progress-bar" style={{ width: "0%" }} />
+                <div className="book-progress-bar" style={{ width: `${comic.total_pages > 0 ? (comic.current_page / comic.total_pages) * 100 : 0}%` }} />
               </div>
             </div>
             <div className="book-info">
@@ -257,7 +361,7 @@ export default function MangaLibrary() {
         >
           <CtxMenuItem icon="✏️" label="重命名" onClick={() => handleRename(ctxMenu.comic)} />
           <CtxMenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.comic); }} />
-          <CtxMenuItem icon="⭐" label={ctxMenu.comic.favorite ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
+          <CtxMenuItem icon="⭐" label={(optimisticFav[ctxMenu.comic.id] ?? ctxMenu.comic.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
           <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
           <CtxMenuItem icon="➡️" label={`阅读方向: ${ctxMenu.comic.direction === "rtl" ? "从右到左" : "从左到右"}`} onClick={() => handleSetDirection(ctxMenu.comic, ctxMenu.comic.direction === "rtl" ? "ltr" : "rtl")} />
           {ctxMenu.comic.source_type === "folder" && (
@@ -279,7 +383,15 @@ export default function MangaLibrary() {
           borderTop: "1px solid var(--border-glass)",
         }}>
           <span style={{ color: "var(--text-dim)", fontSize: ".8rem" }}>已选 {selectedIds.size} 项</span>
+          <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => {
+            if (selectedIds.size === displayList.length) {
+              setSelectedIds(new Set());
+            } else {
+              setSelectedIds(new Set(displayList.map(b => b.id)));
+            }
+          }}>{selectedIds.size === displayList.length ? "取消全选" : "全选"}</button>
           <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>取消</button>
+          <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedIds.size === 0} onClick={handleBatchFavorite}>⭐ 收藏所选</button>
           <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedIds.size === 0 ? undefined : "rgba(200,60,50,0.8)" }} disabled={selectedIds.size === 0} onClick={handleBatchDelete}>
             🗑️ 删除所选
           </button>

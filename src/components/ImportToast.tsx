@@ -6,6 +6,7 @@ export default function ImportToast() {
   const setImportProgress = useStore((s) => s.setImportProgress);
   const mangaReading = useStore((s) => s.mangaReading);
   const reading = useStore((s) => s.reading);
+  const triggerRefresh = useStore((s) => s.triggerRefresh);
   const timerRef = useRef<number>(0);
 
   useEffect(() => {
@@ -16,6 +17,11 @@ export default function ImportToast() {
         (event) => {
           const { status, message, title } = event.payload;
           setImportProgress({ title, status, message });
+
+          // 渲染完成时刷新主页面
+          if (status === "done") {
+            triggerRefresh();
+          }
 
           clearTimeout(timerRef.current);
           if (status === "done" || status === "error") {
@@ -37,7 +43,7 @@ export default function ImportToast() {
   return (
     <div style={{
       position: "fixed",
-      bottom: 24,
+      bottom: 64,
       left: "50%",
       transform: "translateX(-50%)",
       zIndex: 9998,

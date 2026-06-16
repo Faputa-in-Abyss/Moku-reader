@@ -266,8 +266,13 @@ export const useStore = create<AppStore>((set, get) => ({
       currentManga: manga,
       mangaCurrentPage: manga.current_page || 0,
     }),
-  closeMangaReader: () =>
-    set({ mangaReading: false, currentManga: null, mangaCurrentPage: 0 }),
+  closeMangaReader: () => {
+    set({ mangaReading: false, currentManga: null, mangaCurrentPage: 0 });
+    setTimeout(() => {
+      const { triggerRefresh } = useStore.getState();
+      triggerRefresh();
+    }, 100);
+  },
   setMangaPage: (idx) => set({ mangaCurrentPage: idx }),
   mangaViewMode: (localStorage.getItem("nr-manga-view") as MangaViewMode) || "single",
   setMangaViewMode: (m) => {
