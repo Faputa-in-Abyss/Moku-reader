@@ -235,6 +235,14 @@ fn strip_html_tags(text: &str) -> String {
 }
 
 pub fn extract_title(file_path: &str, content: &str) -> String {
+    // TXT 文件优先使用文件名（不含扩展名）作为书名
+    if file_path.ends_with(".txt") || file_path.ends_with(".TXT") {
+        return std::path::Path::new(file_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("未命名小说")
+            .to_string();
+    }
     for line in content.lines() {
         let t = line.trim();
         if !t.is_empty() && t.len() < 50 {

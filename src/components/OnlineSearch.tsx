@@ -338,7 +338,7 @@ export default function OnlineSearch() {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9997, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setOnlineSearchOpen(false)}>
-      <div style={{ width: "85vw", height: "80vh", maxWidth: 900, background: "var(--bg)", borderRadius: 16, border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ width: "85vw", height: "80vh", maxWidth: 900, background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
         {/* 标题栏 */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0 }}>
           <span style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text)" }}>📚 联网搜书</span>
@@ -347,14 +347,14 @@ export default function OnlineSearch() {
 
         {/* 搜索栏 */}
         <div style={{ display: "flex", gap: 6, padding: "10px 20px", borderBottom: "1px solid var(--border-glass)", alignItems: "center", flexShrink: 0, flexWrap: "wrap" }}>
-          <select value={activeSource} onChange={(e) => setActiveSource(e.target.value)} style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: 8, padding: "7px 10px", fontSize: ".82rem", outline: "none", cursor: "pointer", maxWidth: 140 }}>
+          <select value={activeSource} onChange={(e) => setActiveSource(e.target.value)} style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: ".82rem", outline: "none", cursor: "pointer", maxWidth: 140 }}>
             {sources.filter(s => s.enabled !== false).map((s) => (
               <option key={s.bookSourceName} value={s.bookSourceName}>{s.bookSourceName}</option>
             ))}
           </select>
 
           <input ref={inputRef} type="text" placeholder="输入小说名称..." value={keyword} onChange={(e) => setKeyword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && doSearch()}
-            style={{ flex: 1, minWidth: 120, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: 8, padding: "7px 12px", fontSize: ".85rem", outline: "none" }} />
+            style={{ flex: 1, minWidth: 120, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "7px 12px", fontSize: ".85rem", outline: "none" }} />
 
           <button className="btn btn-primary" onClick={doSearch} disabled={searching || !keyword.trim()} style={{ fontSize: ".82rem", padding: "7px 14px" }}>
             {searching ? "搜索中..." : "🔍 搜索"}
@@ -375,7 +375,7 @@ export default function OnlineSearch() {
         {showManager && (
           <div style={{ borderBottom: "1px solid var(--border-glass)", padding: "10px 20px", flexShrink: 0, maxHeight: "50%", overflow: "auto" }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-              <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://...json (书源 API 地址)" style={{ flex: 1, minWidth: 150, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: 6, padding: "5px 10px", fontSize: ".74rem", outline: "none" }} />
+              <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://...json (书源 API 地址)" style={{ flex: 1, minWidth: 150, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-xs)", padding: "5px 10px", fontSize: ".74rem", outline: "none" }} />
               <button className="btn btn-primary" onClick={importFromUrl} disabled={importing || !importUrl.trim()} style={{ fontSize: ".72rem", padding: "5px 12px" }}>{importing ? "..." : "导入"}</button>
             </div>
             <div style={{ fontSize: ".74rem", color: "var(--text-dim)", marginBottom: 6 }}>

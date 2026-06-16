@@ -339,7 +339,7 @@ export default function MangaReader() {
         pointerEvents: "auto",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button className="btn" style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: 10, padding: "6px 14px", transition: "all 0.25s ease" }}
+          <button className="btn" style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: "var(--radius-md)", padding: "6px 14px", transition: "all 0.25s ease" }}
             onMouseEnter={(e) => { const t = e.currentTarget; t.style.background = "rgba(var(--accent-rgb), 0.12)"; t.style.boxShadow = "0 0 20px rgba(var(--accent-rgb), 0.25)"; }}
             onMouseLeave={(e) => { const t = e.currentTarget; t.style.background = "none"; t.style.boxShadow = "none"; }}
             onClick={(e) => { e.stopPropagation(); closeMangaReader(); }}>← 返回</button>
@@ -434,7 +434,7 @@ export default function MangaReader() {
               useStore.setState({ currentManga: c, mangaCurrentPage: targetPage });
             }}
               style={{
-                display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "6px 8px", borderRadius: 8,
+                display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "6px 8px", borderRadius: "var(--radius-sm)",
                 background: c.id === manga?.id ? "rgba(var(--accent-rgb),0.12)" : "transparent",
                 transition: "all 0.15s ease",
               }}>
@@ -457,11 +457,11 @@ export default function MangaReader() {
       </div>
 
       {loading && !loadedPages[mangaCurrentPage] ? (
-        <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", padding: "8px 20px", borderRadius: 20, border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>
+        <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", padding: "8px 20px", borderRadius: "var(--radius-full)", border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>
       ) : null}
 
       {tip && (
-        <div style={{ position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)", background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", border: "1px solid var(--border-glass)", borderRadius: 30, padding: "10px 24px", fontSize: ".85rem", color: "var(--text)", zIndex: 500, animation: "tipIn 0.3s ease" }}>{tip}</div>
+        <div style={{ position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)", background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-full)", padding: "10px 24px", fontSize: ".85rem", color: "var(--text)", zIndex: 500, animation: "tipIn 0.3s ease" }}>{tip}</div>
       )}
     </div>
   );
