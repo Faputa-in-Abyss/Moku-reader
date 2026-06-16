@@ -595,7 +595,7 @@ export default function Reader() {
         position: "fixed", top: 0, left: 0, right: 0, width: "100%",
         padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
         background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
-        backdropFilter: "blur(24px) saturate(1.4)", borderBottom: "1px solid var(--border-glass)",
+        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))", borderBottom: "1px solid var(--border-glass)",
         opacity: 0, transform: "translateY(-100%)", transition: "all 0.45s ease", zIndex: 300,
       }}>
         <div className="light-follow" />
@@ -640,7 +640,7 @@ export default function Reader() {
       {/* 目录侧栏 */}
       <div style={{
         position: "fixed", top: 0, left: 0, bottom: 0, width: 280,
-        background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+        background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
         borderRight: "1px solid var(--border-glass)",
         transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.35s ease", zIndex: 400,
@@ -681,7 +681,7 @@ export default function Reader() {
       {/* 设置面板 */}
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0, width: 300,
-        background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+        background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
         borderLeft: "1px solid var(--border-glass)",
         transform: settingsOpen ? "translateX(0)" : "translateX(100%)",
         transition: "transform 0.35s ease", zIndex: 400,
@@ -754,7 +754,7 @@ export default function Reader() {
       {tip && (
         <div style={{
           position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)",
-          background: "var(--glass-bg)", backdropFilter: "blur(20px)",
+          background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))",
           border: "1px solid var(--border-glass)", borderRadius: 30,
           padding: "10px 24px", fontSize: ".85rem", color: "var(--text)",
           zIndex: 500, animation: "tipIn 0.3s ease",
@@ -766,7 +766,7 @@ export default function Reader() {
         <div style={{ position: "fixed", left: 0, top: 0, right: 0, bottom: 0, zIndex: 599, cursor: "default" }} onClick={() => { setCtxMenu(null); setCtxSubMenu(null); }} onContextMenu={(e) => e.preventDefault()}>
           <div style={{
             position: "fixed", left: ctxMenu.x, top: ctxMenu.y, zIndex: 600,
-            background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+            background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
             border: "1px solid var(--border-glass)", borderRadius: 12,
             padding: "6px 0", minWidth: 190, boxShadow: "0 8px 40px var(--shadow)",
           }} onClick={(e) => e.stopPropagation()}>
@@ -795,7 +795,7 @@ export default function Reader() {
         <div style={{ position: "fixed", left: 0, top: 0, right: 0, bottom: 0, zIndex: 609, cursor: "default" }} onClick={() => { setCtxMenu(null); setCtxSubMenu(null); }} onContextMenu={(e) => e.preventDefault()}>
           <div style={{
             position: "fixed", left: ctxMenu.x + 10, top: ctxMenu.y, zIndex: 610,
-            background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+            background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
             border: "1px solid var(--border-glass)", borderRadius: 12,
             padding: 14, minWidth: 210, boxShadow: "0 8px 40px var(--shadow)",
           }} onClick={(e) => e.stopPropagation()}>
@@ -826,7 +826,7 @@ export default function Reader() {
         <div style={{ position: "fixed", left: 0, top: 0, right: 0, bottom: 0, zIndex: 609, cursor: "default" }} onClick={() => { setCtxMenu(null); setCtxSubMenu(null); }} onContextMenu={(e) => e.preventDefault()}>
           <div style={{
             position: "fixed", left: ctxMenu.x + 10, top: ctxMenu.y, zIndex: 610,
-            background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+            background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
             border: "1px solid var(--border-glass)", borderRadius: 12,
             padding: "6px 0", minWidth: 200, boxShadow: "0 8px 40px var(--shadow)",
           }} onClick={(e) => e.stopPropagation()}>

@@ -337,7 +337,7 @@ export default function OnlineSearch() {
   const enableBatch = sources.filter((s) => s.enabled !== false).length > 1;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 9997, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setOnlineSearchOpen(false)}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9997, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setOnlineSearchOpen(false)}>
       <div style={{ width: "85vw", height: "80vh", maxWidth: 900, background: "var(--bg)", borderRadius: 16, border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
         {/* 标题栏 */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0 }}>

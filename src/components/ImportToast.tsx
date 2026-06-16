@@ -52,7 +52,7 @@ export default function ImportToast() {
         : importProgress.status === "error"
           ? "rgba(200,60,50,0.15)"
           : "rgba(var(--accent-rgb),0.12)",
-      backdropFilter: "blur(24px) saturate(1.5)",
+      backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
       border: "1px solid var(--border-glass)",
       borderRadius: 14,
       padding: "14px 28px",

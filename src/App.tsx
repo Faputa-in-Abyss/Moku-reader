@@ -22,6 +22,11 @@ export default function App() {
     const saved = localStorage.getItem("nr-theme") || "dark";
     document.documentElement.setAttribute("data-theme", saved);
     useStore.getState().setTheme(saved as any);
+    // 恢复毛玻璃强度
+    const glass = localStorage.getItem("nr-glass-intensity");
+    if (glass) {
+      document.documentElement.style.setProperty("--glass-blur", glass + "px");
+    }
   }, []);
 
   return (
