@@ -15,8 +15,13 @@ export default function MangaLibrary() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const toggleLockRef = useRef<Set<string>>(new Set());
-  type SortField = "name" | "type" | "pages";
-  const [sortField, setSortField] = useState<SortField>(() => (localStorage.getItem("nr-manga-sort-field") as SortField) || "name");
+  type SortField = "name" | "pages";
+  const [sortField, setSortField] = useState<SortField>(() => {
+    const saved = localStorage.getItem("nr-manga-sort-field");
+    if (saved === "pages") return "pages";
+    localStorage.setItem("nr-manga-sort-field", "name");
+    return "name";
+  });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-manga-sort-asc") !== "false");
 
   const setSort = (field: SortField) => {
@@ -44,7 +49,6 @@ export default function MangaLibrary() {
     list.sort((a, b) => {
       let cmp = 0;
       if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
-      else if (sortField === "type") cmp = (a.source_type || "").localeCompare(b.source_type || "");
       else if (sortField === "pages") cmp = a.total_pages - b.total_pages;
       return sortAsc ? cmp : -cmp;
     });
@@ -171,6 +175,13 @@ export default function MangaLibrary() {
     } catch {}
   };
 
+  // 清除封面缓存（选中项）
+  const handleClearCoverCache = (ids: Set<string>) => {
+    ids.forEach((id) => {
+      try { localStorage.removeItem(`nr-manga-cover-${id}`); } catch {}
+    });
+  };
+
   // 批量删除
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
@@ -285,13 +296,13 @@ export default function MangaLibrary() {
         <span className="library-count">{displayList.length} 本漫画</span>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-        {(["name", "type", "pages"] as const).map((field) => (
+        {(["name", "pages"] as const).map((field) => (
           <button key={field} className="btn" onClick={() => setSort(field)} style={{
             fontSize: ".78rem", padding: "4px 12px",
             background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
             borderColor: sortField === field ? "var(--accent)" : undefined,
           }}>
-            {field === "name" ? "📄 名称" : field === "type" ? "📦 类型" : "📄 页数"}
+            {field === "name" ? "📄 名称" : "📄 页数"}
             {sortField === field && (sortAsc ? " ↑" : " ↓")}
           </button>
         ))}
@@ -339,7 +350,8 @@ export default function MangaLibrary() {
               </div>
             )}
             <div className={`book-cover${selectedIds.has(comic.id) ? " cover-selected" : ""}`}>
-              {((optimisticFav[comic.id] ?? comic.favorite)) && <span style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: bursting.has(comic.id) ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
+              {((optimisticFav[comic.id] ?? comic.favorite)) && <span style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 4, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: bursting.has(comic.id) ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
+              <MangaCardCover comicId={comic.id} hasIcon={!!comic.book_icon} />
               <div className="book-cover-icon">{comic.book_icon || getMangaIcon(comic)}</div>
               <div className="book-title">{comic.title}</div>
               <div className="book-progress">
@@ -433,6 +445,11 @@ export default function MangaLibrary() {
                 >{ic}</span>
               ))}
             </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button className="btn" style={{ flex: 1, fontSize: ".78rem", justifyContent: "center", padding: "6px 0" }} onClick={() => { handleBatchIcon(""); handleClearCoverCache(selectedIds); }}>
+                🖼️ 原封面
+              </button>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input id="batch-icon-input" placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleBatchIcon((document.getElementById("batch-icon-input") as HTMLInputElement)?.value || ""); }}
@@ -453,12 +470,23 @@ export default function MangaLibrary() {
                   style={{ fontSize: "1.6rem", cursor: "pointer", padding: 6, borderRadius: "var(--radius-sm)", background: iconPicker.book_icon === ic ? "rgba(var(--accent-rgb),0.12)" : "transparent", border: iconPicker.book_icon === ic ? "1px solid var(--accent)" : "1px solid transparent" }}>{ic}</span>
               ))}
             </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button className="btn" style={{ flex: 1, fontSize: ".78rem", justifyContent: "center", padding: "6px 0" }}
+                onClick={() => { setIconPicker({ ...iconPicker, book_icon: "" }); }}>
+                🖼️ 原封面
+              </button>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input value={iconPicker.book_icon || ""} onChange={(e) => setIconPicker({ ...iconPicker, book_icon: e.target.value })} placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }} />
               <button className="btn btn-primary" style={{ padding: "8px 20px", fontSize: ".82rem" }} onClick={async () => {
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");
-                  await invoke("set_comic_icon", { comicId: iconPicker.id, icon: iconPicker.book_icon || "" });
+                  const icon = iconPicker.book_icon || "";
+                  await invoke("set_comic_icon", { comicId: iconPicker.id, icon });
+                  if (!icon) {
+                    // 选原封面时清除缓存，下次显示真实封面
+                    try { localStorage.removeItem(`nr-manga-cover-${iconPicker.id}`); } catch {}
+                  }
                   setIconPicker(null);
                   triggerRefresh();
                 } catch {}
@@ -469,6 +497,75 @@ export default function MangaLibrary() {
       )}
     </section>
   );
+}
+
+function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolean }) {
+  const [cover, setCover] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    // 用户设置了 emoji 图标时，不显示第一页封面
+    if (hasIcon) {
+      setCover(null);
+      return;
+    }
+
+    // 先查缓存
+    const cached = localStorage.getItem(`nr-manga-cover-${comicId}`);
+    if (cached) {
+      setCover(cached);
+      return;
+    }
+
+    // 缓存已清除（选了原封面），直接加载不等待 IntersectionObserver
+    const loadCover = async () => {
+      loadedRef.current = true;
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const b64: string = await invoke("get_comic_thumbnail", { comicId });
+        if (b64) {
+          setCover(b64);
+          try { localStorage.setItem(`nr-manga-cover-${comicId}`, b64); } catch {}
+        }
+      } catch {}
+    };
+
+    // loadedRef.current 为 true 说明之前已经加载过 now 被触发（原封面→emoji→原封面切换），直接重新加载
+    if (loadedRef.current) {
+      loadCover();
+      return;
+    }
+
+    const el = ref.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !loadedRef.current) {
+          loadedRef.current = true;
+          obs.disconnect();
+          loadCover();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [comicId, hasIcon]);
+
+  if (cover) {
+    return (
+      <>
+        <img className="book-cover-img" src={cover} alt="" />
+        <div className="book-cover-gradient" />
+      </>
+    );
+  }
+
+  // 不渲染占位 div，等进入视口才加载
+  return <div ref={ref} style={{ position: "absolute", inset: 0, zIndex: 1 }} />;
 }
 
 function CtxMenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
