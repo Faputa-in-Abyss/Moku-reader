@@ -111,6 +111,15 @@ export default function MangaLibrary() {
     triggerRefresh();
   };
 
+  const handleOpenPath = async (comic: ComicData) => {
+    setCtxMenu(null);
+    if (!comic.source_path) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_file_location", { path: comic.source_path });
+    } catch {}
+  };
+
   const handleRename = async (comic: ComicData) => {
     setCtxMenu(null);
     const newName = prompt("请输入新漫画名：", comic.title);
@@ -205,6 +214,23 @@ export default function MangaLibrary() {
       triggerRefresh();
     } catch {}
   };
+
+  // 批量设置封面图标
+  const handleBatchIcon = async (icon: string) => {
+    if (selectedIds.size === 0) return;
+    setBatchIconPicker(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      for (const id of selectedIds) {
+        await invoke("set_comic_icon", { comicId: id, icon }).catch(() => {});
+      }
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      triggerRefresh();
+    } catch {}
+  };
+
+  const [batchIconPicker, setBatchIconPicker] = useState(false);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -302,7 +328,7 @@ export default function MangaLibrary() {
             {selectMode && (
               <div style={{
                 position: "absolute", top: 8, left: 8, zIndex: 10,
-                width: 24, height: 24, borderRadius: 6,
+                width: 24, height: 24, borderRadius: "var(--radius-sm)",
                 border: selectedIds.has(comic.id) ? "2px solid var(--accent)" : "2px solid rgba(var(--accent-rgb),0.25)",
                 background: selectedIds.has(comic.id) ? "var(--accent)" : "rgba(0,0,0,0.25)",
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -343,7 +369,7 @@ export default function MangaLibrary() {
             backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
             WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
             border: "1px solid var(--border-glass)",
-            borderRadius: 12,
+            borderRadius: "var(--radius-md)",
             padding: "6px 0",
             minWidth: 200,
             boxShadow: "0 8px 40px var(--shadow)",
@@ -355,13 +381,15 @@ export default function MangaLibrary() {
           <CtxMenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.comic); }} />
           <CtxMenuItem icon="⭐" label={(optimisticFav[ctxMenu.comic.id] ?? ctxMenu.comic.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
           <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
+          <CtxMenuItem icon="📂" label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.comic)} />
+          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
           <CtxMenuItem icon="➡️" label={`阅读方向: ${ctxMenu.comic.direction === "rtl" ? "从右到左" : "从左到右"}`} onClick={() => handleSetDirection(ctxMenu.comic, ctxMenu.comic.direction === "rtl" ? "ltr" : "rtl")} />
           {ctxMenu.comic.source_type === "folder" && (
             <CtxMenuItem icon="🔄" label="重新扫描文件夹" onClick={() => handleRescan(ctxMenu.comic)} />
           )}
           <CtxMenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.comic)} />
           <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
-          <CtxMenuItem icon="☑️" label="批量选择" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
+          <CtxMenuItem icon="☑️" label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
         </div>
       )}
 
@@ -384,24 +412,49 @@ export default function MangaLibrary() {
           }}>{selectedIds.size === displayList.length ? "取消全选" : "全选"}</button>
           <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>取消</button>
           <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedIds.size === 0} onClick={handleBatchFavorite}>⭐ 收藏所选</button>
+          <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedIds.size === 0} onClick={() => setBatchIconPicker(true)}>🎨 图标</button>
           <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedIds.size === 0 ? undefined : "rgba(200,60,50,0.8)" }} disabled={selectedIds.size === 0} onClick={handleBatchDelete}>
             🗑️ 删除所选
           </button>
         </div>
       )}
 
+      {/* 批量图标选择器 */}
+      {batchIconPicker && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setBatchIconPicker(false)}>
+          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>批量设置封面图标（{selectedIds.size} 项）</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 }}>
+              {ICON_LIST.map((ic) => (
+                <span key={ic} onClick={() => handleBatchIcon(ic)}
+                  style={{ fontSize: "1.6rem", cursor: "pointer", padding: 6, borderRadius: "var(--radius-sm)", border: "1px solid transparent", transition: "all 0.15s ease" }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                >{ic}</span>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input id="batch-icon-input" placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleBatchIcon((document.getElementById("batch-icon-input") as HTMLInputElement)?.value || ""); }}
+              />
+              <button className="btn btn-primary" style={{ padding: "8px 20px", fontSize: ".82rem" }} onClick={() => handleBatchIcon((document.getElementById("batch-icon-input") as HTMLInputElement)?.value || "")}>确定</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {iconPicker && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setIconPicker(null)}>
-          <div style={{ background: "var(--bg)", borderRadius: 16, border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>选择封面图标</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 }}>
               {ICON_LIST.map((ic) => (
                 <span key={ic} onClick={() => setIconPicker({ ...iconPicker, book_icon: ic })}
-                  style={{ fontSize: "1.6rem", cursor: "pointer", padding: 6, borderRadius: 8, background: iconPicker.book_icon === ic ? "rgba(var(--accent-rgb),0.12)" : "transparent", border: iconPicker.book_icon === ic ? "1px solid var(--accent)" : "1px solid transparent" }}>{ic}</span>
+                  style={{ fontSize: "1.6rem", cursor: "pointer", padding: 6, borderRadius: "var(--radius-sm)", background: iconPicker.book_icon === ic ? "rgba(var(--accent-rgb),0.12)" : "transparent", border: iconPicker.book_icon === ic ? "1px solid var(--accent)" : "1px solid transparent" }}>{ic}</span>
               ))}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={iconPicker.book_icon || ""} onChange={(e) => setIconPicker({ ...iconPicker, book_icon: e.target.value })} placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: 8, padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }} />
+              <input value={iconPicker.book_icon || ""} onChange={(e) => setIconPicker({ ...iconPicker, book_icon: e.target.value })} placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }} />
               <button className="btn btn-primary" style={{ padding: "8px 20px", fontSize: ".82rem" }} onClick={async () => {
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");

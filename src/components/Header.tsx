@@ -166,7 +166,10 @@ export default function Header() {
 
   return (
     <>
-    <header className="glass-panel" style={headerStyle}>
+    <header className="glass-panel" style={headerStyle}
+        onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 32px rgba(0,0,0,0.45), 0 0 60px rgba(var(--accent-rgb),0.04)"; el.style.borderColor = "rgba(var(--accent-rgb),0.12)"; }}
+        onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "var(--shadow)"; el.style.borderColor = "var(--border-glass)"; }}
+    >
       <div className="light-follow" />
       <div style={{ display: "flex", alignItems: "center", gap: 24, position: "relative", zIndex: 1 }}>
         <a className="logo" href="#" style={logoStyle}
@@ -181,72 +184,45 @@ export default function Header() {
           墨读
         </a>
         <div className="header-tabs" style={{
-          display: "flex", gap: 0,
+          display: "flex", gap: 0, cursor: "pointer", userSelect: "none",
           background: "rgba(var(--accent-rgb),0.06)",
-          borderRadius: 10, padding: 3,
+          borderRadius: "var(--radius-sm)", padding: 3,
           position: "relative",
-        }}>
+          transition: "box-shadow 0.3s ease, border-color 0.3s ease",
+          border: "1px solid transparent",
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 2px 20px rgba(var(--accent-rgb),0.08)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.06)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "transparent"; }}
+        onClick={() => switchViewMode(viewMode === "library" ? "manga" : "library")}>
           {/* 跟随滑块 */}
           <div style={{
-            position: "absolute",
-            top: 3, bottom: 3,
+            position: "absolute", top: 3, bottom: 3,
             left: viewMode === "library" ? 3 : "calc(50% + 1.5px)",
             width: "calc(50% - 3px)",
             background: "rgba(var(--accent-rgb),0.18)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-sm)",
             transform: "translateZ(0)",
             willChange: "left",
             transition: "left 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)",
             zIndex: 0,
           }} />
-          <button
-            className="btn header-tab"
-            style={{
-              fontSize: ".82rem",
-              padding: "6px 20px",
-              background: "transparent",
-              border: "none",
-              position: "relative", zIndex: 1,
-              fontWeight: 500,
-              color: "var(--text-dim)",
-            }}
-            onClick={() => switchViewMode("library")}
-          >
-            📖 小说
-          </button>
-          <button
-            className="btn header-tab"
-            style={{
-              fontSize: ".82rem",
-              padding: "6px 20px",
-              background: "transparent",
-              border: "none",
-              position: "relative", zIndex: 1,
-              fontWeight: 500,
-              color: "var(--text-dim)",
-            }}
-            onClick={() => switchViewMode("manga")}
-          >
-            🎴 漫画
-          </button>
+          <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "library" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease" }}>📖 小说</span>
+          <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "manga" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease" }}>🎴 漫画</span>
         </div>
       </div>
-      <div className="header-actions" style={{ display: "flex", gap: 8, position: "relative", zIndex: 1 }}>
-        <button className="btn" onClick={cycleTheme} title="切换主题" style={{ width: 36, height: 36, borderRadius: 10, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, padding: 4, background: "rgba(var(--accent-rgb),0.04)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-glass)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))", transition: "box-shadow 0.3s ease, border-color 0.3s ease" }}
+        onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 32px rgba(0,0,0,0.45), 0 0 60px rgba(var(--accent-rgb),0.04)"; el.style.borderColor = "rgba(var(--accent-rgb),0.12)"; const glow = el.querySelector("div") as HTMLDivElement; if (glow) glow.style.opacity = "1"; }}
+        onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "none"; el.style.borderColor = "var(--border-glass)"; const glow = el.querySelector("div") as HTMLDivElement; if (glow) glow.style.opacity = "0"; }}
+      >
+        {/* 顶部光效 */}
+        <div style={{ position: "absolute", top: -1, left: "10%", right: "10%", height: 1, background: "linear-gradient(90deg, transparent, rgba(var(--accent-rgb),0.4), transparent)", opacity: 0, transition: "opacity 0.3s ease", pointerEvents: "none" }} />
+        <button className="btn" onClick={cycleTheme} title="切换主题" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span>{THEME_ICONS[theme]}</span>
         </button>
-        {viewMode === "library" ? (
-          <button className="btn btn-primary" onClick={handleImportNovel} title="导入小说" style={{ width: 36, height: 36, borderRadius: 10, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: "1.2rem", fontWeight: 700 }}>+</span>
-          </button>
-        ) : (
-          <div style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-primary" onClick={handleImportManga} title="导入漫画" style={{ width: 36, height: 36, borderRadius: 10, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: "1.2rem", fontWeight: 700 }}>+</span>
-            </button>
-          </div>
-        )}
-        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="高级设置" style={{ width: 36, height: 36, borderRadius: 10, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".85rem", letterSpacing: 2 }}>
+        <button className="btn btn-primary" onClick={viewMode === "library" ? handleImportNovel : handleImportManga} title={viewMode === "library" ? "导入小说" : "导入漫画"} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
+          <span style={{ fontSize: "1.3rem", fontWeight: 300, lineHeight: 1 }}>+</span>
+        </button>
+        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="高级设置" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".85rem", letterSpacing: 2 }}>
           ⋯
         </button>
       </div>
@@ -255,7 +231,7 @@ export default function Header() {
     {aboutFlying && (
       <div style={aboutFlyStyle}>
         <span style={{
-          width: 36, height: 36, borderRadius: 10,
+          width: 36, height: 36, borderRadius: "var(--radius-md)",
           background: "linear-gradient(135deg, var(--accent), #b8895a)",
           display: "flex", alignItems: "center", justifyContent: "center",
           color: "#fff", fontSize: "1.1rem", fontWeight: 700,
@@ -274,16 +250,16 @@ export default function Header() {
         animation: "aboutFadeIn 0.35s ease",
       }} onClick={() => setAboutOpen(false)}>
         <div style={{
-          background: "var(--bg)",
+          background: "var(--glass-bg)",
           backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-          border: "1px solid var(--border-glass)", borderRadius: 20,
+          border: "1px solid var(--border-glass)", borderRadius: "var(--radius-full)",
           padding: "40px 48px", maxWidth: 420, width: "90%",
           boxShadow: "0 24px 80px var(--shadow)",
           animation: "aboutScaleIn 0.4s cubic-bezier(0.22, 0.61, 0.36, 1)",
           display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
         }} onClick={(e) => e.stopPropagation()}>
           <div style={{
-            width: 56, height: 56, borderRadius: 16,
+            width: 56, height: 56, borderRadius: "var(--radius-lg)",
             background: "linear-gradient(135deg, var(--accent), #b8895a)",
             display: "flex", alignItems: "center", justifyContent: "center",
             color: "#fff", fontSize: "1.6rem", fontWeight: 700, marginBottom: 20,
@@ -318,7 +294,7 @@ const headerStyle: React.CSSProperties = {
   background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
   backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
   borderBottom: "1px solid var(--border-glass)",
-  transition: "background 0.6s ease, border-color 0.6s ease",
+  transition: "background 0.6s ease, border-color 0.3s ease, box-shadow 0.3s ease",
 };
 
 const logoStyle: React.CSSProperties = {
@@ -341,7 +317,7 @@ const logoIconStyle: React.CSSProperties = {
   width: 36,
   height: 36,
   background: "linear-gradient(135deg, var(--accent), #b8895a)",
-  borderRadius: 10,
+  borderRadius: "var(--radius-md)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

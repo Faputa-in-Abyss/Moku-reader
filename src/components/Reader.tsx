@@ -604,7 +604,7 @@ export default function Reader() {
             className="btn"
             onMouseEnter={(e) => { const t = e.currentTarget; t.style.background = "rgba(var(--accent-rgb), 0.12)"; t.style.boxShadow = "0 0 20px rgba(var(--accent-rgb), 0.25)"; }}
             onMouseLeave={(e) => { const t = e.currentTarget; t.style.background = "none"; t.style.boxShadow = "none"; }}
-            style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: 10, padding: "6px 14px", transition: "all 0.25s ease" }}
+            style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: "var(--radius-md)", padding: "6px 14px", transition: "all 0.25s ease" }}
             onClick={closeReader}>
             ← 返回书库
           </button>
@@ -755,7 +755,7 @@ export default function Reader() {
         <div style={{
           position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)",
           background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))",
-          border: "1px solid var(--border-glass)", borderRadius: 30,
+          border: "1px solid var(--border-glass)", borderRadius: "var(--radius-full)",
           padding: "10px 24px", fontSize: ".85rem", color: "var(--text)",
           zIndex: 500, animation: "tipIn 0.3s ease",
         }}>{tip}</div>
@@ -767,7 +767,7 @@ export default function Reader() {
           <div style={{
             position: "fixed", left: ctxMenu.x, top: ctxMenu.y, zIndex: 600,
             background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            border: "1px solid var(--border-glass)", borderRadius: 12,
+            border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)",
             padding: "6px 0", minWidth: 190, boxShadow: "0 8px 40px var(--shadow)",
           }} onClick={(e) => e.stopPropagation()}>
             <CtxItem label={bookmarks.find(b => b.chapterIndex === currentChapter) ? "🔖 取消书签" : "🔖 添加书签"} onClick={() => {
@@ -796,7 +796,7 @@ export default function Reader() {
           <div style={{
             position: "fixed", left: ctxMenu.x + 10, top: ctxMenu.y, zIndex: 610,
             background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            border: "1px solid var(--border-glass)", borderRadius: 12,
+            border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)",
             padding: 14, minWidth: 210, boxShadow: "0 8px 40px var(--shadow)",
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{ color: "var(--text)", fontSize: ".82rem", marginBottom: 10, fontWeight: 500, display: "flex", justifyContent: "space-between" }}>
@@ -806,14 +806,14 @@ export default function Reader() {
             <div style={{ fontSize: ".75rem", color: "var(--text-dim)", marginBottom: 6 }}>字体颜色</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
               {COLOR_PRESETS.map((c) => (
-                <div key={"t"+c} onClick={() => { setReaderTextColor(c); setCtxMenu(null); setCtxSubMenu(null); }} style={{ width: 26, height: 26, borderRadius: 6, background: c, cursor: "pointer", outline: readerTextColor === c ? "2px solid var(--accent)" : "none", outlineOffset: 2 }} />
+                <div key={"t"+c} onClick={() => { setReaderTextColor(c); setCtxMenu(null); setCtxSubMenu(null); }} style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", background: c, cursor: "pointer", outline: readerTextColor === c ? "2px solid var(--accent)" : "none", outlineOffset: 2 }} />
               ))}
               {readerTextColor ? <span onClick={() => { setReaderTextColor(""); }} style={{ color: "var(--text-dim)", fontSize: ".7rem", cursor: "pointer", padding: "4px 6px" }}>重置</span> : null}
             </div>
             <div style={{ fontSize: ".75rem", color: "var(--text-dim)", marginBottom: 6 }}>背景颜色</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
               {COLOR_PRESETS.map((c) => (
-                <div key={"b"+c} onClick={() => { setReaderBgColor(c); setCtxMenu(null); setCtxSubMenu(null); }} style={{ width: 26, height: 26, borderRadius: 6, background: c, cursor: "pointer", outline: readerBgColor === c ? "2px solid var(--accent)" : "none", outlineOffset: 2 }} />
+                <div key={"b"+c} onClick={() => { setReaderBgColor(c); setCtxMenu(null); setCtxSubMenu(null); }} style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", background: c, cursor: "pointer", outline: readerBgColor === c ? "2px solid var(--accent)" : "none", outlineOffset: 2 }} />
               ))}
               {readerBgColor ? <span onClick={() => { setReaderBgColor(""); }} style={{ color: "var(--text-dim)", fontSize: ".7rem", cursor: "pointer", padding: "4px 6px" }}>重置</span> : null}
             </div>
@@ -827,7 +827,7 @@ export default function Reader() {
           <div style={{
             position: "fixed", left: ctxMenu.x + 10, top: ctxMenu.y, zIndex: 610,
             background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            border: "1px solid var(--border-glass)", borderRadius: 12,
+            border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)",
             padding: "6px 0", minWidth: 200, boxShadow: "0 8px 40px var(--shadow)",
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: "8px 14px 4px", color: "var(--text-dim)", fontSize: ".78rem", display: "flex", justifyContent: "space-between" }}>
@@ -892,11 +892,11 @@ function FontSearchDropdown({ fonts, current, onSelect }: {
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <div onClick={() => setOpen(!open)}
-        style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: 8, padding: "7px 10px", fontSize: ".82rem", cursor: "pointer", userSelect: "none" }}>
+        style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: ".82rem", cursor: "pointer", userSelect: "none" }}>
         {currentLabel}
       </div>
       {open && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "var(--bg)", border: "1px solid var(--border-glass)", borderRadius: 8, boxShadow: "0 8px 32px rgba(0,0,0,0.3)", zIndex: 10, overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "var(--bg)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", zIndex: 10, overflow: "hidden" }}>
           <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索字体..."
             style={{ width: "100%", padding: "8px 10px", background: "var(--glass-bg)", color: "var(--text)", border: "none", borderBottom: "1px solid var(--border-glass)", fontSize: ".8rem", outline: "none" }} />
           <div style={{ maxHeight: 140, overflowY: "auto" }}>

@@ -54,7 +54,7 @@ export default function ImportToast() {
           : "rgba(var(--accent-rgb),0.12)",
       backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
       border: "1px solid var(--border-glass)",
-      borderRadius: 14,
+      borderRadius: "var(--radius-md)",
       padding: "14px 28px",
       display: "flex",
       alignItems: "center",
@@ -65,7 +65,7 @@ export default function ImportToast() {
     }}>
       {isProcessing ? (
         <span style={{
-          width: 18, height: 18, borderRadius: "50%",
+          width: 18, height: 18, borderRadius: "var(--radius-full)",
           border: "2px solid var(--accent)",
           borderTopColor: "transparent",
           animation: "spin 0.8s linear infinite",

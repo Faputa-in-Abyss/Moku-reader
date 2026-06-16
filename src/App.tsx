@@ -17,6 +17,11 @@ export default function App() {
   const reading = useStore((s) => s.reading);
   const viewMode = useStore((s) => s.viewMode);
   const mangaReading = useStore((s) => s.mangaReading);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [viewMode]);
 
   React.useEffect(() => {
     const saved = localStorage.getItem("nr-theme") || "dark";
@@ -26,6 +31,19 @@ export default function App() {
     const glass = localStorage.getItem("nr-glass-intensity");
     if (glass) {
       document.documentElement.style.setProperty("--glass-blur", glass + "px");
+    }
+    // 恢复圆角强度
+    const radius = localStorage.getItem("nr-radius-intensity");
+    if (radius) {
+      const v = Number(radius);
+      const sm = Math.max(2, Math.round(v * 0.5));
+      const md = v;
+      const lg = Math.min(32, Math.round(v * 1.4));
+      const xl = Math.min(40, Math.round(v * 2));
+      document.documentElement.style.setProperty("--radius-sm", sm + "px");
+      document.documentElement.style.setProperty("--radius-md", md + "px");
+      document.documentElement.style.setProperty("--radius-lg", lg + "px");
+      document.documentElement.style.setProperty("--radius-xl", xl + "px");
     }
   }, []);
 
@@ -46,16 +64,19 @@ export default function App() {
         }}
       />
       <Header />
-      <div style={{
+      <div ref={scrollRef} style={{
         display: "grid",
         gridTemplateColumns: "1fr",
         gridTemplateRows: "1fr",
+        overflow: "hidden",
+        height: "calc(100vh - 73px)",
       }}>
         <div style={{
           gridArea: "1 / 1",
           opacity: viewMode === "library" && !reading ? 1 : 0,
           pointerEvents: viewMode === "library" && !reading ? "auto" : "none",
           transition: "opacity 0.4s ease",
+          overflowY: "auto",
         }}>
           <Library />
         </div>
@@ -64,6 +85,7 @@ export default function App() {
           opacity: viewMode === "manga" && !mangaReading ? 1 : 0,
           pointerEvents: viewMode === "manga" && !mangaReading ? "auto" : "none",
           transition: "opacity 0.4s ease",
+          overflowY: "auto",
         }}>
           <MangaLibrary />
         </div>

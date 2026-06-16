@@ -40,7 +40,7 @@ function createParticle(W: number, H: number): Particle {
 
 function initParticles(W: number, H: number) {
   _particles = [];
-  for (let i = 0; i < 150; i++) _particles.push(createParticle(W, H));
+  for (let i = 0; i < 200; i++) _particles.push(createParticle(W, H));
 }
 
 export default function ParticleCanvas() {
@@ -75,20 +75,20 @@ export default function ParticleCanvas() {
         const wb = Math.sin(_time * p.wf + p.wo) * p.wa;
         p.sx += (Math.random() - 0.5) * 0.02;
         p.sy += (Math.random() - 0.5) * 0.02;
-        p.sx *= 0.98; p.sy *= 0.98;
+        p.sx *= 0.96; p.sy *= 0.96;
         const dx = p.x - _mouse.x, dy = p.y - _mouse.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const md = 180 * p.z;
+        const md = 200 * p.z;
         if (dist < md && dist > 0) {
-          const force = (1 - dist / md) * 0.6 * p.z;
+          const force = (1 - dist / md) * 0.7 * p.z;
           const angle = Math.atan2(dy, dx);
           const fa = Math.atan2(_mouse.vy, _mouse.vx);
-          const fi = Math.min(1, Math.sqrt(_mouse.vx * _mouse.vx + _mouse.vy * _mouse.vy) * 0.05);
-          p.sx += Math.cos(angle) * force + Math.cos(fa) * fi * 0.3;
-          p.sy += Math.sin(angle) * force + Math.sin(fa) * fi * 0.3;
+          const fi = Math.min(1, Math.sqrt(_mouse.vx * _mouse.vx + _mouse.vy * _mouse.vy) * 0.08);
+          p.sx += Math.cos(angle) * force + Math.cos(fa) * fi * 0.4;
+          p.sy += Math.sin(angle) * force + Math.sin(fa) * fi * 0.4;
           p.to = 0.05 + (dist / md) * p.bo;
         } else { p.to = p.bo; }
-        p.co += (p.to - p.co) * 0.05;
+          p.co += (p.to - p.co) * 0.06;
         p.x += p.sx + wb * 0.02;
         p.y += p.sy + Math.cos(_time * p.wf + p.wo) * 0.1;
         if (p.x < -20) p.x = W + 20;
@@ -141,7 +141,7 @@ export default function ParticleCanvas() {
         p.bo = 0.2 + Math.random() * 0.6;
         _particles.push(p);
       }
-      if (_particles.length > 300) _particles.splice(0, _particles.length - 300);
+      if (_particles.length > 400) _particles.splice(0, _particles.length - 400);
     };
     return () => {
       running = false; cancelAnimationFrame(_animId);

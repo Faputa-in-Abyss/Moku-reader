@@ -83,6 +83,10 @@ export default function DebugPanel() {
     const saved = localStorage.getItem("nr-glass-intensity");
     return saved ? Number(saved) : 24;
   });
+  const [radiusIntensity, setRadiusIntensity] = useState(() => {
+    const saved = localStorage.getItem("nr-radius-intensity");
+    return saved ? Number(saved) : 12;
+  });
 
   // 系统资源
   const [procMem, setProcMem] = useState(0);
@@ -143,6 +147,21 @@ export default function DebugPanel() {
       const v = Number(savedGlass);
       setGlassIntensity(v);
       document.documentElement.style.setProperty("--glass-blur", v + "px");
+    }
+    // 恢复圆角强度
+    const savedRadius = localStorage.getItem("nr-radius-intensity");
+    if (savedRadius) {
+      const v = Number(savedRadius);
+      setRadiusIntensity(v);
+      // 根据圆角强度设置各令牌
+      const sm = Math.max(2, Math.round(v * 0.5));
+      const md = v;
+      const lg = Math.min(32, Math.round(v * 1.4));
+      const xl = Math.min(40, Math.round(v * 2));
+      document.documentElement.style.setProperty("--radius-sm", sm + "px");
+      document.documentElement.style.setProperty("--radius-md", md + "px");
+      document.documentElement.style.setProperty("--radius-lg", lg + "px");
+      document.documentElement.style.setProperty("--radius-xl", xl + "px");
     }
 
     const update = async () => {
@@ -249,7 +268,7 @@ export default function DebugPanel() {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.35)", backdropFilter: `blur(${glassIntensity}px) saturate(1.4)`, WebkitBackdropFilter: `blur(${glassIntensity}px) saturate(1.4)`, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDebugPanelOpen(false)}>
-      <div style={{ width: "88vw", height: "82vh", maxWidth: 960, background: "var(--glass-bg)", borderRadius: 16, border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ width: "88vw", height: "82vh", maxWidth: 960, background: "var(--glass-bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: "1.15rem", fontWeight: 600, color: "var(--text)" }}>高级设置</span>
@@ -312,7 +331,7 @@ export default function DebugPanel() {
                   onChange={(e) => setDpiEditValue(e.target.value)}
                   onBlur={() => commitDpi()}
                   onKeyDown={(e) => { if (e.key === "Enter") commitDpi(); if (e.key === "Escape") { setDpiEditing(false); setDpiEditValue(String(renderDpi)); } }}
-                  style={{ width: 80, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--accent)", borderRadius: 6, padding: "2px 8px", fontSize: ".75rem", textAlign: "center", outline: "none" }}
+                  style={{ width: 80, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "2px 8px", fontSize: ".75rem", textAlign: "center", outline: "none" }}
                 />
               ) : (
                 <span
@@ -360,6 +379,31 @@ export default function DebugPanel() {
               <span>4（清晰）</span><span>|</span><span>12</span><span>|</span><span>24</span><span>|</span><span>36</span><span>|</span><span>48（模糊）</span>
             </div>
             <div style={{ borderTop: "1px solid var(--border-glass)", margin: "14px 0 10px" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "0 0 4px" }}>
+              <span style={{ color: "var(--text)" }}>📐 圆角强度</span>
+              <span style={{ color: "var(--accent)", fontWeight: 600 }}>{radiusIntensity}px</span>
+            </div>
+            <input
+              type="range" min={2} max={24} step={1} value={radiusIntensity}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setRadiusIntensity(v);
+                localStorage.setItem("nr-radius-intensity", String(v));
+                const sm = Math.max(2, Math.round(v * 0.5));
+                const md = v;
+                const lg = Math.min(32, Math.round(v * 1.4));
+                const xl = Math.min(40, Math.round(v * 2));
+                document.documentElement.style.setProperty("--radius-sm", sm + "px");
+                document.documentElement.style.setProperty("--radius-md", md + "px");
+                document.documentElement.style.setProperty("--radius-lg", lg + "px");
+                document.documentElement.style.setProperty("--radius-xl", xl + "px");
+                console.log(`[墨读] 圆角强度已设为 ${v}px（sm=${sm} md=${md} lg=${lg} xl=${xl})`);
+              }}
+              style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
+              <span>2（直角）</span><span>|</span><span>8</span><span>|</span><span>12</span><span>|</span><span>18</span><span>|</span><span>24（圆润）</span>
+            </div>
             <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem" }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -369,7 +413,7 @@ export default function DebugPanel() {
                 <span style={{ fontSize: ".68rem", color: "var(--text-dim)", opacity: 0.4 }}>(共 {logs.length} 条)</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <select value={filterSource} onChange={(e) => setFilterSource(e.target.value as any)} style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: 6, padding: "3px 8px", fontSize: ".75rem", outline: "none", cursor: "pointer" }}>
+                <select value={filterSource} onChange={(e) => setFilterSource(e.target.value as any)} style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: ".75rem", outline: "none", cursor: "pointer" }}>
                   <option value="all">全部来源</option>
                   <option value="frontend">仅前端</option>
                   <option value="backend">仅后端</option>
