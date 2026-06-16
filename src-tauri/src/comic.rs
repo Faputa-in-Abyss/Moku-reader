@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 
 /// 支持的图片格式扩展名
 const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
+/// 会在 data_dir/comics/ 下创建副本的文件格式
+pub const COPY_EXTS: &[&str] = &["cbz", "zip", "pdf"];
 
 pub fn is_image_ext(ext: &str) -> bool {
     IMAGE_EXTS.contains(&ext)
@@ -286,6 +288,9 @@ fn import_pdf(path: &Path, dest_dir: &Path) -> Result<(Vec<String>, String), Str
     Ok((files, title))
 }
 
+/// 渲染完成后删除 dest_dir 中可能残留的 PDF 副本（mutool 参数中的 path 就是源 PDF）
+/// 但 import_pdf 不复制 PDF，所以只需要在 import_comic 返回后由调用方处理
+
 // ===== 公开接口 =====
 
 pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
@@ -300,7 +305,7 @@ pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
         .unwrap_or("")
         .to_lowercase();
 
-    let (mut files, title, source_type, image_dir): (Vec<String>, String, String, PathBuf);
+    let (mut files, title, source_type, image_dir, dest_dir): (Vec<String>, String, String, PathBuf, Option<PathBuf>);
 
     match ext.as_str() {
         "cbz" | "zip" => {
@@ -308,7 +313,8 @@ pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
             files = extract_cbz(path_obj, &dest)?;
             title = title_from_path(path);
             source_type = "cbz".to_string();
-            image_dir = dest;
+            image_dir = dest.clone();
+            dest_dir = Some(dest);
         }
         "pdf" => {
             let dest = data_dir.join("comics").join(&generate_id());
@@ -317,6 +323,7 @@ pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
             title = t;
             source_type = "pdf".to_string();
             image_dir = dest.join("images");
+            dest_dir = Some(dest);
         }
         _ => {
             if !path_obj.is_dir() {
@@ -327,6 +334,7 @@ pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
             title = t;
             source_type = "folder".to_string();
             image_dir = path_obj.to_path_buf();
+            dest_dir = None;
         }
     }
 
@@ -349,6 +357,41 @@ pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
         total_pages: total, current_page: 0, direction: "ltr".to_string(),
         favorite: false, book_icon: String::new(),
     })
+}
+
+/// 渲染完成后删除源文件副本（PDF/CBZ 会被复制到 data_dir）
+/// 在 import_comic 成功返回后，立即清理源文件
+pub fn cleanup_source_copy(path: &str, dest_dir: Option<&PathBuf>) {
+    // 如果源文件在 data_dir/comics/ 下（即被复制过的），渲染完成后删除这个副本
+    if let Some(dest) = dest_dir {
+        // 检查是否有源文件副本在 dest 目录中
+        let source_path = Path::new(path);
+        if let Some(file_name) = source_path.file_name() {
+            let copied = dest.join(file_name);
+            if copied.exists() {
+                let _ = fs::remove_file(&copied);
+            }
+        }
+    }
+}
+
+/// 清理漫画导入产生的文件残留（应用于 PDF/CBZ，这些会复制到 data_dir）
+pub fn cleanup_comic_files(comic: &ComicBook) {
+    if comic.source_type == "pdf" {
+        // PDF: image_dir = dest/images, 删除 dest 整个目录
+        let images_dir = Path::new(&comic.image_dir);
+        if let Some(dest) = images_dir.parent() {
+            if dest.exists() {
+                let _ = fs::remove_dir_all(dest);
+            }
+        }
+    } else if comic.source_type == "cbz" {
+        // CBZ: image_dir = dest（解压后目录）, 直接删除
+        let dest = Path::new(&comic.image_dir);
+        if dest.exists() {
+            let _ = fs::remove_dir_all(dest);
+        }
+    }
 }
 
 pub fn get_page_base64(image_dir: &str, filename: &str) -> Result<String, String> {

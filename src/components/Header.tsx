@@ -232,7 +232,7 @@ export default function Header() {
         </div>
       </div>
       <div className="header-actions" style={{ display: "flex", gap: 8, position: "relative", zIndex: 1 }}>
-        <button className="btn" onClick={cycleTheme} title="切换主题">
+        <button className="btn" onClick={cycleTheme} title="切换主题" style={{ width: 36, height: 36, borderRadius: 10, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span>{THEME_ICONS[theme]}</span>
         </button>
         {viewMode === "library" ? (
@@ -246,13 +246,8 @@ export default function Header() {
             </button>
           </div>
         )}
-        <button
-          className="btn"
-          onClick={() => setDebugPanelOpen(true)}
-          title="高级设置"
-          style={{ fontSize: "1.1rem", padding: "8px 12px", letterSpacing: 2 }}
-        >
-          ...
+        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="高级设置" style={{ width: 36, height: 36, borderRadius: 10, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".85rem", letterSpacing: 2 }}>
+          ⋯
         </button>
       </div>
     </header>
