@@ -81,6 +81,11 @@ export default function DebugPanel() {
   const [storageApp, setStorageApp] = useState(0);
   const [storageContent, setStorageContent] = useState(0);
 
+  // fmtBytes 可以直接处理 MB 数值，转成可读格式
+  function fmtMB(mb: number): string {
+    return fmtBytes(mb * 1024 * 1024);
+  }
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     (async () => {
@@ -123,8 +128,8 @@ export default function DebugPanel() {
         const res: any = await invoke("get_system_resources");
         if (cancelled) return;
         setProcMem(res.process_mem_mb);
-        setStorageApp(res.storage_app_mb * 1024 * 1024);
-        setStorageContent(res.storage_content_mb * 1024 * 1024);
+        setStorageApp(res.storage_app_mb);
+        setStorageContent(res.storage_content_mb);
       } catch {};
     };
     update();
@@ -191,8 +196,6 @@ export default function DebugPanel() {
   const displayLogs = filterSource === "all" ? logs : logs.filter((l) => l.source === filterSource);
   const appInfo: Record<string, string> = {
     "书库路径": libraryPath || "（未设置）",
-    "已导入书籍": books.length + " 本",
-    "已导入漫画": comics.length + " 本",
     "阅读模式": useStore.getState().readingMode,
     "字号": useStore.getState().fontSize + "rem",
     "窗口挡位": ["小", "中", "大", "超大", "全屏"][useStore.getState().windowSize] || "未知",
@@ -204,10 +207,10 @@ export default function DebugPanel() {
       <div style={{ width: "88vw", height: "82vh", maxWidth: 960, background: "var(--bg)", borderRadius: 16, border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: "1.15rem", fontWeight: 600, color: "var(--text)" }}>⚙️ 高级设置</span>
+            <span style={{ fontSize: "1.15rem", fontWeight: 600, color: "var(--text)" }}>高级设置</span>
             <span style={{ fontSize: ".7rem", color: "var(--text-dim)", opacity: 0.45 }}>Debug Panel</span>
           </div>
-          <button className="btn" style={{ padding: "5px 14px" }} onClick={() => setDebugPanelOpen(false)}>✕ 关闭</button>
+          <button className="btn" style={{ padding: "5px 10px", fontSize: ".85rem" }} onClick={() => setDebugPanelOpen(false)}>✕</button>
         </div>
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
           <div style={{ width: 220, flexShrink: 0, padding: "14px 18px", borderRight: "1px solid var(--border-glass)", overflowY: "auto", fontSize: ".8rem" }}>
@@ -218,6 +221,17 @@ export default function DebugPanel() {
                 <div style={{ color: "var(--text)", wordBreak: "break-all", fontSize: ".78rem" }}>{v}</div>
               </div>
             ))}
+            {/* 已导入书籍/漫画合并到一行 */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "var(--text-dim)", fontSize: ".7rem", marginBottom: 1 }}>已导入书籍</div>
+                <div style={{ color: "var(--text)", fontSize: ".78rem" }}>{books.length} 本</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "var(--text-dim)", fontSize: ".7rem", marginBottom: 1 }}>已导入漫画</div>
+                <div style={{ color: "var(--text)", fontSize: ".78rem" }}>{comics.length} 本</div>
+              </div>
+            </div>
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 10, color: "var(--text)", fontSize: ".88rem" }}>系统资源</div>
             {/* 应用占用内存 */}
             <div style={{ marginBottom: 12 }}>
@@ -230,18 +244,17 @@ export default function DebugPanel() {
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
                 <span>⚙️ 应用本身</span>
-                <span>{storageApp > 0 ? fmtBytes(storageApp) : "—"}</span>
+                <span>{storageApp > 0 ? fmtMB(storageApp) : "—"}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
                 <span>📚 小说漫画</span>
-                <span>{storageContent > 0 ? fmtBytes(storageContent) : "—"}</span>
+                <span>{storageContent > 0 ? fmtMB(storageContent) : "—"}</span>
               </div>
             </div>
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>操作</div>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={handleSetPath}>📂 更改书库路径</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={scanning || !libraryPath} onClick={handleScan}>{scanning ? "⏳ 扫描中..." : "🔄 扫描书库"}</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
-            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().closeMangaReader(); }}>📕 关闭漫画阅读器</button>
             {false && <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().setOnlineSearchOpen(true); }}>📚 联网搜书</button>}
             <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem" }} onClick={() => { try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
           </div>

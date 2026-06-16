@@ -77,16 +77,8 @@ export default function MangaLibrary() {
       try {
         const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen("comics-refreshed", async () => {
-          // 重新加载漫画库
-          try {
-            const { invoke } = await import("@tauri-apps/api/core");
-            const lib: ComicData[] = await invoke("get_comic_library");
-            const { setComics, setComicsMeta, triggerRefresh } = useStore.getState();
-            setComics(lib);
-            const meta = lib.map((c): ComicMeta => ({ id: c.id, title: c.title, source_type: c.source_type, total_pages: c.total_pages, current_page: c.current_page, direction: c.direction, favorite: c.favorite, book_icon: c.book_icon }));
-            setComicsMeta(meta);
-            triggerRefresh();
-          } catch {}
+          const { triggerRefresh } = useStore.getState();
+          triggerRefresh();
         });
       } catch {}
     })();

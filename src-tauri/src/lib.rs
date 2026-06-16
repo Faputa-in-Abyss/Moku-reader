@@ -746,6 +746,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                 }
             } else {
                 let result = comic::import_comic(path, &data_dir);
+                let mut need_cleanup = false;
                 match result {
                     Ok(book) => {
                         let title = book.title.clone();
@@ -754,6 +755,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                         cl.comics.push(book);
                         comic::save_comic_library(&data_dir, &cl).ok();
                         comics_imported += 1;
+                        need_cleanup = true;
                         if let Some(handle) = crate::APP_HANDLE.get() {
                             let _ = handle.emit("comic-import-progress", &crate::ImportProgress {
                                 title: title.clone(),
@@ -765,6 +767,18 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                     }
                     Err(e) => {
                         errors.push(format!("导入漫画失败 {}: {}", path, e));
+                    }
+                }
+                // 清理 PDF/CBZ 的源文件副本
+                if need_cleanup {
+                    let p = std::path::Path::new(path);
+                    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                    if ext == "pdf" || ext == "cbz" || ext == "zip" {
+                        // 判断是否在 data_dir/comics/ 下（被复制过的）
+                        let comics_dir = data_dir.join("comics");
+                        if p.starts_with(&comics_dir) {
+                            let _ = std::fs::remove_file(p);
+                        }
                     }
                 }
             }
@@ -911,6 +925,10 @@ fn update_comic_direction(comic_id: String, direction: String, state: State<AppS
 #[tauri::command]
 fn remove_comic(comic_id: String, state: State<AppState>) -> Result<(), String> {
     let mut lib = state.comic_library.lock().unwrap();
+    // 删除前清理文件
+    if let Some(comic) = lib.comics.iter().find(|c| c.id == comic_id) {
+        comic::cleanup_comic_files(comic);
+    }
     lib.comics.retain(|c| c.id != comic_id);
     comic::save_comic_library(&state.data_dir, &lib).ok();
     Ok(())
@@ -1002,7 +1020,7 @@ fn get_system_resources() -> SystemResource {
 /// 递归计算目录大小（MB）
 fn dir_size_mb(dir: &Path) -> f64 {
     let mut total = 0u64;
-    if let Ok(entries) = fs::read_dir(dir) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
