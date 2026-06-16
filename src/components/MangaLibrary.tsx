@@ -8,6 +8,7 @@ export default function MangaLibrary() {
   const setComicsMeta = useStore((s) => s.setComicsMeta);
   const openMangaReader = useStore((s) => s.openMangaReader);
   const refreshKey = useStore((s) => s.refreshKey);
+  const [animStars, setAnimStars] = useState<Record<string, boolean>>({});
 
   const [ctxMenu, setCtxMenu] = useState<{ comic: ComicData; x: number; y: number } | null>(null);
   const [iconPicker, setIconPicker] = useState<ComicData | null>(null);
@@ -91,6 +92,13 @@ export default function MangaLibrary() {
 
   const handleToggleFavorite = async (comic: ComicData) => {
     setCtxMenu(null);
+    // 取消收藏时才播放消散动画
+    const wasFavorited = comic.favorite;
+    if (wasFavorited) {
+      setAnimStars((p) => ({ ...p, [comic.id]: true }));
+      await new Promise((r) => setTimeout(r, 400));
+      setAnimStars((p) => { const n = { ...p }; delete n[comic.id]; return n; });
+    }
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("toggle_comic_favorite", { comicId: comic.id });
@@ -175,6 +183,7 @@ export default function MangaLibrary() {
             onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
           >
             <div className="book-cover">
+              {comic.favorite && <span key={"s-"+comic.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: animStars[comic.id] ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
               {thumbnails[comic.id] ? (
                 <img
                   src={thumbnails[comic.id]}

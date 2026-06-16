@@ -162,6 +162,8 @@ body {
   background: var(--glass-bg);
   backdrop-filter: blur(16px) saturate(1.2);
   -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  position: relative;
+  overflow: hidden;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 24px 20px; text-align: center;
@@ -179,6 +181,21 @@ body {
 .book-card:hover .book-cover {
   box-shadow: 0 12px 48px var(--shadow);
   border-color: rgba(var(--accent-rgb),0.10);
+}
+/* SortableJS 拖拽样式 */
+.sortable-ghost {
+  opacity: 0.3;
+}
+.sortable-chosen {
+  z-index: 10;
+}
+.sortable-drag {
+  transform: scale(1.06) !important;
+  box-shadow: 0 16px 64px var(--shadow) !important;
+  border-radius: 16px !important;
+  opacity: 0.92 !important;
+  z-index: 9999 !important;
+  pointer-events: none !important;
 }
 .book-cover-icon {
   font-size: 2.8rem; margin-bottom: 10px;
@@ -301,6 +318,22 @@ body {
   0% { transform: translateX(-100%); }
   50% { transform: translateX(150%); }
   100% { transform: translateX(-100%); }
+}
+
+/* 收藏星星入场动画：由小到大弹出然后落下 */
+@keyframes starPop {
+  0% { transform: scale(0) translateY(-30px); opacity: 0; }
+  35% { transform: scale(1.5) translateY(8px); opacity: 1; }
+  50% { transform: scale(0.9) translateY(-6px); opacity: 1; }
+  70% { transform: scale(1.1) translateY(3px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* 收藏星星消散为粒子 */
+@keyframes starBurst {
+  0% { transform: scale(1) translateY(0) rotate(0deg); opacity: 1; filter: blur(0); box-shadow: 0 0 0 transparent; }
+  20% { transform: scale(1.8) translateY(-12px) rotate(15deg); opacity: 0.9; filter: blur(1px); box-shadow: 0 0 20px rgba(var(--accent-rgb),0.6); }
+  100% { transform: scale(0.15) translateY(60px) rotate(180deg); opacity: 0; filter: blur(10px); box-shadow: 0 0 0 transparent; }
 }
 
 /* 关于面板入场动画 */
