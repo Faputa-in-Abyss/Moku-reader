@@ -153,6 +153,9 @@ body {
 .library-title { font-family: 'Georgia','Noto Serif SC',serif; font-size: 1.8rem; font-weight: 500; letter-spacing: .04em; color: var(--text); transition: color 0.6s ease; }
 .library-count { color: var(--text-dim); font-size: .9rem; transition: color 0.6s ease; }
 .book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 28px; }
+@media(max-width:768px){
+  .book-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
+}
 
 /* ===== 书卡 ===== */
 .book-card { position: relative; cursor: pointer; transition: transform 0.5s ease; border-radius: 16px; }
@@ -181,21 +184,6 @@ body {
 .book-card:hover .book-cover {
   box-shadow: 0 12px 48px var(--shadow);
   border-color: rgba(var(--accent-rgb),0.10);
-}
-/* SortableJS 拖拽样式 */
-.sortable-ghost {
-  opacity: 0.3;
-}
-.sortable-chosen {
-  z-index: 10;
-}
-.sortable-drag {
-  transform: scale(1.06) !important;
-  box-shadow: 0 16px 64px var(--shadow) !important;
-  border-radius: 16px !important;
-  opacity: 0.92 !important;
-  z-index: 9999 !important;
-  pointer-events: none !important;
 }
 .book-cover-icon {
   font-size: 2.8rem; margin-bottom: 10px;
@@ -361,3 +349,4 @@ body {
       scale(6);
   }
 }
+                                                                                                                                                                                                                                                                                                        

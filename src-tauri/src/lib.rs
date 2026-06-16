@@ -554,10 +554,7 @@ fn get_comic_thumbnail(comic_id: String, state: State<AppState>) -> Result<Strin
     if comic.pages.is_empty() {
         return Err("漫画没有页面".to_string());
     }
-    // PDF thumbnail 不在此处处理
-    if comic.source_type == "pdf" {
-        return Err("PDF 不支持后端缩略图".to_string());
-    }
+    // 所有类型都尝试读取第一页作为缩略图（PDF 首次已渲染为图片）
     let page = &comic.pages[0];
     comic::get_page_base64(&comic.image_dir, &page.filename)
 }
@@ -796,15 +793,4 @@ pub fn run() {
             import_comic,
             get_comic_library,
             get_comic_page,
-            get_comic_thumbnail,
-            update_comic_progress,
-            update_comic_direction,
-            remove_comic,
-            rename_comic,
-            toggle_comic_favorite,
-            set_comic_icon,
-            rescan_comic_folder,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
+            get_comic_thum

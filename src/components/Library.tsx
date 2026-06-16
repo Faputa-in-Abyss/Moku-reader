@@ -1,6 +1,5 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useStore, BookData } from "../store";
-import { ReactSortable } from "react-sortablejs";
 
 export default function Library() {
   const books = useStore((s) => s.books);
@@ -63,9 +62,14 @@ export default function Library() {
 
   const handleToggleFavorite = async (book: BookData) => {
     setCtxMenu(null);
-    // 取消收藏时播放消散动画（只有从收藏→未收藏才触发）
     const wasFavorited = book.favorite;
-    if (wasFavorited) {
+    // 添加收藏时播放弹出动画
+    if (!wasFavorited) {
+      setAnimStars((p) => ({ ...p, [book.id]: true }));
+      await new Promise((r) => setTimeout(r, 400));
+      setAnimStars((p) => { const n = { ...p }; delete n[book.id]; return n; });
+    } else {
+      // 取消收藏时播放消散动画
       setAnimStars((p) => ({ ...p, [book.id]: true }));
       await new Promise((r) => setTimeout(r, 400));
       setAnimStars((p) => { const n = { ...p }; delete n[book.id]; return n; });
@@ -130,29 +134,6 @@ export default function Library() {
         <span className="library-count">{books.length} 本书</span>
       </div>
       <div className="book-grid">
-        <ReactSortable
-          list={books.map((b, i) => ({ id: b.id } as any))}
-          setList={() => {}}
-          onEnd={(evt) => {
-            const ordered = [...books];
-            const [moved] = ordered.splice(evt.oldIndex ?? 0, 1);
-            ordered.splice(evt.newIndex ?? 0, 0, moved);
-            setBooks(ordered);
-            import("@tauri-apps/api/core").then(({ invoke }) => {
-              invoke("save_book_order", { bookIds: ordered.map(b => b.id) }).catch(() => {});
-            });
-          }}
-          delay={400}
-          delayOnTouchOnly={false}
-          touchStartThreshold={5}
-          animation={200}
-          easing="cubic-bezier(0.22, 0.61, 0.36, 1)"
-          ghostClass="sortable-ghost"
-          chosenClass="sortable-chosen"
-          dragClass="sortable-drag"
-        >
-          {books.map((book) => (
-              <div
         {books.map((book) => (
             <div
               key={book.id}
@@ -162,7 +143,7 @@ export default function Library() {
               onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
             >
               <div className="book-cover">
-                {book.favorite && <span key={"s-"+book.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: animStars[book.id] ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
+                {book.favorite && <span key={"s-"+book.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none" }}>⭐</span>}
                 <div className="book-cover-icon">{book.book_icon || getBookIcon(book.title)}</div>
                 <div className="book-title">{book.title}</div>
                 <div className="book-progress">
@@ -176,7 +157,6 @@ export default function Library() {
               </div>
             </div>
           ))}
-        </ReactSortable>
       </div>
 
       {/* 右键菜单 */}
@@ -278,3 +258,4 @@ const sampleBooks: BookData[] = [
   { id: "3", title: "三体", file_path: "", file_type: "txt", total_chapters: 6, current_chapter: 5, progress: 0.88, chapters: [{ index: 0, title: "第一章 科学边界", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 三体游戏", start_pos: 101, end_pos: 200 }], book_icon: "" },
   { id: "4", title: "全职高手", file_path: "", file_type: "txt", total_chapters: 5, current_chapter: 0, progress: 0.12, chapters: [{ index: 0, title: "第一章 退役", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 重返", start_pos: 101, end_pos: 200 }], book_icon: "" },
 ];
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                

@@ -55,6 +55,14 @@ function levelColor(level: string, source: string): string {
   return "var(--text)";
 }
 
+/** 格式化字节数为可读字符串 */
+function fmtBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + " " + units[i];
+}
+
 export default function DebugPanel() {
   const debugPanelOpen = useStore((s) => s.debugPanelOpen);
   const setDebugPanelOpen = useStore((s) => s.setDebugPanelOpen);
@@ -63,6 +71,10 @@ export default function DebugPanel() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [filterSource, setFilterSource] = useState<"all" | "frontend" | "backend">("all");
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  // 系统资源
+  const [sysMem, setSysMem] = useState({ used: 0, total: 0, pct: 0 });
+  const [storage, setStorage] = useState({ used: 0, total: 0, pct: 0 });
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -85,6 +97,37 @@ export default function DebugPanel() {
     const id = setInterval(() => setLogs(getLogsSnapshot()), 500);
     return () => clearInterval(id);
   }, [debugPanelOpen]);
+
+  // 收集系统资源
+  useEffect(() => {
+    if (!debugPanelOpen) return;
+    const update = () => {
+      try {
+        // 前端侧估算：通过 performance.memory 获取 JS 堆占用（Chrome 特有）
+        const mem = (performance as any).memory;
+        if (mem) {
+          const used = mem.usedJSHeapSize;
+          const total = mem.jsHeapSizeLimit;
+          setSysMem({ used, total, pct: total > 0 ? (used / total) * 100 : 0 });
+        } else {
+          // 无法获取时显示估算值
+          setSysMem({ used: 0, total: 0, pct: 0 });
+        }
+        // localStorage 占用
+        let storageBytes = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k) storageBytes += k.length * 2 + (localStorage.getItem(k)?.length ?? 0) * 2;
+        }
+        // 估算 AppData 书库大小（前端只展示 localStorage 用量，精确的由后端提供）
+        setStorage({ used: storageBytes, total: 50 * 1024 * 1024, pct: Math.min(100, (storageBytes / (50 * 1024 * 1024)) * 100) });
+      } catch {}
+    };
+    update();
+    const timer = setInterval(update, 3000);
+    return () => clearInterval(timer);
+  }, [debugPanelOpen]);
+
   useEffect(() => {
     if (autoScroll && logEndRef.current) logEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [logs, autoScroll]);
@@ -102,7 +145,7 @@ export default function DebugPanel() {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDebugPanelOpen(false)}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDebugPanelOpen(false)}>
       <div style={{ width: "88vw", height: "82vh", maxWidth: 960, background: "var(--bg)", borderRadius: 16, border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -120,6 +163,27 @@ export default function DebugPanel() {
                 <div style={{ color: "var(--text)", wordBreak: "break-all", fontSize: ".78rem" }}>{v}</div>
               </div>
             ))}
+            <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 10, color: "var(--text)", fontSize: ".88rem" }}>系统资源</div>
+            {/* 内存 */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
+                <span>🧠 内存占用</span>
+                <span>{sysMem.used > 0 ? `${fmtBytes(sysMem.used)} / ${fmtBytes(sysMem.total)}` : "—"}</span>
+              </div>
+              <div style={{ width: "100%", height: 6, borderRadius: 3, background: "rgba(var(--accent-rgb),0.08)", overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(100, sysMem.pct)}%`, height: "100%", borderRadius: 3, background: sysMem.pct > 80 ? "#e06060" : "var(--accent)", transition: "width 0.6s ease" }} />
+              </div>
+            </div>
+            {/* 存储 */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
+                <span>💾 存储占用</span>
+                <span>{storage.used > 0 ? fmtBytes(storage.used) : "—"}</span>
+              </div>
+              <div style={{ width: "100%", height: 6, borderRadius: 3, background: "rgba(var(--accent-rgb),0.08)", overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(100, storage.pct)}%`, height: "100%", borderRadius: 3, background: "linear-gradient(90deg, var(--accent), #b8895a)", transition: "width 0.6s ease" }} />
+              </div>
+            </div>
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>操作</div>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().closeMangaReader(); }}>📕 关闭漫画阅读器</button>
