@@ -185,6 +185,10 @@ body {
   box-shadow: 0 12px 48px var(--shadow);
   border-color: rgba(var(--accent-rgb),0.10);
 }
+.cover-selected {
+  box-shadow: 0 0 0 2px var(--accent), 0 8px 32px rgba(var(--accent-rgb), 0.15) !important;
+  border-color: var(--accent) !important;
+}
 .book-cover-icon {
   font-size: 2.8rem; margin-bottom: 10px;
   filter: drop-shadow(0 2px 12px rgba(var(--accent-rgb),0.10));
@@ -349,4 +353,3 @@ body {
       scale(6);
   }
 }
-                                                                                                                                                                                                                                                                                                        

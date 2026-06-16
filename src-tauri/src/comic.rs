@@ -6,6 +6,10 @@ use std::path::{Path, PathBuf};
 /// 支持的图片格式扩展名
 const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
 
+pub fn is_image_ext(ext: &str) -> bool {
+    IMAGE_EXTS.contains(&ext)
+}
+
 // ===== 数据结构 =====
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,7 +135,7 @@ fn scan_image_dir(dir: &Path) -> Result<Vec<String>, String> {
     Ok(files)
 }
 
-fn probe_image_size(path: &Path) -> (u32, u32) {
+pub fn probe_image_size(path: &Path) -> (u32, u32) {
     let data = match fs::read(path) {
         Ok(d) => d,
         Err(_) => return (0, 0),
@@ -192,7 +196,7 @@ fn extract_cbz(source: &Path, dest_dir: &Path) -> Result<Vec<String>, String> {
 
 // ===== 文件夹导入 =====
 
-fn import_folder(path: &Path) -> Result<(Vec<String>, String), String> {
+pub fn import_folder(path: &Path) -> Result<(Vec<String>, String), String> {
     let files = scan_image_dir(path)?;
     let title = title_from_path(path.to_string_lossy().as_ref());
     Ok((files, title))

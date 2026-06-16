@@ -12,6 +12,8 @@ export default function Library() {
   const [iconPicker, setIconPicker] = useState<BookData | null>(null);
   const [animStars, setAnimStars] = useState<Record<string, boolean>>({});
   const animRef = useRef<number>(0);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
@@ -88,6 +90,8 @@ export default function Library() {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("remove_book", { bookId: book.id });
       triggerRefresh();
+      // 删除后自动扫描书库
+      invoke("scan_library").catch(() => {});
     } catch {}
   };
 
@@ -109,6 +113,34 @@ export default function Library() {
     } catch (e) {
       console.error("重新解析失败:", e);
     }
+  };
+
+  // 批量删除
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (!confirm(`确定要删除选中的 ${count} 本书吗？`)) return;
+    setCtxMenu(null);
+    setSelectMode(false);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      for (const id of selectedIds) {
+        await invoke("remove_book", { bookId: id }).catch(() => {});
+      }
+      setSelectedIds(new Set());
+      triggerRefresh();
+      // 删除后自动扫描书库
+      invoke("scan_library").catch(() => {});
+    } catch {}
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   if (books.length === 0) {
@@ -138,11 +170,30 @@ export default function Library() {
             <div
               key={book.id}
               className="book-card"
-              onClick={() => openReader(book)}
+              onClick={() => {
+                if (selectMode) {
+                  toggleSelect(book.id);
+                } else {
+                  openReader(book);
+                }
+              }}
               onContextMenu={(e) => handleCtxMenu(e, book)}
               onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
             >
-              <div className="book-cover">
+              {selectMode && (
+                <div style={{
+                  position: "absolute", top: 8, left: 8, zIndex: 10,
+                  width: 24, height: 24, borderRadius: 6,
+                  border: selectedIds.has(book.id) ? "2px solid var(--accent)" : "2px solid rgba(var(--accent-rgb),0.25)",
+                  background: selectedIds.has(book.id) ? "var(--accent)" : "rgba(0,0,0,0.25)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: ".75rem", color: "#fff", fontWeight: 700,
+                  pointerEvents: "none", backdropFilter: "blur(4px)",
+                }}>
+                  {selectedIds.has(book.id) ? "✓" : ""}
+                </div>
+              )}
+              <div className={`book-cover${selectedIds.has(book.id) ? " cover-selected" : ""}`}>
                 {book.favorite && <span key={"s-"+book.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none" }}>⭐</span>}
                 <div className="book-cover-icon">{book.book_icon || getBookIcon(book.title)}</div>
                 <div className="book-title">{book.title}</div>
@@ -158,6 +209,23 @@ export default function Library() {
             </div>
           ))}
       </div>
+
+      {/* 批量操作栏 */}
+      {selectMode && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+          padding: "12px 24px",
+          background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+          borderTop: "1px solid var(--border-glass)",
+        }}>
+          <span style={{ color: "var(--text-dim)", fontSize: ".8rem" }}>已选 {selectedIds.size} 项</span>
+          <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>取消</button>
+          <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedIds.size === 0 ? undefined : "rgba(200,60,50,0.8)" }} disabled={selectedIds.size === 0} onClick={handleBatchDelete}>
+            🗑️ 删除所选
+          </button>
+        </div>
+      )}
 
       {/* 右键菜单 */}
       {ctxMenu && (
@@ -185,6 +253,8 @@ export default function Library() {
           <MenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.book)} />
           <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
           <MenuItem icon="📂" label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.book)} />
+          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
+          <MenuItem icon="☑️" label="批量选择" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
         </div>
       )}
 
@@ -258,4 +328,3 @@ const sampleBooks: BookData[] = [
   { id: "3", title: "三体", file_path: "", file_type: "txt", total_chapters: 6, current_chapter: 5, progress: 0.88, chapters: [{ index: 0, title: "第一章 科学边界", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 三体游戏", start_pos: 101, end_pos: 200 }], book_icon: "" },
   { id: "4", title: "全职高手", file_path: "", file_type: "txt", total_chapters: 5, current_chapter: 0, progress: 0.12, chapters: [{ index: 0, title: "第一章 退役", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 重返", start_pos: 101, end_pos: 200 }], book_icon: "" },
 ];
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                

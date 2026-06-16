@@ -67,14 +67,19 @@ export default function DebugPanel() {
   const debugPanelOpen = useStore((s) => s.debugPanelOpen);
   const setDebugPanelOpen = useStore((s) => s.setDebugPanelOpen);
   const books = useStore((s) => s.books);
+  const comics = useStore((s) => s.comics);
+  const triggerRefresh = useStore((s) => s.triggerRefresh);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [filterSource, setFilterSource] = useState<"all" | "frontend" | "backend">("all");
   const logEndRef = useRef<HTMLDivElement>(null);
+  const [libraryPath, setLibraryPath] = useState("");
+  const [scanning, setScanning] = useState(false);
 
   // 系统资源
-  const [sysMem, setSysMem] = useState({ used: 0, total: 0, pct: 0 });
-  const [storage, setStorage] = useState({ used: 0, total: 0, pct: 0 });
+  const [procMem, setProcMem] = useState(0);
+  const [storageApp, setStorageApp] = useState(0);
+  const [storageContent, setStorageContent] = useState(0);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -98,46 +103,96 @@ export default function DebugPanel() {
     return () => clearInterval(id);
   }, [debugPanelOpen]);
 
-  // 收集系统资源
+  // 收集系统资源（通过后端 sysinfo 获取）
   useEffect(() => {
     if (!debugPanelOpen) return;
-    const update = () => {
+    let cancelled = false;
+
+    // 首次加载时获取书库路径
+    (async () => {
       try {
-        // 前端侧估算：通过 performance.memory 获取 JS 堆占用（Chrome 特有）
-        const mem = (performance as any).memory;
-        if (mem) {
-          const used = mem.usedJSHeapSize;
-          const total = mem.jsHeapSizeLimit;
-          setSysMem({ used, total, pct: total > 0 ? (used / total) * 100 : 0 });
-        } else {
-          // 无法获取时显示估算值
-          setSysMem({ used: 0, total: 0, pct: 0 });
-        }
-        // localStorage 占用
-        let storageBytes = 0;
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k) storageBytes += k.length * 2 + (localStorage.getItem(k)?.length ?? 0) * 2;
-        }
-        // 估算 AppData 书库大小（前端只展示 localStorage 用量，精确的由后端提供）
-        setStorage({ used: storageBytes, total: 50 * 1024 * 1024, pct: Math.min(100, (storageBytes / (50 * 1024 * 1024)) * 100) });
+        const { invoke } = await import("@tauri-apps/api/core");
+        const path: string = await invoke("get_library_path");
+        if (!cancelled) setLibraryPath(path);
       } catch {}
+    })();
+
+    const update = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const res: any = await invoke("get_system_resources");
+        if (cancelled) return;
+        setProcMem(res.process_mem_mb);
+        setStorageApp(res.storage_app_mb * 1024 * 1024);
+        setStorageContent(res.storage_content_mb * 1024 * 1024);
+      } catch {};
     };
     update();
-    const timer = setInterval(update, 3000);
-    return () => clearInterval(timer);
+    const timer = setInterval(update, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
   }, [debugPanelOpen]);
 
   useEffect(() => {
     if (autoScroll && logEndRef.current) logEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [logs, autoScroll]);
 
+  // 监听扫描完成事件
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<any>("scan-complete", (event) => {
+          const r = event.payload;
+          console.log("[墨读] 扫描完成:", `${r.novels_imported}本小说/${r.comics_imported}本漫画`);
+          if (r.errors?.length > 0) {
+            console.error("[墨读] 扫描错误:", r.errors);
+          }
+          setScanning(false);
+          triggerRefresh();
+        });
+      } catch {}
+    })();
+    return () => { unlisten?.(); };
+  }, []);
+
+  const handleScan = async () => {
+    setScanning(true);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const msg: string = await invoke("scan_library");
+      console.log("[墨读] 扫描已启动:", msg);
+    } catch (e) {
+      console.error("[墨读] 扫描启动失败:", e);
+      setScanning(false);
+    }
+  };
+
+  const handleSetPath = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({ directory: true, multiple: false });
+      if (!selected) return;
+      const path = typeof selected === "string" ? selected : selected.path;
+      if (!path) return;
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_library_path", { newPath: path });
+      setLibraryPath(path);
+      console.log("[墨读] 书库路径已设置:", path);
+      // 自动触发扫描
+      await handleScan();
+    } catch (e) {
+      console.error("[墨读] 设置书库路径失败:", e);
+    }
+  };
+
   if (!debugPanelOpen) return null;
 
   const displayLogs = filterSource === "all" ? logs : logs.filter((l) => l.source === filterSource);
   const appInfo: Record<string, string> = {
-    "书库路径": localStorage.getItem("nr-library-path") || "(Tauri 默认)",
+    "书库路径": libraryPath || "（未设置）",
     "已导入书籍": books.length + " 本",
+    "已导入漫画": comics.length + " 本",
     "阅读模式": useStore.getState().readingMode,
     "字号": useStore.getState().fontSize + "rem",
     "窗口挡位": ["小", "中", "大", "超大", "全屏"][useStore.getState().windowSize] || "未知",
@@ -164,27 +219,27 @@ export default function DebugPanel() {
               </div>
             ))}
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 10, color: "var(--text)", fontSize: ".88rem" }}>系统资源</div>
-            {/* 内存 */}
+            {/* 应用占用内存 */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
-                <span>🧠 内存占用</span>
-                <span>{sysMem.used > 0 ? `${fmtBytes(sysMem.used)} / ${fmtBytes(sysMem.total)}` : "—"}</span>
-              </div>
-              <div style={{ width: "100%", height: 6, borderRadius: 3, background: "rgba(var(--accent-rgb),0.08)", overflow: "hidden" }}>
-                <div style={{ width: `${Math.min(100, sysMem.pct)}%`, height: "100%", borderRadius: 3, background: sysMem.pct > 80 ? "#e06060" : "var(--accent)", transition: "width 0.6s ease" }} />
+                <span>📦 应用占用内存</span>
+                <span>{procMem > 0 ? fmtBytes(procMem * 1024 * 1024) : "—"}</span>
               </div>
             </div>
-            {/* 存储 */}
+            {/* 本地存储 */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
-                <span>💾 存储占用</span>
-                <span>{storage.used > 0 ? fmtBytes(storage.used) : "—"}</span>
+                <span>⚙️ 应用本身</span>
+                <span>{storageApp > 0 ? fmtBytes(storageApp) : "—"}</span>
               </div>
-              <div style={{ width: "100%", height: 6, borderRadius: 3, background: "rgba(var(--accent-rgb),0.08)", overflow: "hidden" }}>
-                <div style={{ width: `${Math.min(100, storage.pct)}%`, height: "100%", borderRadius: 3, background: "linear-gradient(90deg, var(--accent), #b8895a)", transition: "width 0.6s ease" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
+                <span>📚 小说漫画</span>
+                <span>{storageContent > 0 ? fmtBytes(storageContent) : "—"}</span>
               </div>
             </div>
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>操作</div>
+            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={handleSetPath}>📂 更改书库路径</button>
+            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={scanning || !libraryPath} onClick={handleScan}>{scanning ? "⏳ 扫描中..." : "🔄 扫描书库"}</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().closeMangaReader(); }}>📕 关闭漫画阅读器</button>
             {false && <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().setOnlineSearchOpen(true); }}>📚 联网搜书</button>}

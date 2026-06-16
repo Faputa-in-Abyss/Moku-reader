@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{Emitter, State};
 
@@ -79,11 +79,45 @@ pub struct ImportProgress {
     pub message: String,
 }
 
+/// 系统资源信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemResource {
+    pub memory_used_mb: f64,
+    pub memory_total_mb: f64,
+    pub memory_pct: f64,
+    pub process_mem_mb: f64,
+    pub storage_app_mb: f64,
+    pub storage_content_mb: f64,
+}
+
 pub struct AppState {
     pub library: Mutex<LibraryData>,
     pub data_dir: PathBuf,
+    pub library_path: Mutex<String>,
     pub fanqie: FanqieApi,
     pub comic_library: Mutex<comic::ComicLibraryData>,
+}
+
+// ===== 设置持久化 =====
+
+fn load_settings(data_dir: &Path) -> String {
+    let path = data_dir.join("settings.json");
+    if !path.exists() {
+        return String::new();
+    }
+    let content = fs::read_to_string(&path).unwrap_or_default();
+    let map: std::collections::HashMap<String, String> = serde_json::from_str(&content).unwrap_or_default();
+    map.get("library_path").cloned().unwrap_or_default()
+}
+
+fn save_setting(data_dir: &Path, key: &str, value: &str) {
+    let path = data_dir.join("settings.json");
+    let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+    let mut map: std::collections::HashMap<String, String> = serde_json::from_str(&content).unwrap_or_default();
+    map.insert(key.to_string(), value.to_string());
+    if let Ok(json) = serde_json::to_string_pretty(&map) {
+        let _ = fs::write(&path, &json);
+    }
 }
 
 // ===== 书库文件存储 =====
@@ -163,6 +197,128 @@ fn import_book(path: String, state: State<AppState>) -> Result<Book, String> {
     save_library(&state.data_dir, &lib).ok();
 
     Ok(book)
+}
+
+/// 不依赖 state 的纯函数：从文件路径导入书籍（复用已有逻辑）
+fn import_book_from_path(path: &str) -> Result<Book, String> {
+    let path_obj = PathBuf::from(path);
+    if !path_obj.exists() {
+        return Err(format!("文件不存在: {}", path));
+    }
+    let ext = path_obj
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let content = match ext.as_str() {
+        "txt" => read_txt_file(path)?,
+        "epub" => read_epub_file(path)?,
+        "html" | "htm" => read_html_file(path)?,
+        _ => return Err(format!("不支持的小说文件格式: .{}", ext)),
+    };
+    let content = content.replace("\r\n", "\n").replace('\r', "\n");
+    let chapters = parse_chapters(&content);
+    let title = extract_title(path, &content);
+    let id = generate_id();
+    let total_chapters = chapters.len();
+
+    Ok(Book {
+        id, title,
+        file_path: path.to_string(),
+        file_type: ext,
+        total_chapters,
+        current_chapter: 0, progress: 0.0,
+        chapters, content,
+        favorite: false, book_icon: String::new(),
+    })
+}
+
+const NOVEL_EXTS: &[&str] = &["txt", "epub", "html", "htm"];
+const COMIC_EXTS: &[&str] = &["cbz", "zip", "pdf"];
+
+/// 递归扫描目录，返回发现的未导入文件列表
+fn scan_directory(dir: &Path, known_books: &[Book], known_comics: &[comic::ComicBook]) -> (Vec<String>, Vec<String>) {
+    let mut novels = Vec::new();
+    let mut comics = Vec::new();
+
+    // 收集已有的绝对路径用于去重
+    let known_book_paths: std::collections::HashSet<String> = known_books.iter()
+        .filter_map(|b| Path::new(&b.file_path).canonicalize().ok())
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    let known_comic_paths: std::collections::HashSet<String> = known_comics.iter()
+        .filter_map(|c| Path::new(&c.source_path).canonicalize().ok())
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+
+    if !dir.exists() {
+        return (novels, comics);
+    }
+
+    fn visit_dir(
+        dir: &Path,
+        novels: &mut Vec<String>,
+        comics: &mut Vec<String>,
+        known_books: &std::collections::HashSet<String>,
+        known_comics: &std::collections::HashSet<String>,
+    ) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+
+        let mut has_image_dir = false;
+        let mut child_dirs = Vec::new();
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                child_dirs.push(path);
+            } else if path.is_file() {
+                let ext = path.extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let raw_path = path.to_string_lossy().to_string();
+                let canonical = match path.canonicalize() {
+                    Ok(p) => p.to_string_lossy().to_string(),
+                    Err(_) => raw_path.clone(),
+                };
+
+                if NOVEL_EXTS.contains(&ext.as_str()) {
+                    if !known_books.contains(&canonical) {
+                        novels.push(raw_path);
+                    }
+                } else if COMIC_EXTS.contains(&ext.as_str()) {
+                    if !known_comics.contains(&canonical) {
+                        comics.push(raw_path);
+                    }
+                } else if comic::is_image_ext(&ext) {
+                    has_image_dir = true;
+                }
+            }
+        }
+
+        // 如果当前目录包含图片文件，且不是已知漫画，作为漫画文件夹导入
+        if has_image_dir {
+            let raw_dir = dir.to_string_lossy().to_string();
+            let canonical_dir = dir.canonicalize()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| raw_dir.clone());
+            if !known_comics.contains(&canonical_dir) {
+                comics.push(raw_dir);
+            }
+        }
+
+        // 递归子目录
+        for child in child_dirs {
+            visit_dir(&child, novels, comics, known_books, known_comics);
+        }
+    }
+
+    visit_dir(dir, &mut novels, &mut comics, &known_book_paths, &known_comic_paths);
+    (novels, comics)
 }
 
 #[tauri::command]
@@ -475,6 +631,158 @@ fn get_workspace_dir() -> String {
     path_str
 }
 
+// ===== 自定义书库路径 =====
+
+/// 获取当前书库路径
+#[tauri::command]
+fn get_library_path(state: State<AppState>) -> String {
+    state.library_path.lock().unwrap().clone()
+}
+
+/// 设置新书库路径
+#[tauri::command]
+fn set_library_path(new_path: String, state: State<AppState>) -> Result<(), String> {
+    let path = PathBuf::from(&new_path);
+    if !path.exists() {
+        return Err("路径不存在".to_string());
+    }
+    if !path.is_dir() {
+        return Err("请选择一个文件夹".to_string());
+    }
+    *state.library_path.lock().unwrap() = new_path.clone();
+    save_setting(&state.data_dir, "library_path", &new_path);
+    debug_log!("📂 书库路径已更改: {}", &new_path);
+    Ok(())
+}
+
+/// 扫描结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanResult {
+    pub novels_found: usize,
+    pub novels_imported: usize,
+    pub comics_found: usize,
+    pub comics_imported: usize,
+    pub errors: Vec<String>,
+}
+
+/// 扫描书库路径并自动导入新文件（后台执行，通过事件返回结果）
+#[tauri::command]
+async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<String, String> {
+    let lib_path = state.library_path.lock().unwrap().clone();
+    if lib_path.is_empty() {
+        return Err("请先设置书库路径".to_string());
+    }
+    let dir = PathBuf::from(&lib_path);
+    if !dir.exists() {
+        return Err(format!("书库路径不存在: {}", lib_path));
+    }
+
+    let data_dir = state.data_dir.clone();
+
+    let (lib, comic_lib) = {
+        let l = state.library.lock().unwrap();
+        let cl = state.comic_library.lock().unwrap();
+        (l.books.clone(), cl.comics.clone())
+    };
+
+    let (novels, comics) = scan_directory(&dir, &lib, &comic_lib);
+
+    // 立即返回，后台处理导入
+    let novels_found = novels.len();
+    let comics_found = comics.len();
+    let novels_list = novels.clone();
+    let comics_list = comics.clone();
+
+    std::thread::spawn(move || {
+        debug_log!("📂 后台扫描: 发现 {} 本小说/{} 本漫画", novels_found, comics_found);
+
+        let mut novels_imported = 0usize;
+        let mut comics_imported = 0usize;
+        let mut errors: Vec<String> = Vec::new();
+
+        // 导入小说
+        for path in &novels_list {
+            match import_book_from_path(path) {
+                Ok(book) => {
+                    let data_dir = dirs_next::data_dir()
+                        .unwrap_or_else(|| PathBuf::from("."))
+                        .join("novel-reader");
+                    let mut l = load_library(&data_dir);
+                    l.books.push(book);
+                    save_library(&data_dir, &l).ok();
+                    novels_imported += 1;
+                }
+                Err(e) => errors.push(format!("导入小说失败 {}: {}", path, e)),
+            }
+        }
+
+        // 导入漫画
+        for (idx, path) in comics_list.iter().enumerate() {
+            let path_obj = PathBuf::from(path);
+            let file_name = path_obj.file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("未知文件")
+                .to_string();
+
+            // 发送进度事件（复用导入 Toast）
+            if let Some(handle) = crate::APP_HANDLE.get() {
+                let _ = handle.emit("comic-import-progress", &crate::ImportProgress {
+                    title: file_name.clone(),
+                    status: "processing".to_string(),
+                    message: format!("正在渲染 {} …", &file_name),
+                });
+            }
+
+            if path_obj.is_dir() {
+                match import_comic_folder_impl(&path_obj) {
+                    Ok(book) => {
+                        let mut cl = comic::load_comic_library(&data_dir);
+                        cl.comics.push(book);
+                        comic::save_comic_library(&data_dir, &cl).ok();
+                        comics_imported += 1;
+                    }
+                    Err(e) => errors.push(format!("导入漫画文件夹失败 {}: {}", path, e)),
+                }
+            } else {
+                let result = comic::import_comic(path, &data_dir);
+                match result {
+                    Ok(book) => {
+                        let title = book.title.clone();
+                        let total_pages = book.total_pages;
+                        let mut cl = comic::load_comic_library(&data_dir);
+                        cl.comics.push(book);
+                        comic::save_comic_library(&data_dir, &cl).ok();
+                        comics_imported += 1;
+                        if let Some(handle) = crate::APP_HANDLE.get() {
+                            let _ = handle.emit("comic-import-progress", &crate::ImportProgress {
+                                title: title.clone(),
+                                status: "done".to_string(),
+                                message: format!("扫描导入：{} ({} 页)", title, total_pages),
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        errors.push(format!("导入漫画失败 {}: {}", path, e));
+                    }
+                }
+            }
+        }
+
+        // 发送完成事件
+        let _ = app.emit("scan-complete", &ScanResult {
+            novels_found, novels_imported,
+            comics_found, comics_imported,
+            errors: errors.clone(),
+        });
+
+        debug_log!("📂 书库扫描完成: 发现 {} 本小说/{} 本漫画, 导入 {} 本小说/{} 本漫画, {} 个错误",
+            novels_found, comics_found, novels_imported, comics_imported, errors.len());
+    });
+
+    // 先返回，前台不阻塞
+    Ok(format!("SCAN_STARTED:{}:{}", novels_found, comics_found))
+}
+
 // ===== 漫画命令 =====
 
 #[tauri::command]
@@ -530,6 +838,27 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
     comic::save_comic_library(&state.data_dir, &lib).ok();
 
     Ok(book)
+}
+
+/// 从图片文件夹原地导入漫画（不复制）
+fn import_comic_folder_impl(folder: &Path) -> Result<comic::ComicBook, String> {
+    let (files, title) = comic::import_folder(folder)?;
+    let pages: Vec<comic::ComicPage> = files.iter().enumerate().map(|(i, fname)| {
+        let full_path = folder.join(fname);
+        let (w, h) = comic::probe_image_size(&full_path);
+        comic::ComicPage { index: i, filename: fname.clone(), width: w, height: h }
+    }).collect();
+    let total = pages.len();
+    let id = generate_id();
+    Ok(comic::ComicBook {
+        id, title,
+        source_type: "folder".to_string(),
+        source_path: folder.to_string_lossy().to_string(),
+        image_dir: folder.to_string_lossy().to_string(),
+        pages, total_pages: total,
+        current_page: 0, direction: "ltr".to_string(),
+        favorite: false, book_icon: String::new(),
+    })
 }
 
 #[tauri::command]
@@ -610,6 +939,78 @@ fn set_comic_icon(comic_id: String, icon: String, state: State<AppState>) -> Res
     comic.book_icon = icon;
     comic::save_comic_library(&state.data_dir, &lib).ok();
     Ok(())
+}
+
+/// 获取系统资源信息（内存、存储）
+#[tauri::command]
+fn get_system_resources() -> SystemResource {
+    use sysinfo::ProcessesToUpdate;
+    static LAST_SYS: OnceLock<std::sync::Mutex<sysinfo::System>> = OnceLock::new();
+    let mut sys = LAST_SYS.get_or_init(|| std::sync::Mutex::new(sysinfo::System::new_all())).lock().unwrap();
+    sys.refresh_memory();
+    sys.refresh_processes(ProcessesToUpdate::All, false);
+
+    let total_mem_mb = sys.total_memory() as f64 / (1024.0 * 1024.0);
+    let used_mem_mb = sys.used_memory() as f64 / (1024.0 * 1024.0);
+    let mem_pct = if total_mem_mb > 0.0 { (used_mem_mb / total_mem_mb) * 100.0 } else { 0.0 };
+
+    let process_mem_mb = {
+        let current_pid = sysinfo::get_current_pid().ok();
+        let mut total_bytes: u64 = 0;
+
+        // 当前进程
+        if let Some(pid) = current_pid {
+            if let Some(proc) = sys.process(pid) {
+                total_bytes += proc.memory();
+            }
+        }
+
+        // 只累加直系子进程（WebView2 子进程）
+        if let Some(parent_pid) = current_pid {
+            for (_pid, proc) in sys.processes() {
+                if proc.parent() == Some(parent_pid) {
+                    total_bytes += proc.memory();
+                }
+            }
+        }
+
+        total_bytes as f64 / (1024.0 * 1024.0)
+    };
+
+    // 计算存储目录大小（应用本身 vs 内容）
+    let data_dir = dirs_next::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("novel-reader");
+    let storage_app_mb = dir_size_mb(&data_dir);
+    let comics_dir = data_dir.join("comics");
+    let storage_content_mb = if comics_dir.exists() { dir_size_mb(&comics_dir) } else { 0.0 };
+    // 应用自身 = 总 - 内容
+    let storage_app_mb = (storage_app_mb - storage_content_mb).max(0.0);
+
+    SystemResource {
+        memory_used_mb: used_mem_mb,
+        memory_total_mb: total_mem_mb,
+        memory_pct: mem_pct,
+        process_mem_mb,
+        storage_app_mb,
+        storage_content_mb,
+    }
+}
+
+/// 递归计算目录大小（MB）
+fn dir_size_mb(dir: &Path) -> f64 {
+    let mut total = 0u64;
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                total += fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            } else if path.is_dir() {
+                total += (dir_size_mb(&path) * 1024.0 * 1024.0) as u64;
+            }
+        }
+    }
+    total as f64 / (1024.0 * 1024.0)
 }
 
 #[tauri::command]
@@ -761,6 +1162,7 @@ pub fn run() {
 
     let library = load_library(&data_dir);
     let comic_library = comic::load_comic_library(&data_dir);
+    let library_path = load_settings(&data_dir);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -768,6 +1170,7 @@ pub fn run() {
         .manage(AppState {
             library: Mutex::new(library),
             data_dir,
+            library_path: Mutex::new(library_path),
             fanqie: fanqie::FanqieApi::new(),
             comic_library: Mutex::new(comic_library),
         })
@@ -793,4 +1196,19 @@ pub fn run() {
             import_comic,
             get_comic_library,
             get_comic_page,
-            get_comic_thum
+            get_comic_thumbnail,
+            update_comic_progress,
+            update_comic_direction,
+            remove_comic,
+            rename_comic,
+            toggle_comic_favorite,
+            set_comic_icon,
+            rescan_comic_folder,
+            get_system_resources,
+            get_library_path,
+            set_library_path,
+            scan_library,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

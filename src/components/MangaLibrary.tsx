@@ -12,6 +12,8 @@ export default function MangaLibrary() {
 
   const [ctxMenu, setCtxMenu] = useState<{ comic: ComicData; x: number; y: number } | null>(null);
   const [iconPicker, setIconPicker] = useState<ComicData | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const ICON_LIST = ["📚", "🎴", "🗾", "⛩️", "🌸", "⚔️", "🦊", "👹", "🌀", "🌊", "🔥", "🖼️", "🎨", "📦", "⭐"];
 
@@ -96,7 +98,37 @@ export default function MangaLibrary() {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("remove_comic", { comicId: comic.id });
       triggerRefresh();
+      // 删除后自动扫描书库
+      invoke("scan_library").catch(() => {});
     } catch {}
+  };
+
+  // 批量删除
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (!confirm(`确定要删除选中的 ${count} 本漫画吗？`)) return;
+    setCtxMenu(null);
+    setSelectMode(false);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      for (const id of selectedIds) {
+        await invoke("remove_comic", { comicId: id }).catch(() => {});
+      }
+      setSelectedIds(new Set());
+      triggerRefresh();
+      // 删除后自动扫描书库
+      invoke("scan_library").catch(() => {});
+    } catch {}
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const handleSetDirection = async (comic: ComicData, dir: string) => {
@@ -161,11 +193,30 @@ export default function MangaLibrary() {
           <div
             key={comic.id}
             className="book-card"
-            onClick={handleOpen}
+            onClick={() => {
+              if (selectMode) {
+                toggleSelect(comic.id);
+              } else {
+                handleOpen();
+              }
+            }}
             onContextMenu={(e) => handleCtxMenu(e, comic)}
             onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
           >
-            <div className="book-cover">
+            {selectMode && (
+              <div style={{
+                position: "absolute", top: 8, left: 8, zIndex: 10,
+                width: 24, height: 24, borderRadius: 6,
+                border: selectedIds.has(comic.id) ? "2px solid var(--accent)" : "2px solid rgba(var(--accent-rgb),0.25)",
+                background: selectedIds.has(comic.id) ? "var(--accent)" : "rgba(0,0,0,0.25)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: ".75rem", color: "#fff", fontWeight: 700,
+                pointerEvents: "none", backdropFilter: "blur(4px)",
+              }}>
+                {selectedIds.has(comic.id) ? "✓" : ""}
+              </div>
+            )}
+            <div className={`book-cover${selectedIds.has(comic.id) ? " cover-selected" : ""}`}>
               {comic.favorite && <span key={"s-"+comic.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none" }}>⭐</span>}
               <div className="book-cover-icon">{comic.book_icon || getMangaIcon(comic)}</div>
               <div className="book-title">{comic.title}</div>
@@ -213,6 +264,25 @@ export default function MangaLibrary() {
             <CtxMenuItem icon="🔄" label="重新扫描文件夹" onClick={() => handleRescan(ctxMenu.comic)} />
           )}
           <CtxMenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.comic)} />
+          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
+          <CtxMenuItem icon="☑️" label="批量选择" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
+        </div>
+      )}
+
+      {/* 批量操作栏 */}
+      {selectMode && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+          padding: "12px 24px",
+          background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+          borderTop: "1px solid var(--border-glass)",
+        }}>
+          <span style={{ color: "var(--text-dim)", fontSize: ".8rem" }}>已选 {selectedIds.size} 项</span>
+          <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>取消</button>
+          <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedIds.size === 0 ? undefined : "rgba(200,60,50,0.8)" }} disabled={selectedIds.size === 0} onClick={handleBatchDelete}>
+            🗑️ 删除所选
+          </button>
         </div>
       )}
 
