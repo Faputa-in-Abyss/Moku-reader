@@ -71,6 +71,14 @@ pub struct LogPayload {
     pub timestamp: String,
 }
 
+/// 导入进度事件 payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportProgress {
+    pub title: String,
+    pub status: String,   // "processing" | "done" | "error"
+    pub message: String,
+}
+
 pub struct AppState {
     pub library: Mutex<LibraryData>,
     pub data_dir: PathBuf,
@@ -452,16 +460,49 @@ fn get_workspace_dir() -> String {
 async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic::ComicBook, String> {
     debug_log!("📥 导入漫画: {}", &path);
 
-    // mutool draw 可能耗时，用 spawn_blocking 避免阻塞 Tauri 的 IPC 线程池
+    let title = std::path::Path::new(&path)
+        .file_stem().and_then(|s| s.to_str()).unwrap_or("未知").to_string();
+
+    // 发送开始事件
+    if let Some(handle) = APP_HANDLE.get() {
+        let _ = handle.emit("comic-import-progress", &ImportProgress {
+            title: title.clone(),
+            status: "processing".to_string(),
+            message: format!("正在渲染 {} …", &title),
+        });
+    }
+
+    // mutool draw 可能耗时（几十秒），用 oneshot 通道异步等待
     let data_dir = state.data_dir.clone();
     let path_c = path.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        comic::import_comic(&path_c, &data_dir)
-    }).await.map_err(|e| format!("导入线程崩溃: {}", e))?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let app_handle = APP_HANDLE.get().cloned();
+    std::thread::spawn(move || {
+        let result = comic::import_comic(&path_c, &data_dir);
+        // 导入完成或失败后发送事件
+        if let Some(handle) = app_handle {
+            match &result {
+                Ok(book) => {
+                    let _ = handle.emit("comic-import-progress", &ImportProgress {
+                        title: book.title.clone(),
+                        status: "done".to_string(),
+                        message: format!("导入完成：{} ({} 页)", book.title, book.total_pages),
+                    });
+                }
+                Err(e) => {
+                    let _ = handle.emit("comic-import-progress", &ImportProgress {
+                        title: title,
+                        status: "error".to_string(),
+                        message: format!("导入失败: {}", e),
+                    });
+                }
+            }
+        }
+        let _ = tx.send(result);
+    });
 
-    let book = result.map_err(|e| format!("导入失败: {}", e))?;
-
-    debug_log!("   导入成功: {} ({} 页)", &book.title, book.total_pages);
+    let book = rx.await.map_err(|_| "导入线程意外终止".to_string())?
+        .map_err(|e| format!("导入失败: {}", e))?;
 
     let mut lib = state.comic_library.lock().unwrap();
     lib.comics.push(book.clone());
