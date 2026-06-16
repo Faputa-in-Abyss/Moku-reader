@@ -11,11 +11,8 @@ const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComicPage {
     pub index: usize,
-    /// 图片文件名（相对路径，相对于 image_dir）
     pub filename: String,
-    /// 图片宽度（从头部读取，可能为 0）
     pub width: u32,
-    /// 图片高度
     pub height: u32,
 }
 
@@ -23,24 +20,17 @@ pub struct ComicPage {
 pub struct ComicBook {
     pub id: String,
     pub title: String,
-    /// 来源类型: "cbz", "folder", "pdf"
     pub source_type: String,
-    /// 导入时的原始路径
     pub source_path: String,
-    /// 图片所在目录（CBZ 被解压后目录，或原始文件夹路径）
     pub image_dir: String,
-    /// 页列表
     pub pages: Vec<ComicPage>,
     pub total_pages: usize,
     pub current_page: usize,
-    /// 阅读方向: "ltr" | "rtl"
     pub direction: String,
     pub favorite: bool,
     #[serde(default)]
     pub book_icon: String,
 }
-
-// ===== 漫画书库持久化 =====
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComicLibraryData {
@@ -63,15 +53,11 @@ pub fn load_comic_library(data_dir: &Path) -> ComicLibraryData {
     serde_json::from_str(&content).unwrap_or(ComicLibraryData { comics: Vec::new() })
 }
 
-// ===== ID 生成 =====
-
 fn generate_id() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
     format!("comic_{}", ts)
 }
-
-// ===== 图片检测 =====
 
 fn is_image_file(name: &str) -> bool {
     let ext = Path::new(name)
@@ -82,7 +68,6 @@ fn is_image_file(name: &str) -> bool {
     IMAGE_EXTS.contains(&ext.as_str())
 }
 
-/// 从文件路径提取书名（去除扩展名）
 fn title_from_path(path: &str) -> String {
     Path::new(path)
         .file_stem()
@@ -91,7 +76,6 @@ fn title_from_path(path: &str) -> String {
         .to_string()
 }
 
-/// 自然排序：对文件名列表按数字+字符串混合排序（如 page1, page2, page10）
 fn sort_image_files(files: &mut Vec<String>) {
     files.sort_by(|a, b| {
         let a_chars: Vec<char> = a.chars().collect();
@@ -102,10 +86,8 @@ fn sort_image_files(files: &mut Vec<String>) {
             if i >= a_chars.len() && j >= b_chars.len() { return std::cmp::Ordering::Equal; }
             if i >= a_chars.len() { return std::cmp::Ordering::Less; }
             if j >= b_chars.len() { return std::cmp::Ordering::Greater; }
-
             let ca = a_chars[i];
             let cb = b_chars[j];
-
             if ca.is_ascii_digit() && cb.is_ascii_digit() {
                 let mut na = 0u64;
                 while i < a_chars.len() && a_chars[i].is_ascii_digit() {
@@ -124,14 +106,12 @@ fn sort_image_files(files: &mut Vec<String>) {
             } else {
                 let cmp = ca.to_ascii_lowercase().cmp(&cb.to_ascii_lowercase());
                 if cmp != std::cmp::Ordering::Equal { return cmp; }
-                i += 1;
-                j += 1;
+                i += 1; j += 1;
             }
         }
     });
 }
 
-/// 扫描文件夹中的图片，返回排序后的文件名列表
 fn scan_image_dir(dir: &Path) -> Result<Vec<String>, String> {
     let entries = fs::read_dir(dir).map_err(|e| format!("读取目录失败: {}", e))?;
     let mut files: Vec<String> = Vec::new();
@@ -151,21 +131,17 @@ fn scan_image_dir(dir: &Path) -> Result<Vec<String>, String> {
     Ok(files)
 }
 
-/// 尝试从 PNG/JPEG 头部读取尺寸
 fn probe_image_size(path: &Path) -> (u32, u32) {
     let data = match fs::read(path) {
         Ok(d) => d,
         Err(_) => return (0, 0),
     };
     if data.len() < 24 { return (0, 0); }
-
-    // PNG
     if data[0..4] == [0x89, 0x50, 0x4E, 0x47] && data[12..16] == [0x49, 0x48, 0x44, 0x52] {
         let w = ((data[16] as u32) << 24) | ((data[17] as u32) << 16) | ((data[18] as u32) << 8) | (data[19] as u32);
         let h = ((data[20] as u32) << 24) | ((data[21] as u32) << 16) | ((data[22] as u32) << 8) | (data[23] as u32);
         return (w, h);
     }
-    // JPEG
     if data[0..2] == [0xFF, 0xD8] {
         let mut pos = 2;
         while pos + 7 < data.len() {
@@ -179,21 +155,6 @@ fn probe_image_size(path: &Path) -> (u32, u32) {
             pos += 2 + seg_len as usize;
         }
     }
-    // WEBP
-    if data[0..4] == [0x52, 0x49, 0x46, 0x46] && data[8..12] == [0x57, 0x45, 0x42, 0x50] {
-        let sub = &data[12..];
-        if sub.len() > 5 && sub[0..4] == [0x56, 0x50, 0x38, 0x20] {
-            let w = (((sub[5] as u32) << 8) | (sub[4] as u32)) & 0x3FFF;
-            let h = (((sub[7] as u32) << 8) | (sub[6] as u32)) & 0x3FFF;
-            return (w * 2, h * 2);
-        }
-        if sub.len() > 5 && sub[0..4] == [0x56, 0x50, 0x38, 0x4C] {
-            let bits = ((sub[5] as u32)) | ((sub[4] as u32) << 8);
-            let w = (bits & 0x3FFF) + 1;
-            let h = ((bits >> 14) & 0x3FFF) + 1;
-            return (w, h);
-        }
-    }
     (0, 0)
 }
 
@@ -202,7 +163,6 @@ fn probe_image_size(path: &Path) -> (u32, u32) {
 fn extract_cbz(source: &Path, dest_dir: &Path) -> Result<Vec<String>, String> {
     let file = fs::File::open(source).map_err(|e| format!("打开 CBZ 文件失败: {}", e))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("读取 ZIP 文件失败: {}", e))?;
-
     let mut image_indexes: Vec<(String, usize)> = Vec::new();
     for i in 0..archive.len() {
         let entry = archive.by_index(i).map_err(|e| format!("读取条目失败: {}", e))?;
@@ -212,28 +172,21 @@ fn extract_cbz(source: &Path, dest_dir: &Path) -> Result<Vec<String>, String> {
             image_indexes.push((fname, i));
         }
     }
-
     if image_indexes.is_empty() {
         return Err("CBZ 文件中没有找到图片".to_string());
     }
-
     image_indexes.sort_by_key(|(_, idx)| *idx);
     let ordered: Vec<String> = image_indexes.into_iter().map(|(n, _)| n).collect();
-
     fs::create_dir_all(dest_dir).map_err(|e| format!("创建目录失败: {}", e))?;
-
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| format!("读取条目失败: {}", e))?;
         let entry_name = entry.name().to_string();
         if !is_image_file(&entry_name) { continue; }
-
         let fname = Path::new(&entry_name).file_name().unwrap_or_default().to_string_lossy().to_string();
         let out_path = dest_dir.join(&fname);
-
         let mut out_file = fs::File::create(&out_path).map_err(|e| format!("创建文件失败: {}", e))?;
         std::io::copy(&mut entry, &mut out_file).map_err(|e| format!("解压文件失败: {}", e))?;
     }
-
     Ok(ordered)
 }
 
@@ -247,25 +200,90 @@ fn import_folder(path: &Path) -> Result<(Vec<String>, String), String> {
 
 // ===== PDF 导入 =====
 
-/// 导入 PDF：将 PDF 元数据存入，实际渲染靠前端 pdf.js
+/// 导入 PDF：使用 mutool 命令行将 PDF 每页渲染为 PNG
+use std::process::Command;
+
+fn find_mutool() -> Option<PathBuf> {
+    // 1. 从 exe 位置向上翻找 mutool/ 目录
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            // 先看 exe 旁边
+            for name in &["mutool.exe", "mutool"] {
+                let candidate = exe_dir.join("mutool").join(name);
+                if candidate.is_file() { return Some(candidate); }
+                let candidate = exe_dir.join(name);
+                if candidate.is_file() { return Some(candidate); }
+            }
+            // 从 exe 目录向上翻找（开发时 exe 在 src-tauri/target/debug/）
+            let mut dir = exe_dir.to_path_buf();
+            for _ in 0..5 {
+                dir = match dir.parent() { Some(p) => p.to_path_buf(), None => break };
+                let candidate = dir.join("mutool").join("mutool.exe");
+                if candidate.is_file() { return Some(candidate); }
+                let candidate = dir.join("mutool.exe");
+                if candidate.is_file() { return Some(candidate); }
+            }
+        }
+    }
+    // 2. PATH 中找
+    if let Ok(paths) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            for name in &["mutool.exe", "mutool"] {
+                let candidate = dir.join(name);
+                if candidate.is_file() { return Some(candidate); }
+            }
+        }
+    }
+    None
+}
+
 fn import_pdf(path: &Path, dest_dir: &Path) -> Result<(Vec<String>, String), String> {
-    let filename = path.file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unknown.pdf")
-        .to_string();
     let title = title_from_path(path.to_string_lossy().as_ref());
+    let images_dir = dest_dir.join("images");
+    fs::create_dir_all(&images_dir).map_err(|e| format!("创建目录失败: {}", e))?;
 
-    fs::create_dir_all(dest_dir).map_err(|e| format!("创建目录失败: {}", e))?;
-    let dest_path = dest_dir.join(&filename);
-    fs::copy(path, &dest_path).map_err(|e| format!("复制 PDF 失败: {}", e))?;
+    let mutool = find_mutool().ok_or_else(||
+        "未找到 mutool，请下载 mupdf 后将 mutool.exe 放在可执行文件旁边或加入 PATH\n\
+         下载地址: https://mupdf.com/downloads/"
+    )?;
 
-    Ok((vec![filename], title))
+    let output_pattern = images_dir.join("page%d.png");
+    let output = Command::new(&mutool)
+        .arg("draw")
+        .arg("-o")
+        .arg(output_pattern.to_string_lossy().as_ref())
+        .arg("-r")
+        .arg("100")
+        .arg(path)
+        .output()
+        .map_err(|e| format!("调用 mutool 失败: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("mutool 渲染失败: {}", stderr));
+    }
+
+    let mut files: Vec<String> = fs::read_dir(&images_dir)
+        .map_err(|e| format!("读取输出目录失败: {}", e))?
+        .filter_map(|e| {
+            let e = e.ok()?;
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with("page") && name.ends_with(".png") {
+                Some(name)
+            } else { None }
+        })
+        .collect();
+    sort_image_files(&mut files);
+
+    if files.is_empty() {
+        return Err("mutool 渲染 PDF 后没有生成页面图片".to_string());
+    }
+
+    Ok((files, title))
 }
 
 // ===== 公开接口 =====
 
-/// 导入漫画（CBZ / 文件夹 / PDF）
-/// 返回 ComicBook（不含 base64 图片数据）
 pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
     let path_obj = Path::new(path);
     if !path_obj.exists() {
@@ -294,7 +312,7 @@ pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
             files = f;
             title = t;
             source_type = "pdf".to_string();
-            image_dir = dest;
+            image_dir = dest.join("images");
         }
         _ => {
             if !path_obj.is_dir() {
@@ -312,72 +330,41 @@ pub fn import_comic(path: &str, data_dir: &Path) -> Result<ComicBook, String> {
         sort_image_files(&mut files);
     }
 
-    // 探测图片尺寸
     let pages: Vec<ComicPage> = files.iter().enumerate().map(|(i, fname)| {
         let full_path = image_dir.join(fname);
         let (w, h) = probe_image_size(&full_path);
-        ComicPage {
-            index: i,
-            filename: fname.clone(),
-            width: w,
-            height: h,
-        }
+        ComicPage { index: i, filename: fname.clone(), width: w, height: h }
     }).collect();
 
     let total = pages.len();
     let id = generate_id();
 
     Ok(ComicBook {
-        id,
-        title,
-        source_type,
-        source_path: path.to_string(),
-        image_dir: image_dir.to_string_lossy().to_string(),
-        pages,
-        total_pages: total,
-        current_page: 0,
-        direction: "ltr".to_string(),
-        favorite: false,
-        book_icon: String::new(),
+        id, title, source_type, source_path: path.to_string(),
+        image_dir: image_dir.to_string_lossy().to_string(), pages,
+        total_pages: total, current_page: 0, direction: "ltr".to_string(),
+        favorite: false, book_icon: String::new(),
     })
 }
 
-/// 读取一张漫画页面图片，返回 base64 的 data URL
 pub fn get_page_base64(image_dir: &str, filename: &str) -> Result<String, String> {
     let path = Path::new(image_dir).join(filename);
     let data = fs::read(&path).map_err(|e| format!("读取图片失败: {}", e))?;
-
-    let mime = if data.len() > 4 && data[..4] == [0x89, 0x50, 0x4E, 0x47] {
-        "image/png"
-    } else if data.len() > 2 && data[..2] == [0xFF, 0xD8] {
-        "image/jpeg"
-    } else if data.len() > 3 && data[..3] == [0x47, 0x49, 0x46] {
-        "image/gif"
-    } else if data.len() > 4 && data[8..12] == [0x57, 0x45, 0x42, 0x50] {
-        "image/webp"
-    } else {
-        "image/png"
-    };
-
+    let mime = if data.len() > 4 && data[..4] == [0x89, 0x50, 0x4E, 0x47] { "image/png" }
+    else if data.len() > 2 && data[..2] == [0xFF, 0xD8] { "image/jpeg" }
+    else if data.len() > 3 && data[..3] == [0x47, 0x49, 0x46] { "image/gif" }
+    else { "image/png" };
     let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
     Ok(format!("data:{};base64,{}", mime, b64))
 }
 
-/// 重新扫描文件夹中的图片文件（用于文件夹来源的漫画）
 pub fn rescan_folder(image_dir: &str) -> Result<Vec<ComicPage>, String> {
     let dir = Path::new(image_dir);
     let files = scan_image_dir(dir)?;
-
     let pages: Vec<ComicPage> = files.iter().enumerate().map(|(i, fname)| {
         let full_path = dir.join(fname);
         let (w, h) = probe_image_size(&full_path);
-        ComicPage {
-            index: i,
-            filename: fname.clone(),
-            width: w,
-            height: h,
-        }
+        ComicPage { index: i, filename: fname.clone(), width: w, height: h }
     }).collect();
-
     Ok(pages)
 }

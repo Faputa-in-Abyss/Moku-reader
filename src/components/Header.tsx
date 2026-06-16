@@ -62,6 +62,7 @@ export default function Header() {
           await invoke("import_comic", { path });
         } catch (e) {
           console.error(`导入漫画失败: ${path}`, e);
+          alert(`导入失败: ${path}\n\n${e}`);
         }
       }
       triggerRefresh();

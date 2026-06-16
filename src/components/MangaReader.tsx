@@ -1,15 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useStore } from "../store";
 
-let pdfjsLib: any = null;
-async function getPdfjs() {
-  if (!pdfjsLib) {
-    pdfjsLib = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
-  }
-  return pdfjsLib;
-}
-
 export default function MangaReader() {
   const currentManga = useStore((s) => s.currentManga);
   const mangaCurrentPage = useStore((s) => s.mangaCurrentPage);
@@ -28,9 +19,6 @@ export default function MangaReader() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const navTimer = useRef<number>(0);
   const [toolbarVisible, setToolbarVisible] = useState(false);
-  const pdfRenderedRef = useRef(false);
-  const [pdfProgress, setPdfProgress] = useState(0);
-  const [pdfTotal, setPdfTotal] = useState(0);
 
   const isRtl = manga?.direction === "rtl";
   const totalPages = manga?.total_pages ?? 0;
@@ -46,85 +34,7 @@ export default function MangaReader() {
   }, []);
 
   useEffect(() => {
-    if (!manga || manga.source_type !== "pdf") return;
-    if (pdfRenderedRef.current) return;
-    pdfRenderedRef.current = true;
-    let pdfDoc: any = null;
-    let cancelled = false;
-    async function renderPdf() {
-      setLoading(true);
-      setPdfProgress(0);
-      try {
-        console.log("[墨读漫画] 开始获取 PDF 路径...");
-        const { convertFileSrc, invoke } = await import("@tauri-apps/api/core");
-        const filePath = await invoke("get_comic_page", { comicId: manga.id, pageIndex: 0 }) as string;
-        console.log("[墨读漫画] PDF 路径:", filePath);
-        const url = convertFileSrc(filePath);
-        console.log("[墨读漫画] asset URL:", url);
-
-        try {
-          const testResp = await fetch(url, { method: "HEAD" });
-          console.log("[墨读漫画] fetch HEAD 响应:", testResp.status, testResp.headers.get("content-type"));
-        } catch (fetchErr) {
-          console.warn("[墨读漫画] fetch HEAD 失败:", fetchErr);
-        }
-
-        console.log("[墨读漫画] 加载 pdfjs...");
-        const pdfjs = await getPdfjs();
-        console.log("[墨读漫画] pdfjs 已加载，版本:", pdfjs.version);
-        console.log("[墨读漫画] workerSrc:", pdfjs.GlobalWorkerOptions.workerSrc);
-
-        console.log("[墨读漫画] 开始 getDocument(), disableRange=true");
-        const loadingTask = pdfjs.getDocument({ url, disableRange: true, disableAutoFetch: true, disableStream: true, useSystemFonts: true, disableFontFace: true, cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/cmaps/", cMapPacked: true });
-        console.log("[墨读漫画] getDocument() 返回, 等待 promise...");
-        console.log("[墨读漫画] 当前时间:", new Date().toISOString());
-
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("PDF 解析超时（30s）")), 30000)
-        );
-        pdfDoc = await Promise.race([loadingTask.promise, timeoutPromise]);
-        console.log("[墨读漫画] PDF 解析成功，页数:", pdfDoc.numPages);
-        if (cancelled) return;
-        const total = pdfDoc.numPages;
-        setPdfTotal(total);
-        setPdfProgress(0);
-        const pages: Record<number, string> = {};
-        const scale = 1.0;
-        const BATCH = 4;
-        for (let start = 1; start <= total; start += BATCH) {
-          if (cancelled) return;
-          const batchEnd = Math.min(start + BATCH - 1, total);
-          const batchPromises = [];
-          for (let i = start; i <= batchEnd; i++) {
-            const pageIdx = i;
-            batchPromises.push(
-              pdfDoc.getPage(pageIdx).then((page: any) => {
-                const vp = page.getViewport({ scale });
-                const cvs = document.createElement("canvas");
-                cvs.width = vp.width;
-                cvs.height = vp.height;
-                const ctx = cvs.getContext("2d")!;
-                return page.render({ canvasContext: ctx, viewport: vp }).promise.then(() => {
-                  pages[pageIdx - 1] = cvs.toDataURL("image/jpeg", 0.85);
-                });
-              })
-            );
-          }
-          await Promise.all(batchPromises);
-          // 用新的对象引用强制 React 重新渲染
-          const newProgress = Math.min(start + BATCH - 1, total);
-          setPdfProgress(newProgress);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    renderPdf();
-    return () => { cancelled = true; };
-  }, [manga?.id]);
-
-  useEffect(() => {
-    if (!manga || manga.source_type === "pdf") return;
+    if (!manga) return;
     const preloadRange = 4;
     const pagesToLoad: number[] = [];
     const start = Math.max(0, mangaCurrentPage - preloadRange);
@@ -243,7 +153,7 @@ export default function MangaReader() {
 
   if (!manga) return null;
 
-  const pdfReady = manga.source_type !== "pdf" || (Object.keys(loadedPages).length === totalPages && totalPages > 0);
+  const pdfReady = manga.source_type !== "pdf" || loadedPages[mangaCurrentPage] != null;
   const showDoublePages = mangaViewMode === "double";
 
   const mainStyle: React.CSSProperties = {
@@ -354,22 +264,7 @@ export default function MangaReader() {
         )}
       </div>
 
-      {loading && manga.source_type === "pdf" ? (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 299,
-          display: "flex", flexDirection: "column", alignItems: "center",
-          gap: 6, padding: "60px 20px 20px",
-          background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
-          backdropFilter: "blur(24px) saturate(1.4)",
-        }}>
-          <span style={{ fontSize: ".8rem", color: "var(--text-dim)" }}>
-            {pdfTotal > 0 ? "渲染中 " + pdfProgress + "/" + pdfTotal : "加载中..."}
-          </span>
-          <div style={{ width: "100%", maxWidth: 300, height: 4, borderRadius: 4, background: "rgba(var(--accent-rgb),0.08)", overflow: "hidden" }}>
-            <div style={{ width: (pdfTotal > 0 ? (pdfProgress / pdfTotal) * 100 : 0) + "%", height: "100%", borderRadius: 4, background: "var(--accent)", transition: "width 0.3s ease" }} />
-          </div>
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(12px)", padding: "8px 20px", borderRadius: 20, border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>
       ) : null}
 

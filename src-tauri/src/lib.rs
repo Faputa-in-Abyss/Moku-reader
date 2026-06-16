@@ -449,9 +449,22 @@ fn get_workspace_dir() -> String {
 // ===== 漫画命令 =====
 
 #[tauri::command]
-fn import_comic(path: String, state: State<AppState>) -> Result<comic::ComicBook, String> {
+async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic::ComicBook, String> {
     debug_log!("📥 导入漫画: {}", &path);
-    let book = comic::import_comic(&path, &state.data_dir)?;
+
+    let data_dir = state.data_dir.clone();
+    let path_c = path.clone();
+
+    // 在新线程中跑 mutool，不阻塞 UI
+    let (tx, rx) = std::sync::mpsc::channel::<Result<comic::ComicBook, String>>();
+    std::thread::spawn(move || {
+        let result = comic::import_comic(&path_c, &data_dir);
+        let _ = tx.send(result);
+    });
+
+    let book = rx.recv().map_err(|_| "导入线程崩溃".to_string())?
+        .map_err(|e| format!("导入失败: {}", e))?;
+
     debug_log!("   导入成功: {} ({} 页)", &book.title, book.total_pages);
 
     let mut lib = state.comic_library.lock().unwrap();
@@ -473,14 +486,6 @@ fn get_comic_page(comic_id: String, page_index: usize, state: State<AppState>) -
     let lib = state.comic_library.lock().unwrap();
     let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     let page = comic.pages.get(page_index).ok_or("页码超出范围")?;
-
-    // PDF 直接返回源文件路径，前端用 asset 协议读取
-    // pdf.js 需禁用 range 请求，因为 Tauri asset 协议不支持 content-range 头
-    if comic.source_type == "pdf" {
-        let pdf_path = std::path::Path::new(&comic.image_dir).join(&page.filename);
-        return Ok(pdf_path.to_string_lossy().to_string());
-    }
-
     comic::get_page_base64(&comic.image_dir, &page.filename)
 }
 
