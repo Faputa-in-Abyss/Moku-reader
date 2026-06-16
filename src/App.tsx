@@ -7,6 +7,7 @@ import DebugPanel, { initDebugCapture } from "./components/DebugPanel";
 import OnlineSearch from "./components/OnlineSearch";
 import MangaLibrary from "./components/MangaLibrary";
 import MangaReader from "./components/MangaReader";
+import ImportToast from "./components/ImportToast";
 import { useStore } from "./store";
 
 initDebugCapture();
@@ -46,6 +47,7 @@ export default function App() {
       {mangaReading && <MangaReader />}
       <DebugPanel />
       <OnlineSearch />
+      <ImportToast />
     </>
   );
 }

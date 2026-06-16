@@ -253,7 +253,7 @@ fn import_pdf(path: &Path, dest_dir: &Path) -> Result<(Vec<String>, String), Str
         .arg("-o")
         .arg(output_pattern.to_string_lossy().as_ref())
         .arg("-r")
-        .arg("100")
+        .arg("150")
         .arg(path)
         .output()
         .map_err(|e| format!("调用 mutool 失败: {}", e))?;

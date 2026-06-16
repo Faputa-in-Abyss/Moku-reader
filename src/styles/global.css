@@ -293,6 +293,16 @@ body {
   50% { opacity: 0.85; }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes importBar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(150%); }
+  100% { transform: translateX(-100%); }
+}
+
 /* 关于面板入场动画 */
 @keyframes aboutFadeIn {
   from { opacity: 0; }

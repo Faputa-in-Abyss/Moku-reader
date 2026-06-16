@@ -93,8 +93,8 @@ export default function Header() {
       const selected = await open({
         multiple: true,
         filters: [
+          { name: "PDF 文件 (*.pdf)", extensions: ["pdf"] },
           { name: "漫画文件 (CBZ/ZIP)", extensions: ["cbz", "zip"] },
-          { name: "PDF 文件", extensions: ["pdf"] },
         ],
       });
       if (!selected) return;
@@ -102,14 +102,19 @@ export default function Header() {
       if (paths.length === 0) return;
 
       const { invoke } = await import("@tauri-apps/api/core");
+      let hasError = false;
       for (const path of paths) {
         try {
-          await invoke("import_comic", { path });
+          console.log("[墨读前端] 开始导入漫画:", path);
+          const result = await invoke("import_comic", { path });
+          console.log("[墨读前端] 导入完成:", result);
         } catch (e) {
           console.error(`导入漫画失败: ${path}`, e);
+          hasError = true;
         }
       }
       triggerRefresh();
+      if (hasError) console.warn("[墨读前端] 部分导入失败");
     } catch (e) {
       console.error("导入漫画失败:", e);
     }

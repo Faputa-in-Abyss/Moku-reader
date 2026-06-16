@@ -130,6 +130,9 @@ interface AppStore {
   setMangaViewMode: (m: MangaViewMode) => void;
   mangaZoom: number;
   setMangaZoom: (z: number) => void;
+  // 导入进度
+  importProgress: { title: string; status: string; message: string } | null;
+  setImportProgress: (p: { title: string; status: string; message: string } | null) => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -268,4 +271,7 @@ export const useStore = create<AppStore>((set, get) => ({
   },
   mangaZoom: 1,
   setMangaZoom: (z) => set({ mangaZoom: Math.min(4, Math.max(0.25, z)) }),
+  // 导入进度
+  importProgress: null,
+  setImportProgress: (p) => set({ importProgress: p }),
 }));
