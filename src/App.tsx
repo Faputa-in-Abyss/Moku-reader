@@ -41,8 +41,28 @@ export default function App() {
         }}
       />
       <Header />
-      {viewMode === "library" && !reading && <Library />}
-      {viewMode === "manga" && !mangaReading && <MangaLibrary />}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr",
+        gridTemplateRows: "1fr",
+      }}>
+        <div style={{
+          gridArea: "1 / 1",
+          opacity: viewMode === "library" && !reading ? 1 : 0,
+          pointerEvents: viewMode === "library" && !reading ? "auto" : "none",
+          transition: "opacity 0.4s ease",
+        }}>
+          <Library />
+        </div>
+        <div style={{
+          gridArea: "1 / 1",
+          opacity: viewMode === "manga" && !mangaReading ? 1 : 0,
+          pointerEvents: viewMode === "manga" && !mangaReading ? "auto" : "none",
+          transition: "opacity 0.4s ease",
+        }}>
+          <MangaLibrary />
+        </div>
+      </div>
       {reading && <Reader />}
       {mangaReading && <MangaReader />}
       <DebugPanel />
