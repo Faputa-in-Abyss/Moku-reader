@@ -412,15 +412,7 @@ export default function MangaReader() {
       </div>
 
       {/* 漫画侧栏 — 鼠标靠近左边缘弹出，显示漫画库列表方便切换 */}
-      <div style={{
-        position: "fixed", left: 0, top: 0, bottom: 0, width: 240, zIndex: 320,
-        background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-        borderRight: "1px solid var(--border-glass)",
-        transform: mangaSidebar ? "translateX(0)" : "translateX(-100%)",
-        transition: "transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)",
-        padding: "14px 16px", overflowY: "auto", color: "var(--text)",
-        fontSize: ".85rem",
-      }} onMouseEnter={() => { clearTimeout(sideTimer.current); }} onMouseLeave={() => { setMangaSidebar(false); }} onWheel={(e) => e.stopPropagation()}>
+      <div className={`manga-sidebar${mangaSidebar ? " manga-sidebar-open" : ""}`} onMouseEnter={() => { clearTimeout(sideTimer.current); }} onMouseLeave={() => { setMangaSidebar(false); }} onWheel={(e) => e.stopPropagation()}>
         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: ".9rem" }}>漫画库</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {sidebarComics.map((c) => (

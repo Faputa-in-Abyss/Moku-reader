@@ -95,6 +95,18 @@ export default function MangaLibrary() {
     return () => window.removeEventListener("click", close);
   }, []);
 
+  // Escape 退出批量模式
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectMode) {
+        setSelectMode(false);
+        setSelectedIds(new Set());
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectMode]);
+
   const handleCardGlow = (e: React.MouseEvent, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
     el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
@@ -472,7 +484,15 @@ export default function MangaLibrary() {
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <button className="btn" style={{ flex: 1, fontSize: ".78rem", justifyContent: "center", padding: "6px 0" }}
-                onClick={() => { setIconPicker({ ...iconPicker, book_icon: "" }); }}>
+                onClick={async () => {
+                  try {
+                    const { invoke } = await import("@tauri-apps/api/core");
+                    await invoke("set_comic_icon", { comicId: iconPicker.id, icon: "" });
+                    try { localStorage.removeItem(`nr-manga-cover-${iconPicker.id}`); } catch {}
+                    setIconPicker(null);
+                    triggerRefresh();
+                  } catch {}
+                }}>
                 🖼️ 原封面
               </button>
             </div>
