@@ -452,18 +452,14 @@ fn get_workspace_dir() -> String {
 async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic::ComicBook, String> {
     debug_log!("📥 导入漫画: {}", &path);
 
+    // mutool draw 可能耗时，用 spawn_blocking 避免阻塞 Tauri 的 IPC 线程池
     let data_dir = state.data_dir.clone();
     let path_c = path.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        comic::import_comic(&path_c, &data_dir)
+    }).await.map_err(|e| format!("导入线程崩溃: {}", e))?;
 
-    // 在新线程中跑 mutool，不阻塞 UI
-    let (tx, rx) = std::sync::mpsc::channel::<Result<comic::ComicBook, String>>();
-    std::thread::spawn(move || {
-        let result = comic::import_comic(&path_c, &data_dir);
-        let _ = tx.send(result);
-    });
-
-    let book = rx.recv().map_err(|_| "导入线程崩溃".to_string())?
-        .map_err(|e| format!("导入失败: {}", e))?;
+    let book = result.map_err(|e| format!("导入失败: {}", e))?;
 
     debug_log!("   导入成功: {} ({} 页)", &book.title, book.total_pages);
 

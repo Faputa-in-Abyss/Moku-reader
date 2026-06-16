@@ -35,30 +35,35 @@ export default function MangaReader() {
 
   useEffect(() => {
     if (!manga) return;
-    const preloadRange = 4;
+    if (mangaViewMode === "scroll") return; // 滚动模式用下面的 useEffect
+
+    const preloadAhead = 10; // 向前预加载 10 页
+    const preloadBehind = 2;  // 保留已翻过的 2 页
     const pagesToLoad: number[] = [];
-    const start = Math.max(0, mangaCurrentPage - preloadRange);
-    const end = Math.min(totalPages - 1, mangaCurrentPage + preloadRange);
+    const start = Math.max(0, mangaCurrentPage - preloadBehind);
+    const end = Math.min(totalPages - 1, mangaCurrentPage + preloadAhead);
     for (let i = start; i <= end; i++) {
       if (!loadedPages[i]) pagesToLoad.push(i);
     }
     if (pagesToLoad.length === 0) return;
     setLoading(true);
     let cancelled = false;
+    const BATCH = 4;
     async function load() {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
-        const results = await Promise.allSettled(
-          pagesToLoad.map((idx) => invoke("get_comic_page", { comicId: manga.id, pageIndex: idx }))
-        );
-        if (cancelled) return;
         const newPages: Record<number, string> = {};
-        results.forEach((r, i) => {
-          if (r.status === "fulfilled") {
-            newPages[pagesToLoad[i]] = r.value as string;
-          }
-        });
-        setLoadedPages((prev) => ({ ...prev, ...newPages }));
+        for (let i = 0; i < pagesToLoad.length; i += BATCH) {
+          if (cancelled) return;
+          const batch = pagesToLoad.slice(i, i + BATCH);
+          const results = await Promise.allSettled(
+            batch.map((idx) => invoke("get_comic_page", { comicId: manga.id, pageIndex: idx }))
+          );
+          results.forEach((r, j) => {
+            if (r.status === "fulfilled") newPages[batch[j]] = r.value as string;
+          });
+          setLoadedPages((prev) => ({ ...prev, ...newPages }));
+        }
       } catch (e) {
         console.error("加载页面失败:", e);
         showTip("加载图片失败");
@@ -68,7 +73,54 @@ export default function MangaReader() {
     }
     load();
     return () => { cancelled = true; };
-  }, [manga?.id, mangaCurrentPage, totalPages]);
+  }, [manga?.id, mangaCurrentPage, mangaViewMode, totalPages]);
+
+  // 滚动模式：按可见区域加载，限流防抖
+  useEffect(() => {
+    if (!manga || mangaViewMode !== "scroll") return;
+    const el = scrollRef.current;
+    if (!el) return;
+    let timer: number;
+    const handle = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (!el) return;
+        const viewTop = el.scrollTop;
+        const viewBottom = viewTop + el.clientHeight;
+        // 加载可视区 -2 屏 ~ +5 屏
+        const estPageH = 600;
+        const screenPages = Math.ceil(el.clientHeight / estPageH);
+        const start = Math.max(0, Math.floor(viewTop / estPageH) - 2 * screenPages);
+        const end = Math.min(totalPages - 1, Math.ceil(viewBottom / estPageH) + 5 * screenPages);
+        const toLoad: number[] = [];
+        for (let i = start; i <= end; i++) {
+          if (!loadedPages[i]) toLoad.push(i);
+        }
+        if (toLoad.length === 0) return;
+        const loadBatch = async () => {
+          try {
+            const { invoke } = await import("@tauri-apps/api/core");
+            const BATCH = 4;
+            const newPages: Record<number, string> = {};
+            for (let i = 0; i < toLoad.length; i += BATCH) {
+              const batch = toLoad.slice(i, i + BATCH);
+              const results = await Promise.allSettled(
+                batch.map((idx) => invoke("get_comic_page", { comicId: manga.id, pageIndex: idx }))
+              );
+              results.forEach((r, j) => {
+                if (r.status === "fulfilled") newPages[batch[j]] = r.value as string;
+              });
+              setLoadedPages((prev) => ({ ...prev, ...newPages }));
+            }
+          } catch {}
+        };
+        loadBatch();
+      }, 200);
+    };
+    el.addEventListener("scroll", handle, { passive: true });
+    handle(); // 首次加载
+    return () => { el.removeEventListener("scroll", handle); clearTimeout(timer); };
+  }, [manga?.id, mangaViewMode, totalPages]);
 
   useEffect(() => {
     if (!manga) return;
@@ -195,7 +247,10 @@ export default function MangaReader() {
         pointerEvents: "auto",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button className="btn" onClick={(e) => { e.stopPropagation(); closeMangaReader(); }}>← 返回</button>
+          <button className="btn" style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: 10, padding: "6px 14px", transition: "all 0.25s ease" }}
+            onMouseEnter={(e) => { const t = e.currentTarget; t.style.background = "rgba(var(--accent-rgb), 0.12)"; t.style.boxShadow = "0 0 20px rgba(var(--accent-rgb), 0.25)"; }}
+            onMouseLeave={(e) => { const t = e.currentTarget; t.style.background = "none"; t.style.boxShadow = "none"; }}
+            onClick={(e) => { e.stopPropagation(); closeMangaReader(); }}>← 返回</button>
           <span style={{ fontFamily: "Georgia,Noto Serif SC,serif", fontWeight: 500, fontSize: ".9rem" }}>{manga.title}</span>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -264,7 +319,7 @@ export default function MangaReader() {
         )}
       </div>
 
-      {loading ? (
+      {loading && !loadedPages[mangaCurrentPage] ? (
         <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(12px)", padding: "8px 20px", borderRadius: 20, border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>
       ) : null}
 
@@ -277,7 +332,7 @@ export default function MangaReader() {
 
 function PageImg({ src, style }: { src?: string; style: React.CSSProperties }) {
   if (!src) {
-    return <div style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: ".8rem" }}>加载中...</div>;
+    return <div style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(var(--accent-rgb),0.03)", borderRadius: 2, color: "var(--text-dim)", fontSize: ".75rem" }}>…</div>;
   }
   return <img src={src} alt="page" style={{ ...style, display: "block", borderRadius: 2 }} draggable={false} />;
 }

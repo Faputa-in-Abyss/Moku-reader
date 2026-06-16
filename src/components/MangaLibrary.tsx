@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useStore, ComicData } from "../store";
+import { useStore, ComicData, ComicMeta } from "../store";
 
 export default function MangaLibrary() {
   const comics = useStore((s) => s.comics);
   const setComics = useStore((s) => s.setComics);
+  const comicsMeta = useStore((s) => s.comicsMeta);
+  const setComicsMeta = useStore((s) => s.setComicsMeta);
   const openMangaReader = useStore((s) => s.openMangaReader);
   const refreshKey = useStore((s) => s.refreshKey);
 
@@ -13,29 +15,36 @@ export default function MangaLibrary() {
 
   const ICON_LIST = ["📚", "🎴", "🗾", "⛩️", "🌸", "⚔️", "🦊", "👹", "🌀", "🌊", "🔥", "🖼️", "🎨", "📦", "⭐"];
 
+  // 优先用 full data，否则用 localStorage meta；二者都空时先展示一个 loading 状态
+  const displayList: ComicMeta[] = comics.length > 0
+    ? comics.map((c): ComicMeta => ({ id: c.id, title: c.title, source_type: c.source_type, total_pages: c.total_pages, current_page: c.current_page, direction: c.direction, favorite: c.favorite, book_icon: c.book_icon }))
+    : comicsMeta;
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         const lib: ComicData[] = await invoke("get_comic_library");
-        if (!cancelled) {
-          setComics(lib);
-          // 加载所有漫画的缩略图（跳过 PDF）
+        if (cancelled) return;
+        setComics(lib);
+        // 更新 localStorage meta
+        const meta = lib.map((c): ComicMeta => ({ id: c.id, title: c.title, source_type: c.source_type, total_pages: c.total_pages, current_page: c.current_page, direction: c.direction, favorite: c.favorite, book_icon: c.book_icon }));
+        setComicsMeta(meta);
+        // 后台异步加载缩略图
+        const loadThumbs = async () => {
           const thumbs: Record<string, string> = {};
-          await Promise.allSettled(
-            lib.map(async (c: ComicData) => {
-              if (c.source_type === "pdf") return;
-              try {
-                const b64 = await invoke("get_comic_thumbnail", { comicId: c.id }) as string;
-                thumbs[c.id] = b64;
-              } catch {
-                // thumbnail fallback to icon
-              }
-            })
-          );
-          setThumbnails(thumbs);
-        }
+          for (const c of lib) {
+            if (cancelled) return;
+            if (c.source_type === "pdf") continue;
+            try {
+              const b64 = await invoke("get_comic_thumbnail", { comicId: c.id }) as string;
+              thumbs[c.id] = b64;
+            } catch { /* fallback to icon */ }
+          }
+          if (!cancelled) setThumbnails(thumbs);
+        };
+        setTimeout(loadThumbs, 100);
       } catch {
         if (!cancelled) setComics([]);
       }
@@ -56,10 +65,12 @@ export default function MangaLibrary() {
     el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
   };
 
-  const handleCtxMenu = (e: React.MouseEvent, comic: ComicData) => {
+  const handleCtxMenu = (e: React.MouseEvent, comic: ComicMeta) => {
     e.preventDefault();
     e.stopPropagation();
-    setCtxMenu({ comic, x: e.clientX, y: e.clientY });
+    const full = comics.find(c => c.id === comic.id);
+    if (full) setCtxMenu({ comic: full, x: e.clientX, y: e.clientY });
+    else setCtxMenu({ comic: comic as any, x: e.clientX, y: e.clientY });
   };
 
   const triggerRefresh = () => {
@@ -118,7 +129,7 @@ export default function MangaLibrary() {
     }
   };
 
-  if (comics.length === 0) {
+  if (displayList.length === 0) {
     return (
       <section className="library">
         <div className="library-header">
@@ -138,14 +149,28 @@ export default function MangaLibrary() {
     <section className="library">
       <div className="library-header">
         <h1 className="library-title">漫画库</h1>
-        <span className="library-count">{comics.length} 本漫画</span>
+        <span className="library-count">{displayList.length} 本漫画</span>
       </div>
       <div className="book-grid">
-        {comics.map((comic) => (
+        {displayList.map((comic) => {
+          // 点击时如果 Full data 已加载则直接用 full data；否则即时加载
+          const handleOpen = async () => {
+            setCtxMenu(null);
+            const full = comics.find(c => c.id === comic.id);
+            if (full) { openMangaReader(full); return; }
+            // lazy load single comic
+            try {
+              const { invoke } = await import("@tauri-apps/api/core");
+              const lib: ComicData[] = await invoke("get_comic_library");
+              const found = lib.find(c => c.id === comic.id);
+              if (found) openMangaReader(found);
+            } catch {}
+          };
+          return (
           <div
             key={comic.id}
             className="book-card"
-            onClick={() => openMangaReader(comic)}
+            onClick={handleOpen}
             onContextMenu={(e) => handleCtxMenu(e, comic)}
             onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
           >
@@ -173,7 +198,8 @@ export default function MangaLibrary() {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {ctxMenu && (
@@ -269,7 +295,7 @@ function sourceTypeLabel(t: string): string {
   }
 }
 
-function getMangaIcon(comic: ComicData): string {
+function getMangaIcon(comic: ComicMeta): string {
   if (comic.book_icon) return comic.book_icon;
   if (comic.source_type === "pdf") return "📕";
   const icons: Record<string, string> = { "海贼王": "🏴‍☠️", "火影忍者": "🍥", "鬼灭之刃": "⚔️", "进击的巨人": "🧱", "咒术回战": "🌀", "龙珠": "🐉", "名侦探柯南": "🔍", "灌篮高手": "🏀", "死神": "⚔️" };

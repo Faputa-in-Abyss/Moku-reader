@@ -41,6 +41,18 @@ export interface ComicData {
   book_icon?: string;
 }
 
+/** comic_library.json 中除去 pages/image_dir 的轻量摘要，存 localStorage */
+export interface ComicMeta {
+  id: string;
+  title: string;
+  source_type: string;
+  total_pages: number;
+  current_page: number;
+  direction: string;
+  favorite?: boolean;
+  book_icon?: string;
+}
+
 type ThemeMode = "light" | "dark";
 type ReadingMode = "scroll" | "page";
 
@@ -106,6 +118,8 @@ interface AppStore {
   setViewMode: (m: "library" | "manga") => void;
   comics: ComicData[];
   setComics: (comics: ComicData[]) => void;
+  comicsMeta: ComicMeta[];
+  setComicsMeta: (meta: ComicMeta[]) => void;
   mangaReading: boolean;
   currentManga: ComicData | null;
   mangaCurrentPage: number;
@@ -221,9 +235,18 @@ export const useStore = create<AppStore>((set, get) => ({
   saveBookmarks: (bookId) => {
     localStorage.setItem(`nr-bookmarks-${bookId}`, JSON.stringify(get().bookmarks));
   },
+  // 持久化漫画列表（仅存 id / title / source_type / total_pages / current_page / direction / favorite / book_icon，不含 pages 和 image_dir）
+  comicsMeta: JSON.parse(localStorage.getItem("nr-comics-meta") || "[]") as ComicMeta[],
+  setComicsMeta: (meta) => {
+    localStorage.setItem("nr-comics-meta", JSON.stringify(meta));
+    set({ comicsMeta: meta });
+  },
   // Manga state
-  viewMode: "library",
-  setViewMode: (m) => set({ viewMode: m }),
+  viewMode: (localStorage.getItem("nr-view-mode") as "library" | "manga") || "library",
+  setViewMode: (m) => {
+    localStorage.setItem("nr-view-mode", m);
+    set({ viewMode: m });
+  },
   comics: [],
   setComics: (comics) => set({ comics }),
   mangaReading: false,
