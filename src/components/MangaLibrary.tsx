@@ -12,7 +12,6 @@ export default function MangaLibrary() {
 
   const [ctxMenu, setCtxMenu] = useState<{ comic: ComicData; x: number; y: number } | null>(null);
   const [iconPicker, setIconPicker] = useState<ComicData | null>(null);
-  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
 
   const ICON_LIST = ["📚", "🎴", "🗾", "⛩️", "🌸", "⚔️", "🦊", "👹", "🌀", "🌊", "🔥", "🖼️", "🎨", "📦", "⭐"];
 
@@ -32,20 +31,6 @@ export default function MangaLibrary() {
         // 更新 localStorage meta
         const meta = lib.map((c): ComicMeta => ({ id: c.id, title: c.title, source_type: c.source_type, total_pages: c.total_pages, current_page: c.current_page, direction: c.direction, favorite: c.favorite, book_icon: c.book_icon }));
         setComicsMeta(meta);
-        // 后台异步加载缩略图
-        const loadThumbs = async () => {
-          const thumbs: Record<string, string> = {};
-          for (const c of lib) {
-            if (cancelled) return;
-            if (c.source_type === "pdf") continue;
-            try {
-              const b64 = await invoke("get_comic_thumbnail", { comicId: c.id }) as string;
-              thumbs[c.id] = b64;
-            } catch { /* fallback to icon */ }
-          }
-          if (!cancelled) setThumbnails(thumbs);
-        };
-        setTimeout(loadThumbs, 100);
       } catch {
         if (!cancelled) setComics([]);
       }
@@ -92,13 +77,11 @@ export default function MangaLibrary() {
 
   const handleToggleFavorite = async (comic: ComicData) => {
     setCtxMenu(null);
-    // 取消收藏时才播放消散动画
     const wasFavorited = comic.favorite;
-    if (wasFavorited) {
-      setAnimStars((p) => ({ ...p, [comic.id]: true }));
-      await new Promise((r) => setTimeout(r, 400));
-      setAnimStars((p) => { const n = { ...p }; delete n[comic.id]; return n; });
-    }
+    // 添加或取消收藏都播放动画
+    setAnimStars((p) => ({ ...p, [comic.id]: true }));
+    await new Promise((r) => setTimeout(r, 400));
+    setAnimStars((p) => { const n = { ...p }; delete n[comic.id]; return n; });
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("toggle_comic_favorite", { comicId: comic.id });
@@ -183,17 +166,8 @@ export default function MangaLibrary() {
             onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
           >
             <div className="book-cover">
-              {comic.favorite && <span key={"s-"+comic.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: animStars[comic.id] ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
-              {thumbnails[comic.id] ? (
-                <img
-                  src={thumbnails[comic.id]}
-                  alt={comic.title}
-                  className="book-cover-img"
-                  draggable={false}
-                />
-              ) : (
-                <div className="book-cover-icon">{comic.book_icon || getMangaIcon(comic)}</div>
-              )}
+              {comic.favorite && <span key={"s-"+comic.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none" }}>⭐</span>}
+              <div className="book-cover-icon">{comic.book_icon || getMangaIcon(comic)}</div>
               <div className="book-title">{comic.title}</div>
               <div className="book-progress">
                 <div className="book-progress-bar" style={{ width: "0%" }} />
