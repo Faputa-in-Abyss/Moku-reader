@@ -269,6 +269,30 @@ body {
   to { opacity: 1; }
 }
 
+/* 侧栏手柄淡入滑入 */
+@keyframes handleIn {
+  from { opacity: 0; transform: translateY(-50%) translateX(-6px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+/* 漫画侧栏弹出 */
+.manga-sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; width: 240; z-index: 320;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-right: 1px solid var(--border-glass);
+  padding: 14px 16px; overflow-y: auto; color: var(--text); font-size: .85rem;
+  transform: translateX(-100%);
+  opacity: 0;
+  will-change: transform;
+  transition: transform 0.45s cubic-bezier(0.22, 1.3, 0.36, 1), opacity 0.3s ease;
+}
+.manga-sidebar-open {
+  transform: translateX(0);
+  opacity: 1;
+}
+
 /* ===== 空状态 ===== */
 .empty-state { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; padding: 80px 32px; text-align: center; }
 .empty-icon { width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, rgba(var(--accent-rgb),0.06), transparent); display: flex; align-items: center; justify-content: center; font-size: 2.4rem; margin-bottom: 20px; animation: pulseGlow 4s ease-in-out infinite; }
