@@ -332,7 +332,7 @@ export default function MangaReader() {
         padding: "10px 20px", display: "flex", alignItems: "center",
         justifyContent: "space-between",
         background: toolbarVisible || !pdfReady ? "linear-gradient(180deg, var(--glass-bg) 60%, transparent)" : "transparent",
-        backdropFilter: toolbarVisible || !pdfReady ? "blur(24px) saturate(1.4)" : "none",
+        backdropFilter: toolbarVisible || !pdfReady ? "blur(var(--glass-blur)) saturate(var(--glass-saturate))" : "none",
         borderBottom: toolbarVisible || !pdfReady ? "1px solid var(--border-glass)" : "1px solid transparent",
         transition: "opacity 0.35s ease",
         opacity: toolbarVisible || !pdfReady ? 1 : 0,
@@ -414,7 +414,7 @@ export default function MangaReader() {
       {/* 漫画侧栏 — 鼠标靠近左边缘弹出，显示漫画库列表方便切换 */}
       <div style={{
         position: "fixed", left: 0, top: 0, bottom: 0, width: 240, zIndex: 320,
-        background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+        background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
         borderRight: "1px solid var(--border-glass)",
         transform: mangaSidebar ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)",
@@ -457,11 +457,11 @@ export default function MangaReader() {
       </div>
 
       {loading && !loadedPages[mangaCurrentPage] ? (
-        <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(12px)", padding: "8px 20px", borderRadius: 20, border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>
+        <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", padding: "8px 20px", borderRadius: 20, border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>
       ) : null}
 
       {tip && (
-        <div style={{ position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)", background: "var(--glass-bg)", backdropFilter: "blur(20px)", border: "1px solid var(--border-glass)", borderRadius: 30, padding: "10px 24px", fontSize: ".85rem", color: "var(--text)", zIndex: 500, animation: "tipIn 0.3s ease" }}>{tip}</div>
+        <div style={{ position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)", background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", border: "1px solid var(--border-glass)", borderRadius: 30, padding: "10px 24px", fontSize: ".85rem", color: "var(--text)", zIndex: 500, animation: "tipIn 0.3s ease" }}>{tip}</div>
       )}
     </div>
   );

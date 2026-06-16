@@ -270,12 +270,12 @@ export default function Header() {
       <div style={{
         position: "fixed", inset: 0, zIndex: 9999,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(0,0,0,0.35)", backdropFilter: "blur(6px)",
+        background: "rgba(0,0,0,0.35)", backdropFilter: "blur(var(--glass-overlay-blur))",
         animation: "aboutFadeIn 0.35s ease",
       }} onClick={() => setAboutOpen(false)}>
         <div style={{
           background: "var(--bg)",
-          backdropFilter: "blur(32px) saturate(1.5)",
+          backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
           border: "1px solid var(--border-glass)", borderRadius: 20,
           padding: "40px 48px", maxWidth: 420, width: "90%",
           boxShadow: "0 24px 80px var(--shadow)",
@@ -316,7 +316,7 @@ const headerStyle: React.CSSProperties = {
   justifyContent: "space-between",
   padding: "14px 32px",
   background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
-  backdropFilter: "blur(24px) saturate(1.4)",
+  backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
   borderBottom: "1px solid var(--border-glass)",
   transition: "background 0.6s ease, border-color 0.6s ease",
 };

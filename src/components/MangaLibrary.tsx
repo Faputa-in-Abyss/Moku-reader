@@ -307,7 +307,7 @@ export default function MangaLibrary() {
                 background: selectedIds.has(comic.id) ? "var(--accent)" : "rgba(0,0,0,0.25)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: ".75rem", color: "#fff", fontWeight: 700,
-                pointerEvents: "none", backdropFilter: "blur(4px)",
+                pointerEvents: "none", backdropFilter: "blur(var(--glass-mask-blur))",
               }}>
                 {selectedIds.has(comic.id) ? "✓" : ""}
               </div>
@@ -340,8 +340,8 @@ export default function MangaLibrary() {
             top: ctxMenu.y,
             zIndex: 300,
             background: "var(--surface-glass, var(--glass-bg))",
-            backdropFilter: "blur(24px) saturate(1.4)",
-            WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+            backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+            WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
             border: "1px solid var(--border-glass)",
             borderRadius: 12,
             padding: "6px 0",
@@ -371,7 +371,7 @@ export default function MangaLibrary() {
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500,
           display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
           padding: "12px 24px",
-          background: "var(--glass-bg)", backdropFilter: "blur(24px) saturate(1.4)",
+          background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
           borderTop: "1px solid var(--border-glass)",
         }}>
           <span style={{ color: "var(--text-dim)", fontSize: ".8rem" }}>已选 {selectedIds.size} 项</span>
@@ -391,7 +391,7 @@ export default function MangaLibrary() {
       )}
 
       {iconPicker && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setIconPicker(null)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setIconPicker(null)}>
           <div style={{ background: "var(--bg)", borderRadius: 16, border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>选择封面图标</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 }}>
