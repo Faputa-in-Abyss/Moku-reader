@@ -440,9 +440,10 @@ export default function MangaReader() {
               }}>
               <div style={{
                 width: 40, height: 50, borderRadius: 4, overflow: "hidden", flexShrink: 0,
-                background: "rgba(var(--accent-rgb),0.06)", display: "flex", alignItems: "center", justifyContent: "center",
+                position: "relative", background: "rgba(var(--accent-rgb),0.06)", display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: "1.2rem",
               }}>
+                <SidebarCover comicId={c.id} />
                 {c.book_icon || getMangaIcon(c)}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -465,6 +466,33 @@ export default function MangaReader() {
       )}
     </div>
   );
+}
+
+function SidebarCover({ comicId }: { comicId: string }) {
+  const [cover, setCover] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    // 先用 MangaLibrary 一样的缓存
+    const cached = localStorage.getItem(`nr-manga-cover-${comicId}`);
+    if (cached) { setCover(cached); return; }
+
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const b64: string = await invoke("get_comic_thumbnail", { comicId });
+        if (b64) {
+          setCover(b64);
+          try { localStorage.setItem(`nr-manga-cover-${comicId}`, b64); } catch {}
+        }
+      } catch {}
+    })();
+  }, [comicId]);
+
+  if (!cover) return null;
+  return <img src={cover} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 1 }} />;
 }
 
 function PageImg({ src, style }: { src?: string; style: React.CSSProperties }) {
