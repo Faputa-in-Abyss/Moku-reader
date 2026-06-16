@@ -717,7 +717,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
         }
 
         // 导入漫画
-        for (idx, path) in comics_list.iter().enumerate() {
+        for (_idx, path) in comics_list.iter().enumerate() {
             let path_obj = PathBuf::from(path);
             let file_name = path_obj.file_name()
                 .and_then(|s| s.to_str())
@@ -740,6 +740,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                         cl.comics.push(book);
                         comic::save_comic_library(&data_dir, &cl).ok();
                         comics_imported += 1;
+                        let _ = app.emit("comics-refreshed", "");
                     }
                     Err(e) => errors.push(format!("导入漫画文件夹失败 {}: {}", path, e)),
                 }
@@ -760,6 +761,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                                 message: format!("扫描导入：{} ({} 页)", title, total_pages),
                             });
                         }
+                        let _ = app.emit("comics-refreshed", "");
                     }
                     Err(e) => {
                         errors.push(format!("导入漫画失败 {}: {}", path, e));

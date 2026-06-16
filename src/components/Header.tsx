@@ -93,8 +93,7 @@ export default function Header() {
       const selected = await open({
         multiple: true,
         filters: [
-          { name: "PDF 文件 (*.pdf)", extensions: ["pdf"] },
-          { name: "漫画文件 (CBZ/ZIP)", extensions: ["cbz", "zip"] },
+          { name: "漫画文件 (PDF/CBZ/ZIP)", extensions: ["pdf", "cbz", "zip"] },
         ],
       });
       if (!selected) return;
@@ -117,6 +116,20 @@ export default function Header() {
       if (hasError) console.warn("[墨读前端] 部分导入失败");
     } catch (e) {
       console.error("导入漫画失败:", e);
+    }
+
+    // 再尝试打开文件夹选择器导入图片文件夹
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const folder = await open({ directory: true, multiple: false });
+      if (!folder) return;
+      const path = typeof folder === "string" ? folder : folder.path;
+      if (!path) return;
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("import_comic", { path });
+      triggerRefresh();
+    } catch (e) {
+      // 用户取消或失败都忽略
     }
   };
 
@@ -223,16 +236,13 @@ export default function Header() {
           <span>{THEME_ICONS[theme]}</span>
         </button>
         {viewMode === "library" ? (
-          <button className="btn btn-primary" onClick={handleImportNovel}>
-            <span>+</span> 导入小说
+          <button className="btn btn-primary" onClick={handleImportNovel} title="导入小说" style={{ width: 36, height: 36, borderRadius: 10, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: "1.2rem", fontWeight: 700 }}>+</span>
           </button>
         ) : (
           <div style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-primary" onClick={handleImportManga}>
-              <span>+</span> 导入漫画
-            </button>
-            <button className="btn" onClick={handleImportFolder} title="导入图片文件夹">
-              📁 导入文件夹
+            <button className="btn btn-primary" onClick={handleImportManga} title="导入漫画" style={{ width: 36, height: 36, borderRadius: 10, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: "1.2rem", fontWeight: 700 }}>+</span>
             </button>
           </div>
         )}

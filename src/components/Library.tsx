@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useStore, BookData } from "../store";
 
 export default function Library() {
@@ -14,6 +14,34 @@ export default function Library() {
   const animRef = useRef<number>(0);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  type SortField = "name" | "progress" | "chapters";
+  const [sortField, setSortField] = useState<SortField>(() => (localStorage.getItem("nr-novel-sort-field") as SortField) || "name");
+  const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-novel-sort-asc") !== "false");
+
+  const setSort = (field: SortField) => {
+    if (sortField === field) {
+      const next = !sortAsc;
+      setSortAsc(next);
+      localStorage.setItem("nr-novel-sort-asc", String(next));
+    } else {
+      setSortField(field);
+      localStorage.setItem("nr-novel-sort-field", field);
+      localStorage.setItem("nr-novel-sort-asc", "true");
+      setSortAsc(true);
+    }
+  };
+
+  const sortedBooks = useMemo(() => {
+    const list = books.slice();
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
+      else if (sortField === "progress") cmp = a.progress - b.progress;
+      else if (sortField === "chapters") cmp = a.total_chapters - b.total_chapters;
+      return sortAsc ? cmp : -cmp;
+    });
+    return list;
+  }, [books, sortField, sortAsc]);
 
   const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
@@ -48,7 +76,9 @@ export default function Library() {
   const handleCtxMenu = (e: React.MouseEvent, book: BookData) => {
     e.preventDefault();
     e.stopPropagation();
-    setCtxMenu({ book, x: e.clientX, y: e.clientY });
+    // 保存最新 book 引用
+    const latest = useStore.getState().books.find(b => b.id === book.id) || book;
+    setCtxMenu({ book: latest, x: e.clientX, y: e.clientY });
   };
 
   const handleRename = async (book: BookData) => {
@@ -62,27 +92,40 @@ export default function Library() {
     } catch {}
   };
 
+  // 乐观更新的收藏状态：覆盖 server 状态，立即生效
+  const [optimisticFav, setOptimisticFav] = useState<Record<string, boolean>>({});
+  // 正在消散的书籍：取消收藏时星星先播 starBurst，延时后才真的移除
+  const [bursting, setBursting] = useState<Set<string>>(new Set());
+
   const handleToggleFavorite = async (book: BookData) => {
     setCtxMenu(null);
-    const wasFavorited = book.favorite;
-    // 添加收藏时播放弹出动画
-    if (!wasFavorited) {
-      setAnimStars((p) => ({ ...p, [book.id]: true }));
-      await new Promise((r) => setTimeout(r, 400));
-      setAnimStars((p) => { const n = { ...p }; delete n[book.id]; return n; });
-    } else {
-      // 取消收藏时播放消散动画
-      setAnimStars((p) => ({ ...p, [book.id]: true }));
-      await new Promise((r) => setTimeout(r, 400));
-      setAnimStars((p) => { const n = { ...p }; delete n[book.id]; return n; });
-    }
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("toggle_favorite", { bookId: book.id });
-      triggerRefresh();
-    } catch {}
-  };
+    const bid = book.id;
+    // 用 optimistic 判断实际状态：如果 optimistic 存在则用它，否则用 book.favorite
+    const currentFav = optimisticFav[bid] ?? book.favorite;
 
+    if (currentFav) {
+      // 取消收藏：立即标记 bursting，星星播 starBurst 消散动画
+      setBursting((prev) => new Set(prev).add(bid));
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("toggle_favorite", { bookId: bid });
+      } catch {}
+      setOptimisticFav((prev) => ({ ...prev, [bid]: false }));
+      setBursting((prev) => { const n = new Set(prev); n.delete(bid); return n; });
+      triggerRefresh();
+    } else {
+      // 添加收藏：立即乐观显示星星
+      setOptimisticFav((prev) => ({ ...prev, [bid]: true }));
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("toggle_favorite", { bookId: bid });
+        triggerRefresh();
+      } catch {
+        setOptimisticFav((prev) => ({ ...prev, [bid]: false }));
+      }
+    }
+  };
   const handleDelete = async (book: BookData) => {
     setCtxMenu(null);
     if (!confirm(`确定要删除「${book.title}」吗？`)) return;
@@ -90,8 +133,6 @@ export default function Library() {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("remove_book", { bookId: book.id });
       triggerRefresh();
-      // 删除后自动扫描书库
-      invoke("scan_library").catch(() => {});
     } catch {}
   };
 
@@ -129,8 +170,35 @@ export default function Library() {
       }
       setSelectedIds(new Set());
       triggerRefresh();
-      // 删除后自动扫描书库
-      invoke("scan_library").catch(() => {});
+    } catch {}
+  };
+
+  // 批量收藏
+  const handleBatchFavorite = async () => {
+    if (selectedIds.size === 0) return;
+    setCtxMenu(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const favs: Record<string, boolean> = {};
+      const booksData = useStore.getState().books;
+      // 先判断是否有未收藏的，有则全部收藏，否则全部取消收藏
+      const anyUnfav = Array.from(selectedIds).some(id => {
+        const b = booksData.find(b => b.id === id);
+        return !b || !(optimisticFav[id] ?? b.favorite);
+      });
+      const newFav = anyUnfav;
+      for (const id of selectedIds) {
+        favs[id] = newFav;
+        // 每个都 toggle 到目标状态
+        const b = booksData.find(b => b.id === id);
+        if ((optimisticFav[id] ?? b?.favorite) !== newFav) {
+          await invoke("toggle_favorite", { bookId: id }).catch(() => {});
+        }
+      }
+      setOptimisticFav((prev) => ({ ...prev, ...favs }));
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      triggerRefresh();
     } catch {}
   };
 
@@ -165,8 +233,20 @@ export default function Library() {
         <h1 className="library-title">我的书库</h1>
         <span className="library-count">{books.length} 本书</span>
       </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        {(["name", "progress", "chapters"] as const).map((field) => (
+          <button key={field} className="btn" onClick={() => setSort(field)} style={{
+            fontSize: ".78rem", padding: "4px 12px",
+            background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
+            borderColor: sortField === field ? "var(--accent)" : undefined,
+          }}>
+            {field === "name" ? "📄 名称" : field === "progress" ? "📊 进度" : "📑 章节"}
+            {sortField === field && (sortAsc ? " ↑" : " ↓")}
+          </button>
+        ))}
+      </div>
       <div className="book-grid">
-        {books.map((book) => (
+        {sortedBooks.map((book) => (
             <div
               key={book.id}
               className="book-card"
@@ -194,7 +274,7 @@ export default function Library() {
                 </div>
               )}
               <div className={`book-cover${selectedIds.has(book.id) ? " cover-selected" : ""}`}>
-                {book.favorite && <span key={"s-"+book.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none" }}>⭐</span>}
+                {((optimisticFav[book.id] ?? book.favorite)) && <span style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: bursting.has(book.id) ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
                 <div className="book-cover-icon">{book.book_icon || getBookIcon(book.title)}</div>
                 <div className="book-title">{book.title}</div>
                 <div className="book-progress">
@@ -220,7 +300,15 @@ export default function Library() {
           borderTop: "1px solid var(--border-glass)",
         }}>
           <span style={{ color: "var(--text-dim)", fontSize: ".8rem" }}>已选 {selectedIds.size} 项</span>
+          <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => {
+            if (selectedIds.size === sortedBooks.length) {
+              setSelectedIds(new Set());
+            } else {
+              setSelectedIds(new Set(sortedBooks.map(b => b.id)));
+            }
+          }}>{selectedIds.size === sortedBooks.length ? "取消全选" : "全选"}</button>
           <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>取消</button>
+          <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedIds.size === 0} onClick={handleBatchFavorite}>⭐ 收藏所选</button>
           <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedIds.size === 0 ? undefined : "rgba(200,60,50,0.8)" }} disabled={selectedIds.size === 0} onClick={handleBatchDelete}>
             🗑️ 删除所选
           </button>
@@ -249,7 +337,7 @@ export default function Library() {
         >
           <MenuItem icon="✏️" label="重命名" onClick={() => handleRename(ctxMenu.book)} />
           <MenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.book); }} />
-          <MenuItem icon="⭐" label={ctxMenu.book.favorite ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.book)} />
+          <MenuItem icon="⭐" label={(optimisticFav[ctxMenu.book.id] ?? ctxMenu.book.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.book)} />
           <MenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.book)} />
           <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
           <MenuItem icon="📂" label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.book)} />
