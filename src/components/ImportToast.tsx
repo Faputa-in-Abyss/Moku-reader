@@ -4,6 +4,8 @@ import { useStore } from "../store";
 export default function ImportToast() {
   const importProgress = useStore((s) => s.importProgress);
   const setImportProgress = useStore((s) => s.setImportProgress);
+  const mangaReading = useStore((s) => s.mangaReading);
+  const reading = useStore((s) => s.reading);
   const timerRef = useRef<number>(0);
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function ImportToast() {
     return () => { clearTimeout(timerRef.current); };
   }, []);
 
-  if (!importProgress) return null;
+  if (!importProgress || mangaReading || reading) return null;
 
   const isProcessing = importProgress.status === "processing";
 

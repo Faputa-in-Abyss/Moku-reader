@@ -267,6 +267,27 @@ fn toggle_favorite(book_id: String, state: State<AppState>) -> Result<(), String
 }
 
 #[tauri::command]
+fn save_book_order(book_ids: Vec<String>, state: State<AppState>) -> Result<(), String> {
+    debug_log!("🔄 保存书库排序: {} 本书", book_ids.len());
+    let mut lib = state.library.lock().unwrap();
+    let mut reordered: Vec<Book> = Vec::with_capacity(book_ids.len());
+    for id in &book_ids {
+        if let Some(idx) = lib.books.iter().position(|b| b.id == *id) {
+            reordered.push(lib.books.swap_remove(idx));
+        }
+    }
+    // 补回未被排序的书籍
+    for b in lib.books.drain(..) {
+        if !reordered.iter().any(|r| r.id == b.id) {
+            reordered.push(b);
+        }
+    }
+    lib.books = reordered;
+    save_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
 fn set_book_icon(book_id: String, icon: String, state: State<AppState>) -> Result<(), String> {
     debug_log!("🎨 设置封面图标: book={}, icon={}", &book_id, &icon);
     let mut lib = state.library.lock().unwrap();
@@ -766,6 +787,7 @@ pub fn run() {
             reparse_book_chapters,
             rename_book,
             toggle_favorite,
+            save_book_order,
             set_book_icon,
             open_file_location,
             fetch_url,

@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useStore, BookData } from "../store";
+import { ReactSortable } from "react-sortablejs";
 
 export default function Library() {
   const books = useStore((s) => s.books);
@@ -10,6 +11,7 @@ export default function Library() {
 
   const [ctxMenu, setCtxMenu] = useState<{ book: BookData; x: number; y: number } | null>(null);
   const [iconPicker, setIconPicker] = useState<BookData | null>(null);
+  const [animStars, setAnimStars] = useState<Record<string, boolean>>({});
   const animRef = useRef<number>(0);
 
   const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
@@ -61,6 +63,13 @@ export default function Library() {
 
   const handleToggleFavorite = async (book: BookData) => {
     setCtxMenu(null);
+    // 取消收藏时播放消散动画（只有从收藏→未收藏才触发）
+    const wasFavorited = book.favorite;
+    if (wasFavorited) {
+      setAnimStars((p) => ({ ...p, [book.id]: true }));
+      await new Promise((r) => setTimeout(r, 400));
+      setAnimStars((p) => { const n = { ...p }; delete n[book.id]; return n; });
+    }
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("toggle_favorite", { bookId: book.id });
@@ -121,28 +130,53 @@ export default function Library() {
         <span className="library-count">{books.length} 本书</span>
       </div>
       <div className="book-grid">
+        <ReactSortable
+          list={books.map((b, i) => ({ id: b.id } as any))}
+          setList={() => {}}
+          onEnd={(evt) => {
+            const ordered = [...books];
+            const [moved] = ordered.splice(evt.oldIndex ?? 0, 1);
+            ordered.splice(evt.newIndex ?? 0, 0, moved);
+            setBooks(ordered);
+            import("@tauri-apps/api/core").then(({ invoke }) => {
+              invoke("save_book_order", { bookIds: ordered.map(b => b.id) }).catch(() => {});
+            });
+          }}
+          delay={400}
+          delayOnTouchOnly={false}
+          touchStartThreshold={5}
+          animation={200}
+          easing="cubic-bezier(0.22, 0.61, 0.36, 1)"
+          ghostClass="sortable-ghost"
+          chosenClass="sortable-chosen"
+          dragClass="sortable-drag"
+        >
+          {books.map((book) => (
+              <div
         {books.map((book) => (
-          <div
-            key={book.id}
-            className="book-card"
-            onClick={() => openReader(book)}
-            onContextMenu={(e) => handleCtxMenu(e, book)}
-            onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
-          >
-            <div className="book-cover">
-              <div className="book-cover-icon">{book.book_icon || getBookIcon(book.title)}</div>
-              <div className="book-title">{book.title}</div>
-              <div className="book-progress">
-                <div className="book-progress-bar" style={{ width: `${book.progress * 100}%` }} />
+            <div
+              key={book.id}
+              className="book-card"
+              onClick={() => openReader(book)}
+              onContextMenu={(e) => handleCtxMenu(e, book)}
+              onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
+            >
+              <div className="book-cover">
+                {book.favorite && <span key={"s-"+book.id} style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: animStars[book.id] ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
+                <div className="book-cover-icon">{book.book_icon || getBookIcon(book.title)}</div>
+                <div className="book-title">{book.title}</div>
+                <div className="book-progress">
+                  <div className="book-progress-bar" style={{ width: `${book.progress * 100}%` }} />
+                </div>
+              </div>
+              <div className="book-info">
+                <div className="book-chapter">
+                  {book.current_chapter > 0 ? `第${book.current_chapter}章` : "尚未阅读"}
+                </div>
               </div>
             </div>
-            <div className="book-info">
-              <div className="book-chapter">
-                {book.current_chapter > 0 ? `第${book.current_chapter}章` : "尚未阅读"}
-              </div>
-            </div>
-          </div>
-        ))}
+          ))}
+        </ReactSortable>
       </div>
 
       {/* 右键菜单 */}
