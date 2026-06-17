@@ -226,6 +226,16 @@ export default function DebugPanel() {
   };
 
   const handleScan = async () => {
+    if (scanning) {
+      // 发送取消请求
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("cancel_scan");
+      } catch {}
+      setScanning(false);
+      console.log("[墨读] 用户主动停止扫描");
+      return;
+    }
     setScanning(true);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -317,7 +327,7 @@ export default function DebugPanel() {
             </div>
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>操作</div>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={handleSetPath}>📂 更改书库路径</button>
-            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={scanning || !libraryPath} onClick={handleScan}>{scanning ? "⏳ 扫描中..." : "🔄 扫描书库"}</button>
+          <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={!libraryPath} onClick={handleScan}>{scanning ? "⏳ 扫描中..点击停止" : "🔄 扫描书库"}</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
             {false && <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().setOnlineSearchOpen(true); }}>📚 联网搜书</button>}
             <div style={{ borderTop: "1px solid var(--border-glass)", margin: "14px 0 10px" }} />

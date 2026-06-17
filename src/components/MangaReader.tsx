@@ -28,8 +28,10 @@ export default function MangaReader() {
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0, moved: false });
   const [mangaSidebar, setMangaSidebar] = useState(false);
+  const [sidebarHint, setSidebarHint] = useState(false);
   const sideTimer = useRef<number>(0);
   const [sidebarComics, setSidebarComics] = useState(useStore((s) => s.comics));
+  const [comicSearch, setComicSearch] = useState("");
   const sidebarRefreshRef = useRef(false);
   // 同系列章节列表
   const seriesChapters = useMemo(() => {
@@ -168,8 +170,12 @@ export default function MangaReader() {
       setToolbarVisible(false);
     }
 
+    // 侧栏提示：扩大触发范围（100px），让用户更早看到 > 箭头；实际侧栏触发仍保持 30px
+    setSidebarHint(e.clientX >= 28 && e.clientX < 100 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && mangaZoom === 1 && !mangaSidebar);
+
     // 鼠标靠近左边缘弹出漫画侧栏——弹出时重新拉取漫画列表与主页同步
-    if (e.clientX < 60 && e.clientY > 60 && e.clientY < window.innerHeight - 60 && mangaZoom === 1) {
+    // 缩窄触发区（30px）且避开顶部工具栏区域（Y > 120），避免误触
+    if (e.clientX < 30 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && mangaZoom === 1) {
       if (!mangaSidebar && !sidebarRefreshRef.current) {
         sidebarRefreshRef.current = true;
         (async () => {
@@ -273,6 +279,8 @@ export default function MangaReader() {
     const el = mainRef.current;
     if (!el) return;
     const handler = (e: WheelEvent) => {
+      // 如果事件来自侧栏内部，不处理（侧栏本身也是 mainRef 的子元素）
+      if ((e.target as HTMLElement)?.closest?.("[data-sidebar]")) return;
       if (viewModeRef.current === "scroll") return;
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
@@ -463,42 +471,104 @@ export default function MangaReader() {
       </div>
 
       {/* 漫画侧栏 — 鼠标靠近左边缘弹出，显示漫画库列表方便切换 */}
-      <div className={`manga-sidebar${mangaSidebar ? " manga-sidebar-open" : ""}`} onMouseEnter={() => { clearTimeout(sideTimer.current); }} onMouseLeave={() => { setMangaSidebar(false); }} onWheel={(e) => e.stopPropagation()}>
-        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: ".9rem" }}>漫画库</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {sidebarComics.map((c) => (
-            <div key={c.id} onClick={async () => {
-              const targetPage = c.current_page || 0;
-              setMangaSidebar(false);
-              setMangaZoom(1);
-              setPanOffset({ x: 0, y: 0 });
-              setLoadedPages({});
-              setMangaPage(targetPage);
-              useStore.setState({ currentManga: c, mangaCurrentPage: targetPage });
+      <div style={{
+        position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 320,
+        transform: mangaSidebar ? "translateX(0)" : "translateX(-100%)",
+        opacity: mangaSidebar ? 1 : 0,
+        willChange: "transform",
+        transition: "transform 0.45s cubic-bezier(0.22, 1.3, 0.36, 1), opacity 0.3s ease",
+        display: "flex",
+        background: "var(--glass-bg)",
+        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+        borderRight: "1px solid var(--border-glass)",
+      }} onMouseEnter={() => { clearTimeout(sideTimer.current); }} onMouseLeave={() => { setMangaSidebar(false); }} onWheel={(e) => e.stopPropagation()} data-sidebar>
+        {/* 侧栏主体 */}
+        <div style={{ width: 240, overflowY: "auto", padding: "14px 16px", color: "var(--text)", fontSize: ".85rem" }}>
+          <div style={{ fontWeight: 600, marginBottom: 6, fontSize: ".9rem" }}>漫画库</div>
+          <input
+            placeholder="搜索漫画..."
+            value={comicSearch}
+            onChange={(e) => setComicSearch(e.target.value)}
+            style={{
+              width: "100%", padding: "5px 8px", fontSize: ".75rem", marginBottom: 8,
+              background: "var(--glass-bg)", color: "var(--text)",
+              border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)",
+              outline: "none", boxSizing: "border-box",
             }}
-              style={{
-                display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "6px 8px", borderRadius: "var(--radius-sm)",
-                background: c.id === manga?.id ? "rgba(var(--accent-rgb),0.12)" : "transparent",
-                transition: "all 0.15s ease",
-              }}>
-              <div style={{
-                width: 40, height: 50, borderRadius: 4, overflow: "hidden", flexShrink: 0,
-                position: "relative", background: "rgba(var(--accent-rgb),0.06)", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "1.2rem",
-              }}>
-                <SidebarCover comicId={c.id} />
-                {c.book_icon || getMangaIcon(c)}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: ".78rem", color: c.id === manga?.id ? "var(--accent)" : "var(--text)", fontWeight: c.id === manga?.id ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>
-                <div style={{ width: "100%", height: 3, background: "rgba(var(--accent-rgb),0.1)", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
-                  <div style={{ width: `${c.total_pages > 0 ? ((c.id === manga?.id ? mangaCurrentPage : c.current_page) / c.total_pages) * 100 : 0}%`, height: "100%", background: c.id === manga?.id ? "var(--accent)" : "rgba(var(--accent-rgb),0.5)", borderRadius: 2, transition: "width 0.3s ease" }} />
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {sidebarComics.filter(c => !comicSearch || c.title.includes(comicSearch)).map((c) => (
+              <div key={c.id} onClick={async () => {
+                const targetPage = c.current_page || 0;
+                setMangaSidebar(false);
+                setMangaZoom(1);
+                setPanOffset({ x: 0, y: 0 });
+                setLoadedPages({});
+                setMangaPage(targetPage);
+                useStore.setState({ currentManga: c, mangaCurrentPage: targetPage });
+              }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "6px 8px", borderRadius: "var(--radius-sm)",
+                  background: c.id === manga?.id ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+                  border: "1px solid transparent",
+                  borderColor: c.id === manga?.id ? "rgba(var(--accent-rgb),0.2)" : "transparent",
+                  boxShadow: c.id === manga?.id ? "0 0 14px rgba(var(--accent-rgb),0.12), inset 0 0 6px rgba(var(--accent-rgb),0.04)" : "none",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  const t = e.currentTarget;
+                  t.style.background = c.id === manga?.id ? "rgba(var(--accent-rgb),0.2)" : "rgba(var(--accent-rgb),0.08)";
+                  t.style.boxShadow = "0 0 18px rgba(var(--accent-rgb),0.2), inset 0 0 8px rgba(var(--accent-rgb),0.05)";
+                  t.style.borderColor = "rgba(var(--accent-rgb),0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  const t = e.currentTarget;
+                  t.style.background = c.id === manga?.id ? "rgba(var(--accent-rgb),0.15)" : "transparent";
+                  t.style.boxShadow = c.id === manga?.id ? "0 0 14px rgba(var(--accent-rgb),0.12), inset 0 0 6px rgba(var(--accent-rgb),0.04)" : "none";
+                  t.style.borderColor = c.id === manga?.id ? "rgba(var(--accent-rgb),0.2)" : "transparent";
+                }}>
+                <div style={{
+                  width: 40, height: 50, borderRadius: 4, overflow: "hidden", flexShrink: 0,
+                  position: "relative", background: "rgba(var(--accent-rgb),0.06)", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "1.2rem",
+                  border: "1px solid transparent",
+                }}>
+                  <SidebarCover comicId={c.id} />
+                  {c.book_icon || getMangaIcon(c)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: ".78rem", color: c.id === manga?.id ? "var(--accent)" : "var(--text)", fontWeight: c.id === manga?.id ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>
+                  <div style={{ width: "100%", height: 3, background: "rgba(var(--accent-rgb),0.1)", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${c.total_pages > 0 ? ((c.id === manga?.id ? mangaCurrentPage : c.current_page) / c.total_pages) * 100 : 0}%`, height: "100%", background: c.id === manga?.id ? "var(--accent)" : "rgba(var(--accent-rgb),0.5)", borderRadius: 2, transition: "width 0.3s ease" }} />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* 侧栏把手 > — 独立定位，侧栏关闭时贴左边缘，打开时滑到侧栏右侧，与侧栏连为一体 */}
+      <div style={{
+        position: "fixed", zIndex: 319,
+        left: mangaSidebar ? 240 : 0, top: "50%", transform: "translateY(-50%)",
+        transition: "left 0.45s cubic-bezier(0.22, 1.3, 0.36, 1), opacity 0.3s ease",
+        opacity: sidebarHint || mangaSidebar ? 1 : 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: 24, height: 80,
+        background: "var(--glass-bg)",
+        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+        borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
+        border: "1px solid var(--border-glass)",
+        borderLeft: "none",
+        boxShadow: sidebarHint || mangaSidebar ? "2px 0 12px rgba(var(--accent-rgb),0.15), inset 0 0 8px rgba(var(--accent-rgb),0.05)" : "none",
+        fontSize: "1.3rem",
+        fontWeight: 700,
+        color: "var(--text)",
+        pointerEvents: "none",
+        animation: sidebarHint && !mangaSidebar ? "pulseHint 2s ease-in-out infinite" : "none",
+      }}>{'>'}</div>
 
       {loading && !loadedPages[mangaCurrentPage] ? (
         <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", padding: "8px 20px", borderRadius: "var(--radius-full)", border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>

@@ -22,10 +22,10 @@ export default function Reader() {
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const readingMode = useStore((s) => s.readingMode);
   const setReadingMode = useStore((s) => s.setReadingMode);
-  const windowSize = useStore((s) => s.windowSize);
-  const setWindowSize = useStore((s) => s.setWindowSize);
   const keybindings = useStore((s) => s.keybindings);
   const setKeybinding = useStore((s) => s.setKeybinding);
+  const windowSize = useStore((s) => s.windowSize);
+  const setWindowSize = useStore((s) => s.setWindowSize);
   const bookmarks = useStore((s) => s.bookmarks);
   const addBookmark = useStore((s) => s.addBookmark);
   const removeBookmark = useStore((s) => s.removeBookmark);
@@ -33,9 +33,9 @@ export default function Reader() {
 
   const [recordingKey, setRecordingKey] = useState<string | null>(null);
   const book = currentBook;
-  const chapter = book?.chapters?.[currentChapter];
 
   const [chapterText, setChapterText] = useState("");
+  const [chapterSearch, setChapterSearch] = useState("");
   const [fadeState, setFadeState] = useState<"in" | "out" | "visible">("visible");
   const fadeTimer = useRef<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -55,81 +55,11 @@ export default function Reader() {
   const [ctxSubMenu, setCtxSubMenu] = useState<string | null>(null);
   const [tip, setTip] = useState("");
   const tipTimer = useRef<number>(0);
+  const [sidebarHint, setSidebarHint] = useState(false);
   const COLOR_PRESETS = ["#e8ddd0", "#d4a96a", "#c0392b", "#e67e22", "#27ae60", "#2980b9", "#8e44ad", "#ecf0f1", "#bdc3c7", "#7f8c8d", "#2c3e50", "#1a1a2e"];
 
   sidebarOpenRef.current = sidebarOpen;
   settingsOpenRef.current = settingsOpen;
-
-  const WINDOW_PRESETS: [number, number, number][] = [
-    [800,  550,  32],
-    [900,  650,  36],
-    [1100, 750,  38],
-    [1300, 850,  42],
-    [0,    0,    46],
-  ];
-
-  async function matchFloorPreset() {
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      const win = getCurrentWindow();
-      if (await win.isMaximized()) {
-        if (useStore.getState().windowSize !== 4) {
-          isProgrammaticRef.current = true;
-          setWindowSize(4);
-        }
-        return;
-      }
-      const size = await win.outerSize();
-      const w = size.width, h = size.height;
-      let best = 0;
-      for (let i = 0; i < 4; i++) {
-        const [pw, ph] = WINDOW_PRESETS[i];
-        if (w >= pw && h >= ph) best = i;
-      }
-      if (best !== useStore.getState().windowSize) {
-        isProgrammaticRef.current = true;
-        setWindowSize(best);
-      }
-    } catch {}
-  }
-
-  useEffect(() => {
-    async function applyWindowSize() {
-      isProgrammaticRef.current = true;
-      const preset = WINDOW_PRESETS[windowSize] || WINDOW_PRESETS[2];
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      const win = getCurrentWindow();
-      if (windowSize === 4) {
-        try { await win.maximize(); } catch {}
-      } else {
-        try {
-          const { LogicalSize } = await import("@tauri-apps/api/dpi");
-          await win.unmaximize();
-          await win.setSize(new LogicalSize(preset[0], preset[1]));
-          await win.center();
-        } catch {}
-      }
-      isProgrammaticRef.current = false;
-    }
-    applyWindowSize();
-  }, [windowSize]);
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    async function setup() {
-      try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const win = getCurrentWindow();
-        await matchFloorPreset();
-        unlisten = await win.onResized(() => {
-          if (isProgrammaticRef.current) return;
-          matchFloorPreset();
-        });
-      } catch {}
-    }
-    setup();
-    return () => { unlisten?.(); };
-  }, []);
 
   const [pageIndex, setPageIndex] = useState(0);
   const [flowKey, setFlowKey] = useState(0);
@@ -188,8 +118,8 @@ export default function Reader() {
   const pageInfo = useMemo(() => {
     void flowKey;
     if (readingMode !== "page" || !chapterText) return [{ text: "", startPos: 0 }];
-    const preset = WINDOW_PRESETS[windowSize] || WINDOW_PRESETS[2];
-    const winH = windowSize === 4 ? window.innerHeight : preset[1];
+    // 使用实际窗口高度计算分页，不再依赖预设值
+    const winH = window.innerHeight;
     const availH = winH - 80 - 32;
     const lineH = fontSize * 32;
     const maxLines = Math.max(1, Math.floor(availH / lineH) - 1);
@@ -353,7 +283,10 @@ export default function Reader() {
       }, 300);
     }
 
-    if (e.clientX < 60 && e.clientY > 100 && e.clientY < window.innerHeight - 60 && !sidebarOpenRef.current && !settingsOpenRef.current) {
+    // 侧栏提示 >：扩大检测范围，实际侧栏触发缩窄并避开顶部区域（Y > 120）
+    setSidebarHint(e.clientX >= 28 && e.clientX < 100 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpen && !settingsOpen);
+
+    if (e.clientX < 30 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpenRef.current && !settingsOpenRef.current) {
       setSidebarOpen(true);
     } else if (!settingsOpenRef.current && e.clientX >= 60) {
       if (sidebarOpenRef.current) {
@@ -637,6 +570,27 @@ export default function Reader() {
         )}
       </div>
 
+      {/* 侧栏把手 >，贴在目录侧栏右侧，与侧栏连为一体 */}
+      <div style={{
+        position: "fixed", zIndex: 399,
+        left: sidebarOpen ? 280 : 0, top: "50%", transform: "translateY(-50%)",
+        transition: "left 0.35s ease, opacity 0.3s ease",
+        opacity: sidebarHint || sidebarOpen ? 1 : 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: 24, height: 80,
+        background: "var(--glass-bg)",
+        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+        borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
+        border: "1px solid var(--border-glass)",
+        borderLeft: "none",
+        boxShadow: sidebarHint || sidebarOpen ? "2px 0 12px rgba(var(--accent-rgb),0.15), inset 0 0 8px rgba(var(--accent-rgb),0.05)" : "none",
+        fontSize: "1.3rem",
+        fontWeight: 700,
+        color: "var(--text)",
+        pointerEvents: "none",
+        animation: sidebarHint && !sidebarOpen ? "pulseHint 2s ease-in-out infinite" : "none",
+      }}>{'>'}</div>
+
       {/* 目录侧栏 */}
       <div style={{
         position: "fixed", top: 0, left: 0, bottom: 0, width: 280,
@@ -645,10 +599,25 @@ export default function Reader() {
         transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.35s ease", zIndex: 400,
         display: "flex", flexDirection: "column", overflow: "hidden",
-      }}>
+      }} onWheel={(e) => e.stopPropagation()}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-glass)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontWeight: 600, color: "var(--text)" }}>📖 目录</span>
           <button className="btn" style={{ padding: "2px 8px", fontSize: ".7rem" }} onClick={() => setSidebarOpen(false)}>✕</button>
+        </div>
+        {/* 章节搜索框 */}
+        <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-glass)" }}>
+          <input
+            placeholder="搜索章节..."
+            value={chapterSearch}
+            onChange={(e) => setChapterSearch(e.target.value)}
+            style={{
+              width: "100%", padding: "6px 10px", fontSize: ".8rem",
+              background: "var(--glass-bg)", color: "var(--text)",
+              border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)",
+              outline: "none", boxSizing: "border-box",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
         {bookmarks.length > 0 && (
           <div style={{ padding: "8px 20px", borderBottom: "1px solid var(--border-glass)" }}>
@@ -663,18 +632,43 @@ export default function Reader() {
           </div>
         )}
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
-          {book?.chapters?.map((ch: any, i: number) => (
-            <div key={i}
-              onClick={() => { animateChapter(i, window.innerWidth / 2, window.innerHeight / 2); setSidebarOpen(false); }}
+          {(book?.chapters?.filter((ch: any, i: number) =>
+            !chapterSearch || ch.title?.includes(chapterSearch) || `第${i+1}章`.includes(chapterSearch)
+          ) || []).length === 0 ? (
+            <div style={{ padding: "20px", textAlign: "center", color: "var(--text-dim)", fontSize: ".8rem" }}>未找到匹配章节</div>
+          ) : (book?.chapters?.filter((ch: any, i: number) =>
+            !chapterSearch || ch.title?.includes(chapterSearch) || `第${i+1}章`.includes(chapterSearch)
+          ) || []).map((ch: any, fi: number) => {
+            const realIdx = book?.chapters?.indexOf(ch) ?? fi;
+              return (
+            <div key={realIdx}
+              onClick={() => { animateChapter(realIdx, window.innerWidth / 2, window.innerHeight / 2); setSidebarOpen(false); }}
               style={{
                 padding: "10px 20px", cursor: "pointer", fontSize: ".85rem",
-                color: i === currentChapter ? "var(--accent)" : "var(--text)",
-                background: i === currentChapter ? "rgba(var(--accent-rgb),0.06)" : "transparent",
-                borderLeft: i === currentChapter ? "3px solid var(--accent)" : "3px solid transparent",
+                color: realIdx === currentChapter ? "var(--accent)" : "var(--text)",
+                background: realIdx === currentChapter ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+                borderLeft: realIdx === currentChapter ? "3px solid var(--accent)" : "3px solid transparent",
+                border: "1px solid transparent",
+                borderColor: realIdx === currentChapter ? "rgba(var(--accent-rgb),0.2)" : "transparent",
+                boxShadow: realIdx === currentChapter ? "0 0 14px rgba(var(--accent-rgb),0.12), inset 0 0 6px rgba(var(--accent-rgb),0.04)" : "none",
                 transition: "all 0.2s ease",
               }}
-            >{ch.title || `第${i+1}章`}{bookmarks.find(b => b.chapterIndex === i) ? <span style={{ marginLeft: 6, fontSize: ".75rem" }}>🔖</span> : null}</div>
-          ))}
+              onMouseEnter={(e) => {
+                const t = e.currentTarget;
+                t.style.background = realIdx === currentChapter ? "rgba(var(--accent-rgb),0.2)" : "rgba(var(--accent-rgb),0.08)";
+                t.style.boxShadow = "0 0 18px rgba(var(--accent-rgb),0.2), inset 0 0 8px rgba(var(--accent-rgb),0.05)";
+                t.style.borderColor = "rgba(var(--accent-rgb),0.3)";
+                t.style.borderLeftColor = "var(--accent)";
+              }}
+              onMouseLeave={(e) => {
+                const t = e.currentTarget;
+                t.style.background = realIdx === currentChapter ? "rgba(var(--accent-rgb),0.15)" : "transparent";
+                t.style.boxShadow = realIdx === currentChapter ? "0 0 14px rgba(var(--accent-rgb),0.12), inset 0 0 6px rgba(var(--accent-rgb),0.04)" : "none";
+                t.style.borderColor = realIdx === currentChapter ? "rgba(var(--accent-rgb),0.2)" : "transparent";
+                t.style.borderLeftColor = realIdx === currentChapter ? "var(--accent)" : "transparent";
+              }}
+            >{ch.title || `第${realIdx+1}章`}{bookmarks.find(b => b.chapterIndex === realIdx) ? <span style={{ marginLeft: 6, fontSize: ".75rem" }}>🔖</span> : null}</div>
+          )})}
         </div>
       </div>
 
@@ -736,9 +730,9 @@ export default function Reader() {
             />
           </div>
           <div style={{ marginBottom: 16 }}>
-            <div style={{ color: "var(--text-dim)", fontSize: ".78rem", marginBottom: 8 }}>窗口尺寸</div>
+            <div style={{ color: "var(--text-dim)", fontSize: ".78rem", marginBottom: 8 }}>界面缩放</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {["小", "中", "大", "超大", "全屏"].map((label, i) => (
+              {["0.8×", "0.9×", "1.0×", "1.1×", "1.2×"].map((label, i) => (
                 <button key={i} className="btn" style={{
                   flex: 1, padding: "6px 0", fontSize: ".72rem",
                   background: windowSize === i ? "rgba(var(--accent-rgb),0.12)" : undefined,
