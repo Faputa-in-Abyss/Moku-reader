@@ -105,7 +105,7 @@ export default function MangaLibrary() {
         }
         const enriched = lib.map((c) => ({ ...c, series_id: c.series_id || seriesReverse[c.id] || undefined }));
         const meta = enriched.map((c): ComicMeta => ({ id: c.id, title: c.title, source_type: c.source_type, total_pages: c.total_pages, current_page: c.current_page, direction: c.direction, favorite: c.favorite, book_icon: c.book_icon, series_id: c.series_id }));
-        startTransition(() => { setComics(enriched); setComicsMeta(meta); });
+        setComics(enriched); setComicsMeta(meta);
       } catch {
         if (!cancelled) setComics([]);
       }
@@ -168,8 +168,13 @@ export default function MangaLibrary() {
     e.stopPropagation();
     const full = comics.find(c => c.id === comic.id);
     const latest = full || useStore.getState().comics.find(c => c.id === comic.id);
-    if (latest) setCtxMenu({ comic: latest, x: e.clientX, y: e.clientY });
-    else setCtxMenu({ comic: comic as any, x: e.clientX, y: e.clientY });
+    const comicData = latest || comic;
+    // 估算菜单高度 ~460px，防止底部超出窗口
+    const menuH = 460;
+    const viewH = window.innerHeight;
+    const x = Math.min(e.clientX, window.innerWidth - 220);
+    const y = e.clientY + menuH > viewH ? Math.max(8, viewH - menuH - 8) : e.clientY;
+    setCtxMenu({ comic: comicData as any, x, y });
   };
 
   const triggerRefresh = () => {
@@ -349,7 +354,7 @@ export default function MangaLibrary() {
     <section className="library">
       <div className="library-header">
         <h1 className="library-title">漫画库</h1>
-        <span className="library-count">{seriesLists[activeSeries]?.length || 0} 本漫画</span>
+        <span className="library-count">{displayList.length} 本漫画</span>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div id="series-tabs" style={{
@@ -370,7 +375,7 @@ export default function MangaLibrary() {
             zIndex: 0, ...sliderStyle,
           }} />
           {seriesTabs.map((name) => {
-            const tabCount = name === "全部" ? displayList.length : seriesMap[name]?.length || 0;
+            const tabCount = seriesLists[name]?.length || 0;
             return (
               <span key={name} data-tab={name}
                 onClick={() => {
@@ -511,8 +516,21 @@ export default function MangaLibrary() {
           <CtxMenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.comic)} />
           <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
           <CtxMenuItem icon="📑" label="添加到系列" onClick={() => { setCtxMenu(null); setSeriesTarget(ctxMenu.comic); }} />
-          {ctxMenu.comic.series_id && (
-            <CtxMenuItem icon="🚫" label="从系列移出" onClick={() => {
+          {activeSeries !== "全部" ? (
+            <CtxMenuItem icon="🚫" label={`从「${activeSeries}」移出`} onClick={() => {
+              setCtxMenu(null);
+              const cur = seriesMap[activeSeries] || [];
+              const filtered = cur.filter((id: string) => id !== ctxMenu.comic.id);
+              if (filtered.length === 0) {
+                const { [activeSeries]: _, ...rest } = seriesMap;
+                setSeriesMap(rest);
+              } else {
+                setSeriesMap({ ...seriesMap, [activeSeries]: filtered });
+              }
+              triggerRefresh();
+            }} />
+          ) : ctxMenu.comic.series_id && (
+            <CtxMenuItem icon="🚫" label={`从系列移出`} onClick={() => {
               setCtxMenu(null);
               const sid = ctxMenu.comic.series_id!;
               const cur = seriesMap[sid] || [];
