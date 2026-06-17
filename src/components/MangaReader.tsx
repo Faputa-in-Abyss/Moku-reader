@@ -11,6 +11,7 @@ export default function MangaReader() {
   const setMangaViewMode = useStore((s) => s.setMangaViewMode);
   const mangaZoom = useStore((s) => s.mangaZoom);
   const setMangaZoom = useStore((s) => s.setMangaZoom);
+  const seriesMap = useStore((s) => s.seriesMap);
 
   const manga = currentManga;
   const [loadedPages, setLoadedPages] = useState<Record<number, string>>({});
@@ -27,6 +28,18 @@ export default function MangaReader() {
   const sideTimer = useRef<number>(0);
   const [sidebarComics, setSidebarComics] = useState(useStore((s) => s.comics));
   const sidebarRefreshRef = useRef(false);
+  // 同系列章节列表
+  const seriesChapters = useMemo(() => {
+    if (!manga || !manga.series_id) return [];
+    const ids = seriesMap[manga.series_id] || [];
+    return ids
+      .map((id) => useStore.getState().comics.find((c) => c.id === id))
+      .filter((c): c is typeof manga => c != null);
+  }, [manga, seriesMap]);
+  const currentSeriesIdx = useMemo(() => {
+    if (!manga || !manga.series_id) return -1;
+    return seriesChapters.findIndex((c) => c.id === manga.id);
+  }, [manga, seriesChapters]);
 
   const isRtl = manga?.direction === "rtl";
   const totalPages = manga?.total_pages ?? 0;
@@ -224,13 +237,31 @@ export default function MangaReader() {
     if (mangaViewMode === "double") {
       const advance = mangaCurrentPage === 0 ? 1 : 2;
       const next = Math.min(totalPages - 1, mangaCurrentPage + advance);
-      if (next === mangaCurrentPage) showTip("已经是最后一页");
-      else setMangaPage(next);
+      if (next === mangaCurrentPage) {
+        // 最后一页 → 跳到下一章节（如果有）
+        if (currentSeriesIdx >= 0 && currentSeriesIdx < seriesChapters.length - 1) {
+          const nextComic = seriesChapters[currentSeriesIdx + 1];
+          useStore.setState({ currentManga: nextComic, mangaCurrentPage: 0 });
+          setLoadedPages({});
+          showTip(`下一章：${nextComic.title}`);
+        } else {
+          showTip("已经是最后一页");
+        }
+      } else setMangaPage(next);
     } else {
       if (mangaCurrentPage < totalPages - 1) setMangaPage(mangaCurrentPage + 1);
-      else showTip("已经是最后一页");
+      else {
+        if (currentSeriesIdx >= 0 && currentSeriesIdx < seriesChapters.length - 1) {
+          const nextComic = seriesChapters[currentSeriesIdx + 1];
+          useStore.setState({ currentManga: nextComic, mangaCurrentPage: 0 });
+          setLoadedPages({});
+          showTip(`下一章：${nextComic.title}`);
+        } else {
+          showTip("已经是最后一页");
+        }
+      }
     }
-  }, [manga, mangaCurrentPage, mangaViewMode, totalPages]);
+  }, [manga, mangaCurrentPage, mangaViewMode, totalPages, currentSeriesIdx, seriesChapters]);
 
   const prevPage = useCallback(() => {
     if (!manga) return;
@@ -243,9 +274,19 @@ export default function MangaReader() {
       else setMangaPage(next);
     } else {
       if (mangaCurrentPage > 0) setMangaPage(mangaCurrentPage - 1);
-      else showTip("已经是第一页");
+      else {
+        // 第一页 → 跳到上一章节（如果有）
+        if (currentSeriesIdx > 0) {
+          const prevComic = seriesChapters[currentSeriesIdx - 1];
+          useStore.setState({ currentManga: prevComic, mangaCurrentPage: prevComic.total_pages - 1 });
+          setLoadedPages({});
+          showTip(`上一章：${prevComic.title}`);
+        } else {
+          showTip("已经是第一页");
+        }
+      }
     }
-  }, [manga, mangaCurrentPage, mangaViewMode]);
+  }, [manga, mangaCurrentPage, mangaViewMode, currentSeriesIdx, seriesChapters]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (mangaViewMode === "scroll") return;
@@ -344,8 +385,33 @@ export default function MangaReader() {
             onMouseLeave={(e) => { const t = e.currentTarget; t.style.background = "none"; t.style.boxShadow = "none"; }}
             onClick={(e) => { e.stopPropagation(); closeMangaReader(); }}>← 返回</button>
           <span style={{ fontFamily: "Georgia,Noto Serif SC,serif", fontWeight: 500, fontSize: ".9rem" }}>{manga.title}</span>
+          {currentSeriesIdx >= 0 && (
+            <span style={{ fontSize: ".75rem", color: "var(--text-dim)", marginLeft: 4 }}>— {currentSeriesIdx + 1}/{seriesChapters.length}章</span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {currentSeriesIdx >= 0 && (
+            <>
+              <button className="btn" style={{ fontSize: ".7rem", padding: "3px 8px" }} onClick={(e) => {
+                e.stopPropagation();
+                if (currentSeriesIdx > 0) {
+                  const prev = seriesChapters[currentSeriesIdx - 1];
+                  useStore.setState({ currentManga: prev, mangaCurrentPage: prev.current_page || 0 });
+                  setLoadedPages({});
+                  setMangaZoom(1);
+                }
+              }} disabled={currentSeriesIdx <= 0}>← 上一章</button>
+              <button className="btn" style={{ fontSize: ".7rem", padding: "3px 8px" }} onClick={(e) => {
+                e.stopPropagation();
+                if (currentSeriesIdx < seriesChapters.length - 1) {
+                  const next = seriesChapters[currentSeriesIdx + 1];
+                  useStore.setState({ currentManga: next, mangaCurrentPage: next.current_page || 0 });
+                  setLoadedPages({});
+                  setMangaZoom(1);
+                }
+              }} disabled={currentSeriesIdx >= seriesChapters.length - 1}>下一章 →</button>
+            </>
+          )}
           <span style={{ fontSize: ".78rem", color: "var(--text)", fontWeight: 500, paddingRight: 4, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>
             {mangaViewMode === "double" && doublePages
               ? `页 ${Math.min(doublePages.left ?? 99, doublePages.right ?? 99) + 1}-${Math.max(doublePages.left ?? 0, doublePages.right ?? 0) + 1} / ${totalPages}`
