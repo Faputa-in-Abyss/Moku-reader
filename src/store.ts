@@ -39,6 +39,8 @@ export interface ComicData {
   direction: string;
   favorite?: boolean;
   book_icon?: string;
+  /** 系列 ID（纯前端标记），同一系列的多本漫画共享一个 seriesId */
+  series_id?: string;
 }
 
 /** comic_library.json 中除去 pages/image_dir 的轻量摘要，存 localStorage */
@@ -51,6 +53,7 @@ export interface ComicMeta {
   direction: string;
   favorite?: boolean;
   book_icon?: string;
+  series_id?: string;
 }
 
 type ThemeMode = "light" | "dark";
@@ -248,6 +251,12 @@ export const useStore = create<AppStore>((set, get) => ({
   setComicsMeta: (meta) => {
     localStorage.setItem("nr-comics-meta", JSON.stringify(meta));
     set({ comicsMeta: meta });
+  },
+  // 系列映射：series_id → 排序后的 comic id 列表（纯前端，用于多章节）
+  seriesMap: JSON.parse(localStorage.getItem("nr-comic-series") || "{}") as Record<string, string[]>,
+  setSeriesMap: (m) => {
+    localStorage.setItem("nr-comic-series", JSON.stringify(m));
+    set({ seriesMap: m });
   },
   // Manga state
   viewMode: (localStorage.getItem("nr-view-mode") as "library" | "manga") || "library",

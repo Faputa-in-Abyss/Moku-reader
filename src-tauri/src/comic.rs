@@ -306,7 +306,7 @@ pub fn import_comic(path: &str, data_dir: &Path, dpi: u32) -> Result<ComicBook, 
         .unwrap_or("")
         .to_lowercase();
 
-    let (mut files, title, source_type, image_dir, dest_dir): (Vec<String>, String, String, PathBuf, Option<PathBuf>);
+    let (mut files, title, source_type, image_dir, _dest_dir): (Vec<String>, String, String, PathBuf, Option<PathBuf>);
 
     match ext.as_str() {
         "cbz" | "zip" => {
@@ -315,7 +315,7 @@ pub fn import_comic(path: &str, data_dir: &Path, dpi: u32) -> Result<ComicBook, 
             title = title_from_path(path);
             source_type = "cbz".to_string();
             image_dir = dest.clone();
-            dest_dir = Some(dest);
+            _dest_dir = Some(dest);
         }
         "pdf" => {
             let dest = data_dir.join("comics").join(&generate_id());
@@ -324,7 +324,7 @@ pub fn import_comic(path: &str, data_dir: &Path, dpi: u32) -> Result<ComicBook, 
             title = t;
             source_type = "pdf".to_string();
             image_dir = dest.join("images");
-            dest_dir = Some(dest);
+            _dest_dir = Some(dest);
         }
         _ => {
             if !path_obj.is_dir() {
@@ -335,7 +335,7 @@ pub fn import_comic(path: &str, data_dir: &Path, dpi: u32) -> Result<ComicBook, 
             title = t;
             source_type = "folder".to_string();
             image_dir = path_obj.to_path_buf();
-            dest_dir = None;
+            _dest_dir = None;
         }
     }
 
