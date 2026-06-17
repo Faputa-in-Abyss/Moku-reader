@@ -423,12 +423,20 @@ export default function MangaLibrary() {
               // 点击时如果 Full data 已加载则直接用 full data；否则即时加载
               const handleOpen = async () => {
                 setCtxMenu(null);
+                const t1 = performance.now();
                 const full = comics.find(c => c.id === comic.id);
-                if (full) { openMangaReader(full); return; }
+                if (full) {
+                  const t2 = performance.now();
+                  console.log(`[perf] handleOpen: comics.find 耗时 ${(t2 - t1).toFixed(1)}ms`);
+                  openMangaReader(full);
+                  return;
+                }
                 // lazy load single comic
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");
                   const lib: ComicData[] = await invoke("get_comic_library");
+                  const t3 = performance.now();
+                  console.log(`[perf] handleOpen: get_comic_library 耗时 ${(t3 - t1).toFixed(1)}ms`);
                   const found = lib.find(c => c.id === comic.id);
                   if (found) openMangaReader(found);
                 } catch {}

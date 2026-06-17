@@ -138,26 +138,37 @@ fn scan_image_dir(dir: &Path) -> Result<Vec<String>, String> {
 }
 
 pub fn probe_image_size(path: &Path) -> (u32, u32) {
-    let data = match fs::read(path) {
-        Ok(d) => d,
+    // 只读文件头部，不读整个文件
+    let mut file = match std::fs::File::open(path) {
+        Ok(f) => f,
         Err(_) => return (0, 0),
     };
-    if data.len() < 24 { return (0, 0); }
-    if data[0..4] == [0x89, 0x50, 0x4E, 0x47] && data[12..16] == [0x49, 0x48, 0x44, 0x52] {
-        let w = ((data[16] as u32) << 24) | ((data[17] as u32) << 16) | ((data[18] as u32) << 8) | (data[19] as u32);
-        let h = ((data[20] as u32) << 24) | ((data[21] as u32) << 16) | ((data[22] as u32) << 8) | (data[23] as u32);
+    use std::io::Read;
+    // 读前 24 字节判断格式
+    let mut header = [0u8; 24];
+    if file.read(&mut header).unwrap_or(0) < 24 {
+        return (0, 0);
+    }
+    // PNG: 前 8 字节签名 + IHDR 块
+    if header[0..4] == [0x89, 0x50, 0x4E, 0x47] && header[12..16] == [0x49, 0x48, 0x44, 0x52] {
+        let w = ((header[16] as u32) << 24) | ((header[17] as u32) << 16) | ((header[18] as u32) << 8) | (header[19] as u32);
+        let h = ((header[20] as u32) << 24) | ((header[21] as u32) << 16) | ((header[22] as u32) << 8) | (header[23] as u32);
         return (w, h);
     }
-    if data[0..2] == [0xFF, 0xD8] {
+    // JPEG: 逐段扫描直到找到 SOF 标记（只读前 1MB）
+    if header[0..2] == [0xFF, 0xD8] {
+        let mut buf = Vec::with_capacity(1024 * 1024);
+        buf.extend_from_slice(&header);
+        file.take(1024 * 1024 - 24).read_to_end(&mut buf).ok();
         let mut pos = 2;
-        while pos + 7 < data.len() {
-            if data[pos] != 0xFF { break; }
-            if data[pos+1] == 0xC0 || data[pos+1] == 0xC1 || data[pos+1] == 0xC2 {
-                let h = ((data[pos+5] as u32) << 8) | (data[pos+6] as u32);
-                let w = ((data[pos+7] as u32) << 8) | (data[pos+8] as u32);
+        while pos + 7 < buf.len() {
+            if buf[pos] != 0xFF { break; }
+            if buf[pos+1] == 0xC0 || buf[pos+1] == 0xC1 || buf[pos+1] == 0xC2 {
+                let h = ((buf[pos+5] as u32) << 8) | (buf[pos+6] as u32);
+                let w = ((buf[pos+7] as u32) << 8) | (buf[pos+8] as u32);
                 return (w, h);
             }
-            let seg_len = ((data[pos+2] as u32) << 8) | (data[pos+3] as u32);
+            let seg_len = ((buf[pos+2] as u32) << 8) | (buf[pos+3] as u32);
             pos += 2 + seg_len as usize;
         }
     }

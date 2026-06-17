@@ -93,22 +93,31 @@ export default function Header() {
       const selected = await open({
         multiple: true,
         filters: [
-          { name: "漫画文件 (PDF/CBZ/ZIP)", extensions: ["pdf", "cbz", "zip"] },
+          { name: "所有漫画文件 (ZIP/PDF/图片)", extensions: ["pdf", "cbz", "zip", "jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"] },
         ],
       });
       if (!selected) return;
-      const paths: string[] = Array.isArray(selected) ? selected.map(s => typeof s === "string" ? s : s.path) : [typeof selected === "string" ? selected : selected.path];
-      if (paths.length === 0) return;
+      const rawPaths: string[] = Array.isArray(selected) ? selected.map(s => typeof s === "string" ? s : s.path) : [typeof selected === "string" ? selected : selected.path];
+      if (rawPaths.length === 0) return;
 
+      // 图片文件取其父文件夹路径（去重），CBZ/ZIP/PDF 直接走文件导入
+      const IMG_EXTS = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
       const { invoke } = await import("@tauri-apps/api/core");
       let hasError = false;
-      for (const path of paths) {
+      const processed = new Set<string>();
+      for (const rawPath of rawPaths) {
+        const ext = rawPath.split('.').pop()?.toLowerCase() || "";
+        const path = IMG_EXTS.includes(ext)
+          ? rawPath.replace(/[/\\][^/\\]*$/, '')
+          : rawPath;
+        if (processed.has(path)) continue;
+        processed.add(path);
         try {
           console.log("[墨读前端] 开始导入漫画:", path);
           const result = await invoke("import_comic", { path });
           console.log("[墨读前端] 导入完成:", result);
         } catch (e) {
-          console.error(`导入漫画失败: ${path}`, e);
+          console.error(`导入漫画失败: ${rawPath}`, e);
           hasError = true;
         }
       }
@@ -116,20 +125,6 @@ export default function Header() {
       if (hasError) console.warn("[墨读前端] 部分导入失败");
     } catch (e) {
       console.error("导入漫画失败:", e);
-    }
-
-    // 再尝试打开文件夹选择器导入图片文件夹
-    try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const folder = await open({ directory: true, multiple: false });
-      if (!folder) return;
-      const path = typeof folder === "string" ? folder : folder.path;
-      if (!path) return;
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("import_comic", { path });
-      triggerRefresh();
-    } catch (e) {
-      // 用户取消或失败都忽略
     }
   };
 
