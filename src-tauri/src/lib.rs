@@ -97,6 +97,7 @@ pub struct AppState {
     pub fanqie: FanqieApi,
     pub comic_library: Mutex<comic::ComicLibraryData>,
     pub render_dpi: Mutex<u32>,
+    pub scan_cancel: Mutex<bool>,
 }
 
 // ===== 设置持久化 =====
@@ -126,7 +127,14 @@ fn save_setting(data_dir: &Path, key: &str, value: &str) {
 
 fn save_library(data_dir: &PathBuf, lib: &LibraryData) -> Result<(), String> {
     let path = data_dir.join("library.json");
-    let json = serde_json::to_string_pretty(lib).map_err(|e| format!("序列化失败: {}", e))?;
+    // 先清空 content 再保存（content 只用于运行时读取章节切片，不持久化）
+    let stripped: Vec<Book> = lib.books.iter().map(|b| {
+        let mut book = b.clone();
+        book.content = String::new();
+        book
+    }).collect();
+    let slim = LibraryData { books: stripped };
+    let json = serde_json::to_string_pretty(&slim).map_err(|e| format!("序列化失败: {}", e))?;
     fs::write(&path, &json).map_err(|e| format!("写入失败: {}", e))?;
     Ok(())
 }
@@ -137,6 +145,7 @@ fn load_library(data_dir: &PathBuf) -> LibraryData {
         return LibraryData { books: Vec::new() };
     }
     let content = fs::read_to_string(&path).unwrap_or_default();
+    // library.json 不存 content，反序列化后 content 为空字符串
     serde_json::from_str(&content).unwrap_or(LibraryData { books: Vec::new() })
 }
 
@@ -170,10 +179,6 @@ fn import_book(path: String, state: State<AppState>) -> Result<Book, String> {
     debug_log!("   解析章节: {} 章", chapters.len());
     if !chapters.is_empty() {
         debug_log!("   第一章标题: {:?}", chapters[0].title);
-    }
-    // 打印前5行内容，方便调试章节解析
-    for (idx, line) in content.lines().take(5).enumerate() {
-        debug_log!("   第{}行: {:?}", idx + 1, line);
     }
     let title = extract_title(&path, &content);
     debug_log!("   书名: {}", &title);
@@ -327,40 +332,51 @@ fn scan_directory(dir: &Path, known_books: &[Book], known_comics: &[comic::Comic
 fn get_library(state: State<AppState>) -> Vec<Book> {
     let lib = state.library.lock().unwrap();
     debug_log!("📚 获取书库: {} 本书", lib.books.len());
-    lib.books.clone()
+    // 去掉 content 大字段再序列化，避免栈溢出
+    let books = lib.books.iter().map(|b| {
+        let mut book = b.clone();
+        book.content = String::new();
+        book
+    }).collect();
+    books
 }
 
 #[tauri::command]
 fn get_chapter_content(book_id: String, chapter_index: usize, state: State<AppState>) -> Result<String, String> {
     debug_log!("📖 读取章节: book={}, chapter={}", &book_id, chapter_index);
-    let lib = match state.library.lock() {
-        Ok(l) => l,
-        Err(_) => return Ok("(内部错误：无法访问书库)".to_string()),
-    };
-    let book = match lib.books.iter().find(|b| b.id == book_id) {
-        Some(b) => b,
-        None => return Ok("(该书不存在，请重新导入)".to_string()),
-    };
-    let chapter = match book.chapters.get(chapter_index) {
-        Some(c) => c,
-        None => return Ok("(章节索引超出范围)".to_string()),
+
+    // 先提取必要信息后释放 lib 锁，避免借用冲突
+    let need_reload: bool;
+    let file_path: String;
+    let start_pos: usize;
+    let end_pos: usize;
+    {
+        let lib = state.library.lock().map_err(|e| format!("锁错误: {}", e))?;
+        let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
+        let chapter = book.chapters.get(chapter_index).ok_or("章节索引超出范围")?;
+        debug_log!("   章节标题: {:?}", chapter.title);
+        need_reload = book.content.is_empty();
+        file_path = book.file_path.clone();
+        start_pos = chapter.start_pos;
+        end_pos = chapter.end_pos;
+    }
+
+    let content = if need_reload {
+        debug_log!("   content 为空，从文件重新读取: {}", file_path);
+        read_txt_file(&file_path)?.replace("\r\n", "\n").replace('\r', "\n")
+    } else {
+        // content 在内存中，可以正常读取
+        let lib = state.library.lock().map_err(|e| format!("锁错误: {}", e))?;
+        let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
+        book.content.clone()
     };
 
-    debug_log!("   内容长度: {}, 章节范围: {}-{}", book.content.len(), chapter.start_pos, chapter.end_pos);
-    debug_log!("   章节标题: {:?}", chapter.title);
-    if book.content.is_empty() {
-        return Ok("(书籍内容为空，请重新导入)".to_string());
-    }
-    let content = &book.content;
-    let end = chapter.end_pos.min(content.len());
-    let start = chapter.start_pos.min(end);
+    let end = end_pos.min(content.len());
+    let start = start_pos.min(end);
     if start >= end {
-        debug_log!("   ⚠️ 章节内容为空, start={}, end={}, content_len={}", start, end, content.len());
         return Ok("(章节内容为空)".to_string());
     }
-    let chapter_text = &content[start..end];
-    debug_log!("   返回内容长度: {} 字节", chapter_text.len());
-    Ok(chapter_text.to_string())
+    Ok(content[start..end].to_string())
 }
 
 #[tauri::command]
@@ -686,6 +702,9 @@ pub struct ScanResult {
 /// 扫描书库路径并自动导入新文件（后台执行，通过事件返回结果）
 #[tauri::command]
 async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<String, String> {
+    // 清除取消标记
+    *state.scan_cancel.lock().unwrap() = false;
+
     let lib_path = state.library_path.lock().unwrap().clone();
     if lib_path.is_empty() {
         return Err("请先设置书库路径".to_string());
@@ -719,13 +738,18 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
         let mut comics_imported = 0usize;
         let mut errors: Vec<String> = Vec::new();
 
+        // 检查是否被取消
+        let check_cancel = || -> bool {
+            if let Ok(cancel_state) = app.state::<AppState>().scan_cancel.lock() {
+                *cancel_state
+            } else { false }
+        };
+
         // 导入小说
         for path in &novels_list {
+            if check_cancel() { break; }
             match import_book_from_path(path) {
                 Ok(book) => {
-                    let data_dir = dirs_next::data_dir()
-                        .unwrap_or_else(|| PathBuf::from("."))
-                        .join("novel-reader");
                     let mut l = load_library(&data_dir);
                     l.books.push(book);
                     save_library(&data_dir, &l).ok();
@@ -737,6 +761,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
 
         // 导入漫画
         for (_idx, path) in comics_list.iter().enumerate() {
+            if check_cancel() { break; }
             let path_obj = PathBuf::from(path);
             let file_name = path_obj.file_name()
                 .and_then(|s| s.to_str())
@@ -834,6 +859,13 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
 
     // 先返回，前台不阻塞
     Ok(format!("SCAN_STARTED:{}:{}", novels_found, comics_found))
+}
+
+/// 取消扫描
+#[tauri::command]
+fn cancel_scan(state: State<'_, AppState>) -> Result<(), String> {
+    *state.scan_cancel.lock().unwrap() = true;
+    Ok(())
 }
 
 // ===== 漫画命令 =====
@@ -1237,6 +1269,7 @@ pub fn run() {
             fanqie: fanqie::FanqieApi::new(),
             comic_library: Mutex::new(comic_library),
             render_dpi: Mutex::new(render_dpi),
+            scan_cancel: Mutex::new(false),
         })
         .setup(|app| {
             APP_HANDLE.set(app.handle().clone()).map_err(|_| "APP_HANDLE already set")?;
@@ -1274,6 +1307,7 @@ pub fn run() {
             get_render_dpi,
             set_render_dpi,
             scan_library,
+            cancel_scan,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -288,10 +288,6 @@ body {
   will-change: transform;
   transition: transform 0.45s cubic-bezier(0.22, 1.3, 0.36, 1), opacity 0.3s ease;
 }
-.manga-sidebar-open {
-  transform: translateX(0);
-  opacity: 1;
-}
 
 /* ===== 空状态 ===== */
 .empty-state { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; padding: 80px 32px; text-align: center; }
@@ -419,4 +415,9 @@ body {
       )
       scale(6);
   }
+}
+
+@keyframes pulseHint {
+  0%, 100% { opacity: 0.4; transform: translateY(-50%) scale(1); }
+  50% { opacity: 0.9; transform: translateY(-50%) scale(1.1); }
 }
