@@ -27,7 +27,7 @@ export default function ImportToast() {
           if (status === "done" || status === "error") {
             timerRef.current = window.setTimeout(() => {
               setImportProgress(null);
-            }, status === "error" ? 6000 : 4000);
+            }, status === "error" ? 6000 : 1500);
           }
         }
       );

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 
 export default function MangaReader() {
@@ -19,6 +20,8 @@ export default function MangaReader() {
   const [tip, setTip] = useState("");
   const tipTimer = useRef<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
+  const mangaZoomRef = useRef(mangaZoom);
   const navTimer = useRef<number>(0);
   const [toolbarVisible, setToolbarVisible] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -56,10 +59,11 @@ export default function MangaReader() {
 
   useEffect(() => {
     if (!manga) return;
-    if (mangaViewMode === "scroll") return; // 滚动模式用下面的 useEffect
+    if (mangaViewMode === "scroll") return;
 
-    const preloadAhead = 10; // 向前预加载 10 页
-    const preloadBehind = 2;  // 保留已翻过的 2 页
+    const t1 = performance.now();
+    const preloadAhead = 10;
+    const preloadBehind = 2;
     const pagesToLoad: number[] = [];
     const start = Math.max(0, mangaCurrentPage - preloadBehind);
     const end = Math.min(totalPages - 1, mangaCurrentPage + preloadAhead);
@@ -68,35 +72,17 @@ export default function MangaReader() {
     }
     if (pagesToLoad.length === 0) return;
     setLoading(true);
-    let cancelled = false;
-    const BATCH = 4;
-    async function load() {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const newPages: Record<number, string> = {};
-        for (let i = 0; i < pagesToLoad.length; i += BATCH) {
-          if (cancelled) return;
-          const batch = pagesToLoad.slice(i, i + BATCH);
-          const results = await Promise.allSettled(
-            batch.map((idx) => invoke("get_comic_page", { comicId: manga.id, pageIndex: idx }))
-          );
-          results.forEach((r, j) => {
-            if (r.status === "fulfilled") newPages[batch[j]] = r.value as string;
-          });
-          setLoadedPages((prev) => ({ ...prev, ...newPages }));
-        }
-      } catch (e) {
-        console.error("加载页面失败:", e);
-        showTip("加载图片失败");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+    const newPages: Record<number, string> = {};
+    for (const idx of pagesToLoad) {
+      newPages[idx] = getPageUrl(manga, idx);
     }
-    load();
-    return () => { cancelled = true; };
+    setLoadedPages((prev) => ({ ...prev, ...newPages }));
+    const t2 = performance.now();
+    console.log(`[perf] 第${pagesToLoad.length}页路径构造完成, 耗时 ${(t2 - t1).toFixed(0)}ms`);
+    setLoading(false);
   }, [manga?.id, mangaCurrentPage, mangaViewMode, totalPages]);
 
-  // 滚动模式：按可见区域加载，限流防抖
+  // 滚动模式：按可见区域加载，直接构造 URL
   useEffect(() => {
     if (!manga || mangaViewMode !== "scroll") return;
     const el = scrollRef.current;
@@ -108,7 +94,6 @@ export default function MangaReader() {
         if (!el) return;
         const viewTop = el.scrollTop;
         const viewBottom = viewTop + el.clientHeight;
-        // 加载可视区 -2 屏 ~ +5 屏
         const estPageH = 600;
         const screenPages = Math.ceil(el.clientHeight / estPageH);
         const start = Math.max(0, Math.floor(viewTop / estPageH) - 2 * screenPages);
@@ -118,24 +103,11 @@ export default function MangaReader() {
           if (!loadedPages[i]) toLoad.push(i);
         }
         if (toLoad.length === 0) return;
-        const loadBatch = async () => {
-          try {
-            const { invoke } = await import("@tauri-apps/api/core");
-            const BATCH = 4;
-            const newPages: Record<number, string> = {};
-            for (let i = 0; i < toLoad.length; i += BATCH) {
-              const batch = toLoad.slice(i, i + BATCH);
-              const results = await Promise.allSettled(
-                batch.map((idx) => invoke("get_comic_page", { comicId: manga.id, pageIndex: idx }))
-              );
-              results.forEach((r, j) => {
-                if (r.status === "fulfilled") newPages[batch[j]] = r.value as string;
-              });
-              setLoadedPages((prev) => ({ ...prev, ...newPages }));
-            }
-          } catch {}
-        };
-        loadBatch();
+        const newPages: Record<number, string> = {};
+        for (const idx of toLoad) {
+          newPages[idx] = getPageUrl(manga, idx);
+        }
+        setLoadedPages((prev) => ({ ...prev, ...newPages }));
       }, 200);
     };
     el.addEventListener("scroll", handle, { passive: true });
@@ -288,36 +260,49 @@ export default function MangaReader() {
     }
   }, [manga, mangaCurrentPage, mangaViewMode, currentSeriesIdx, seriesChapters]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (mangaViewMode === "scroll") return;
-    // Ctrl+滚轮：以鼠标为中心的缩放（修正：补偿鼠标位置，无瞬移）
-    if (e.ctrlKey || e.metaKey) {
+  // 滚动翻页 + Ctrl+滚轮缩放（原生 addEventListener 避免 passive 报错）
+  const isRtlRef = useRef(isRtl);
+  const viewModeRef = useRef(mangaViewMode);
+  const panOffsetRef = useRef(panOffset);
+  useEffect(() => { isRtlRef.current = isRtl; }, [isRtl]);
+  useEffect(() => { viewModeRef.current = mangaViewMode; }, [mangaViewMode]);
+  useEffect(() => { mangaZoomRef.current = mangaZoom; }, [mangaZoom]);
+  useEffect(() => { panOffsetRef.current = panOffset; }, [panOffset]);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      if (viewModeRef.current === "scroll") return;
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const rect = el.getBoundingClientRect();
+        const dx = e.clientX - rect.left - rect.width / 2;
+        const dy = e.clientY - rect.top - rect.height / 2;
+        const oldZoom = mangaZoomRef.current;
+        const newZoom = Math.min(4, Math.max(0.25, oldZoom + (e.deltaY > 0 ? -0.1 : 0.1)));
+        const ratio = newZoom / oldZoom;
+        const p = panOffsetRef.current;
+        setPanOffset({ x: dx + (p.x - dx) * ratio, y: dy + (p.y - dy) * ratio });
+        setMangaZoom(newZoom);
+        return;
+      }
       e.preventDefault();
-      const rect = e.currentTarget.getBoundingClientRect();
-      // 鼠标到容器中心的方向向量（像素）
-      const dx = e.clientX - rect.left - rect.width / 2;
-      const dy = e.clientY - rect.top - rect.height / 2;
-      // 缩放后的鼠标方向向量（分子不变，分母变大/变小）
-      const oldZoom = mangaZoom;
-      const newZoom = Math.min(4, Math.max(0.25, mangaZoom + (e.deltaY > 0 ? -0.1 : 0.1)));
-      // 保持鼠标下的图片点不动：panOffset = 鼠标世界坐标 - 鼠标视口坐标
-      // 鼠标世界坐标 = (视口坐标 - panOffset) / oldZoom → 视口坐标 - panOffset = 鼠标世界坐标 * oldZoom
-      // 新缩放下的视口坐标 = 鼠标世界坐标 * newZoom + panOffset
-      // 在一帧内连续：setPanOffset + setMangaZoom 同时更新
-      // pan = pan + d - d * (newZoom / oldZoom)  = pan + d * (1 - newZoom / oldZoom)
-      const ratio = newZoom / oldZoom;
-      setPanOffset(p => ({ x: dx + (p.x - dx) * ratio, y: dy + (p.y - dy) * ratio }));
-      setMangaZoom(newZoom);
-      return;
-    }
-    e.preventDefault();
-    const forward = e.deltaY > 0;
-    if (isRtl) {
-      if (forward) prevPage(); else nextPage();
-    } else {
-      if (forward) nextPage(); else prevPage();
-    }
-  }, [mangaViewMode, nextPage, prevPage, isRtl, mangaZoom, setMangaZoom]);
+      const forward = e.deltaY > 0;
+      if (isRtlRef.current) {
+        if (forward) prevPageRef.current(); else nextPageRef.current();
+      } else {
+        if (forward) nextPageRef.current(); else prevPageRef.current();
+      }
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, []);
+
+  const prevPageRef = useRef(prevPage);
+  const nextPageRef = useRef(nextPage);
+  useEffect(() => { prevPageRef.current = prevPage; }, [prevPage]);
+  useEffect(() => { nextPageRef.current = nextPage; }, [nextPage]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (dragStart.current.moved) return; // 拖拽后不触发翻页
@@ -366,7 +351,7 @@ export default function MangaReader() {
   }, [mangaCurrentPage, totalPages, showDoublePages]);
 
   return (
-    <div style={mainStyle} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onWheel={handleWheel} onClick={handleClick}>
+    <div ref={mainRef} style={mainStyle} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onClick={handleClick}>
       {/* Toolbar — PDF 加载时也始终可见返回按钮 */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, zIndex: 310,
@@ -551,6 +536,12 @@ function SidebarCover({ comicId }: { comicId: string }) {
 
   if (!cover) return null;
   return <img src={cover} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 1 }} />;
+}
+
+/** 构造图片的 asset:// URL，完全跳过 IPC + base64 */
+function getPageUrl(manga: { image_dir: string; pages: { index: number; filename: string }[] }, pageIdx: number): string {
+  const page = manga.pages.find(p => p.index === pageIdx);
+  return page ? convertFileSrc(manga.image_dir + "\\" + page.filename) : "";
 }
 
 function PageImg({ src, style }: { src?: string; style: React.CSSProperties }) {
