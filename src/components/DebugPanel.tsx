@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useStore } from "../store";
 
 export interface LogEntry {
@@ -87,6 +88,7 @@ export default function DebugPanel() {
     const saved = localStorage.getItem("nr-radius-intensity");
     return saved ? Number(saved) : 12;
   });
+  const [rightTab, setRightTab] = useState<"settings" | "logs" | "fonts">("logs");
 
   // 系统资源
   const [procMem, setProcMem] = useState(0);
@@ -331,127 +333,115 @@ export default function DebugPanel() {
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
             {false && <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().setOnlineSearchOpen(true); }}>📚 联网搜书</button>}
             <div style={{ borderTop: "1px solid var(--border-glass)", margin: "14px 0 10px" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", marginBottom: 4 }}>
-              <span style={{ color: "var(--text)" }}>🖼️ PDF 渲染精度</span>
-              {dpiEditing ? (
-                <input
-                  ref={dpiInputRef}
-                  type="number" min={72} max={300}
-                  value={dpiEditValue}
-                  onChange={(e) => setDpiEditValue(e.target.value)}
-                  onBlur={() => commitDpi()}
-                  onKeyDown={(e) => { if (e.key === "Enter") commitDpi(); if (e.key === "Escape") { setDpiEditing(false); setDpiEditValue(String(renderDpi)); } }}
-                  style={{ width: 80, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "2px 8px", fontSize: ".75rem", textAlign: "center", outline: "none" }}
-                />
-              ) : (
-                <span
-                  onClick={() => { setDpiEditing(true); setDpiEditValue(String(renderDpi)); }}
-                  style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed var(--accent)" }}
-                  title="点击输入精确值"
-                >{renderDpi} DPI</span>
-              )}
-            </div>
-            <input
-              type="range" min={72} max={300} step={1} value={renderDpi}
-              onChange={async (e) => {
-                const v = Number(e.target.value);
-                setRenderDpi(v);
-                setDpiEditValue(String(v));
-                try {
-                  const { invoke } = await import("@tauri-apps/api/core");
-                  await invoke("set_render_dpi", { dpi: v });
-                  console.log(`[墨读] 渲染精度已设为 ${v} DPI（重启后生效，仅新导入）`);
-                } catch (err) {
-                  console.error("[墨读] 设置渲染精度失败:", err);
-                }
-              }}
-              style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
-            />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
-              <span>72</span><span>|</span><span>100</span><span>|</span><span>150</span><span>|</span><span>200</span><span>|</span><span>250</span><span>|</span><span>300</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "10px 0 4px" }}>
-              <span style={{ color: "var(--text)" }}>🔍 毛玻璃强度</span>
-              <span style={{ color: "var(--accent)", fontWeight: 600 }}>{glassIntensity}px</span>
-            </div>
-            <input
-              type="range" min={4} max={48} step={1} value={glassIntensity}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setGlassIntensity(v);
-                localStorage.setItem("nr-glass-intensity", String(v));
-                document.documentElement.style.setProperty("--glass-blur", v + "px");
-                console.log(`[墨读] 毛玻璃强度已设为 ${v}px`);
-              }}
-              style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
-            />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
-              <span>4（清晰）</span><span>|</span><span>12</span><span>|</span><span>24</span><span>|</span><span>36</span><span>|</span><span>48（模糊）</span>
-            </div>
-            <div style={{ borderTop: "1px solid var(--border-glass)", margin: "14px 0 10px" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "0 0 4px" }}>
-              <span style={{ color: "var(--text)" }}>📐 圆角强度</span>
-              <span style={{ color: "var(--accent)", fontWeight: 600 }}>{radiusIntensity}px</span>
-            </div>
-            <input
-              type="range" min={2} max={24} step={1} value={radiusIntensity}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setRadiusIntensity(v);
-                localStorage.setItem("nr-radius-intensity", String(v));
-                const sm = Math.max(2, Math.round(v * 0.5));
-                const md = v;
-                const lg = Math.min(32, Math.round(v * 1.4));
-                const xl = Math.min(40, Math.round(v * 2));
-                document.documentElement.style.setProperty("--radius-sm", sm + "px");
-                document.documentElement.style.setProperty("--radius-md", md + "px");
-                document.documentElement.style.setProperty("--radius-lg", lg + "px");
-                document.documentElement.style.setProperty("--radius-xl", xl + "px");
-                console.log(`[墨读] 圆角强度已设为 ${v}px（sm=${sm} md=${md} lg=${lg} xl=${xl})`);
-              }}
-              style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
-            />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
-              <span>2（直角）</span><span>|</span><span>8</span><span>|</span><span>12</span><span>|</span><span>18</span><span>|</span><span>24（圆润）</span>
-            </div>
-            <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem" }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
+            <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>面板</div>
+            {(["settings", "logs", "fonts"] as const).map((tab) => (
+              <button key={tab} className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginBottom: 4, background: rightTab === tab ? "rgba(var(--accent-rgb),0.12)" : undefined, border: rightTab === tab ? "1px solid rgba(var(--accent-rgb),0.3)" : undefined }}
+                onClick={() => setRightTab(tab)}>
+                {tab === "settings" ? "⚙️ 设置" : tab === "logs" ? "📋 日志" : "🔤 字体"}
+              </button>
+            ))}
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0, gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: ".8rem", color: "var(--text-dim)" }}>日志输出 ({displayLogs.length} 条)</span>
-                <span style={{ fontSize: ".68rem", color: "var(--text-dim)", opacity: 0.4 }}>(共 {logs.length} 条)</span>
+            {rightTab === "settings" && (
+              <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", marginBottom: 4 }}>
+                  <span style={{ color: "var(--text)" }}>🖼️ PDF 渲染精度</span>
+                  {dpiEditing ? (
+                    <input
+                      ref={dpiInputRef}
+                      type="number" min={72} max={300}
+                      value={dpiEditValue}
+                      onChange={(e) => setDpiEditValue(e.target.value)}
+                      onBlur={() => commitDpi()}
+                      onKeyDown={(e) => { if (e.key === "Enter") commitDpi(); if (e.key === "Escape") { setDpiEditing(false); setDpiEditValue(String(renderDpi)); } }}
+                      style={{ width: 80, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "2px 8px", fontSize: ".75rem", textAlign: "center", outline: "none" }}
+                    />
+                  ) : (
+                    <span
+                      onClick={() => { setDpiEditing(true); setDpiEditValue(String(renderDpi)); }}
+                      style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed var(--accent)" }}
+                      title="点击输入精确值"
+                    >{renderDpi} DPI</span>
+                  )}
+                </div>
+                <input
+                  type="range" min={72} max={300} step={1} value={renderDpi}
+                  onChange={async (e) => {
+                    const v = Number(e.target.value);
+                    setRenderDpi(v);
+                    setDpiEditValue(String(v));
+                    try {
+                      const { invoke } = await import("@tauri-apps/api/core");
+                      await invoke("set_render_dpi", { dpi: v });
+                      console.log(`[墨读] 渲染精度已设为 ${v} DPI（重启后生效，仅新导入）`);
+                    } catch (err) {
+                      console.error("[墨读] 设置渲染精度失败:", err);
+                    }
+                  }}
+                  style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
+                  <span>72</span><span>|</span><span>100</span><span>|</span><span>150</span><span>|</span><span>200</span><span>|</span><span>250</span><span>|</span><span>300</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "16px 0 4px" }}>
+                  <span style={{ color: "var(--text)" }}>🔍 毛玻璃强度</span>
+                  <span style={{ color: "var(--accent)", fontWeight: 600 }}>{glassIntensity}px</span>
+                </div>
+                <input
+                  type="range" min={4} max={48} step={1} value={glassIntensity}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setGlassIntensity(v);
+                    localStorage.setItem("nr-glass-intensity", String(v));
+                    document.documentElement.style.setProperty("--glass-blur", v + "px");
+                    console.log(`[墨读] 毛玻璃强度已设为 ${v}px`);
+                  }}
+                  style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
+                  <span>4（清晰）</span><span>|</span><span>12</span><span>|</span><span>24</span><span>|</span><span>36</span><span>|</span><span>48（模糊）</span>
+                </div>
+                <div style={{ borderTop: "1px solid var(--border-glass)", margin: "16px 0 10px" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "0 0 4px" }}>
+                  <span style={{ color: "var(--text)" }}>📐 圆角强度</span>
+                  <span style={{ color: "var(--accent)", fontWeight: 600 }}>{radiusIntensity}px</span>
+                </div>
+                <input
+                  type="range" min={2} max={24} step={1} value={radiusIntensity}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setRadiusIntensity(v);
+                    localStorage.setItem("nr-radius-intensity", String(v));
+                    const sm = Math.max(2, Math.round(v * 0.5));
+                    const md = v;
+                    const lg = Math.min(32, Math.round(v * 1.4));
+                    const xl = Math.min(40, Math.round(v * 2));
+                    document.documentElement.style.setProperty("--radius-sm", sm + "px");
+                    document.documentElement.style.setProperty("--radius-md", md + "px");
+                    document.documentElement.style.setProperty("--radius-lg", lg + "px");
+                    document.documentElement.style.setProperty("--radius-xl", xl + "px");
+                    console.log(`[墨读] 圆角强度已设为 ${v}px（sm=${sm} md=${md} lg=${lg} xl=${xl})`);
+                  }}
+                  style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
+                  <span>2（直角）</span><span>|</span><span>8</span><span>|</span><span>12</span><span>|</span><span>18</span><span>|</span><span>24（圆润）</span>
+                </div>
+                <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 16 }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <select value={filterSource} onChange={(e) => setFilterSource(e.target.value as any)} style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: ".75rem", outline: "none", cursor: "pointer" }}>
-                  <option value="all">全部来源</option>
-                  <option value="frontend">仅前端</option>
-                  <option value="backend">仅后端</option>
-                </select>
-                <label style={{ fontSize: ".75rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
-                  <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} /> 自动滚动
-                </label>
-              </div>
-            </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 0", fontFamily: "'SF Mono','Consolas','Courier New',monospace", fontSize: ".73rem", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-              {displayLogs.length === 0 && <div style={{ color: "var(--text-dim)", opacity: 0.35, textAlign: "center", paddingTop: 50, fontSize: ".8rem" }}>暂无日志</div>}
-              {displayLogs.map((entry) => {
-                const color = levelColor(entry.level, entry.source);
-                const tag = entry.source === "backend" ? "🖥 " : "";
-                return (
-                  <div key={entry.id} style={{ color, marginBottom: 1, padding: "0 20px", background: entry.source === "backend" ? "rgba(var(--accent-rgb),0.03)" : "transparent" }}>
-                    <span style={{ opacity: 0.4, marginRight: 6, fontSize: ".65rem", userSelect: "none" }}>{entry.timestamp}</span>
-                    <span style={{ opacity: 0.5, marginRight: 4, fontSize: ".65rem", fontWeight: 700 }}>[{entry.level}]</span>
-                    {tag}{entry.message}
+            )}
+            {rightTab === "logs" && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0, gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: ".8rem", color: "var(--text-dim)" }}>日志输出 ({displayLogs.length} 条)</span>
+                    <span style={{ fontSize: ".68rem", color: "var(--text-dim)", opacity: 0.4 }}>(共 {logs.length} 条)</span>
                   </div>
-                );
-              })}
-              <div ref={logEndRef} />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <select value={filterSource} onChange={(e) => setFilterSource(e.target.value as any)} style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: ".75rem", outline: "none", cursor: "pointer" }}>
+                      <option value="all">全部来源</option>
+                      <option value="frontend">仅前端</option>
+                      <option value="backend">仅后端</option>
+                    </select>
+                    <label style={{ fontSize: ".75rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                      <input type="checkbox" checked={autoS
