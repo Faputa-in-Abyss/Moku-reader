@@ -267,30 +267,4 @@ export const useStore = create<AppStore>((set, get) => ({
   comics: [],
   setComics: (comics) => set({ comics }),
   mangaReading: false,
-  currentManga: null,
-  mangaCurrentPage: 0,
-  openMangaReader: (manga) =>
-    set({
-      mangaReading: true,
-      currentManga: manga,
-      mangaCurrentPage: manga.current_page || 0,
-    }),
-  closeMangaReader: () => {
-    set({ mangaReading: false, currentManga: null, mangaCurrentPage: 0 });
-    setTimeout(() => {
-      const { triggerRefresh } = useStore.getState();
-      triggerRefresh();
-    }, 100);
-  },
-  setMangaPage: (idx) => set({ mangaCurrentPage: idx }),
-  mangaViewMode: (localStorage.getItem("nr-manga-view") as MangaViewMode) || "single",
-  setMangaViewMode: (m) => {
-    localStorage.setItem("nr-manga-view", m);
-    set({ mangaViewMode: m });
-  },
-  mangaZoom: 1,
-  setMangaZoom: (z) => set({ mangaZoom: Math.min(4, Math.max(0.25, z)) }),
-  // 导入进度
-  importProgress: null,
-  setImportProgress: (p) => set({ importProgress: p }),
-}));
+  currentManga: null,

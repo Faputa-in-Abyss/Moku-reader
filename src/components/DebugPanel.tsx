@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useStore } from "../store";
 
 export interface LogEntry {
@@ -473,10 +472,10 @@ export default function DebugPanel() {
   );
 }
 
-// ===== FontSettings — 字体设置子面板 =====
-const FONT_LIST = [
-  { value: "", label: "默认衬线 (Georgia / Noto Serif SC)" },
-  { value: "'PingFang SC','Microsoft YaHei',sans-serif", label: "无衬线 (苹方/微软雅黑)" },
+// ===== FontSettings — 字体设置子面板（普通 select，不折腾） =====
+const FONT_OPTIONS = [
+  { value: "", label: "默认衬线" },
+  { value: "'PingFang SC','Microsoft YaHei',sans-serif", label: "无衬线" },
   { value: "'STSong','SimSun',serif", label: "宋体" },
   { value: "'KaiTi','STKaiti',serif", label: "楷体" },
   { value: "'FangSong','STFangsong',serif", label: "仿宋" },
@@ -489,186 +488,162 @@ const FONT_LIST = [
   { value: "'ZCOOL KuaiLe',sans-serif", label: "站酷快乐体" },
 ];
 const FONT_SIZES = [
-  { value: ".5rem", label: "八号" },
-  { value: ".55rem", label: "七号" },
-  { value: ".63rem", label: "小六" },
-  { value: ".7rem",  label: "六号" },
-  { value: ".75rem", label: "小五" },
-  { value: ".8rem",  label: "五号" },
-  { value: ".88rem", label: "小四" },
-  { value: ".94rem", label: "四号" },
-  { value: "1rem",   label: "小三" },
-  { value: "1.06rem",label: "三号" },
-  { value: "1.2rem", label: "小二号" },
-  { value: "1.38rem",label: "二号" },
-  { value: "1.5rem", label: "小一号" },
-  { value: "1.75rem",label: "一号" },
+  { value: ".5rem", label: "八号" },    { value: ".55rem", label: "七号" },
+  { value: ".63rem", label: "小六" },   { value: ".7rem",  label: "六号" },
+  { value: ".75rem", label: "小五" },   { value: ".8rem",  label: "五号" },
+  { value: ".88rem", label: "小四" },   { value: ".94rem", label: "四号" },
+  { value: "1rem",   label: "小三" },   { value: "1.06rem",label: "三号" },
+  { value: "1.2rem", label: "小二号" }, { value: "1.38rem",label: "二号" },
+  { value: "1.5rem", label: "小一号" }, { value: "1.75rem",label: "一号" },
 ];
 
 function FontSettings() {
-  const readerFont = useStore((s) => s.readerFont);
-  const setReaderFont = useStore((s) => s.setReaderFont);
+  const storeReaderFont = useStore((s) => s.readerFont);
+  const setStoreReaderFont = useStore((s) => s.setReaderFont);
 
+  // 全部用局部 state + localStorage，不依赖 CSS 变量
+  const [readerFont, setReaderFont] = useState(() => localStorage.getItem("nr-reader-font") || "");
+  const [readerSize, setReaderSize] = useState(() => Number(localStorage.getItem("nr-font-reader-size")) || 8);
   const [titleFont, setTitleFont] = useState(() => localStorage.getItem("nr-font-title") || "");
   const [uiFont, setUiFont] = useState(() => localStorage.getItem("nr-font-ui") || "");
   const [titleSize, setTitleSize] = useState(() => Number(localStorage.getItem("nr-font-title-size")) || 5);
   const [uiSize, setUiSize] = useState(() => Number(localStorage.getItem("nr-font-ui-size")) || 5);
   const [titleBold, setTitleBold] = useState(() => localStorage.getItem("nr-font-title-bold") !== "0");
   const [readerBold, setReaderBold] = useState(() => localStorage.getItem("nr-font-reader-bold") !== "0");
+  const [uiBold, setUiBold] = useState(() => localStorage.getItem("nr-font-ui-bold") !== "0");
 
-  const applyTitleFont = (v: string) => {
-    setTitleFont(v);
-    localStorage.setItem("nr-font-title", v);
-    document.documentElement.style.setProperty("--font-title", v || "'Georgia','Noto Serif SC',serif");
-  };
-  const applyUiFont = (v: string) => {
-    setUiFont(v);
-    localStorage.setItem("nr-font-ui", v);
-    document.documentElement.style.setProperty("--font-ui", v || "inherit");
-  };
-  const applyTitleSize = (idx: number) => {
-    setTitleSize(idx);
-    localStorage.setItem("nr-font-title-size", String(idx));
-    document.documentElement.style.setProperty("--font-title-size", FONT_SIZES[idx].value);
-  };
-  const applyUiSize = (idx: number) => {
-    setUiSize(idx);
-    localStorage.setItem("nr-font-ui-size", String(idx));
-    document.documentElement.style.setProperty("--font-ui-size", FONT_SIZES[idx].value);
-  };
-  const toggleTitleBold = () => {
-    const v = !titleBold;
-    setTitleBold(v);
-    localStorage.setItem("nr-font-title-bold", v ? "1" : "0");
-    document.documentElement.style.setProperty("--font-title-weight", v ? "700" : "600");
-  };
-  const toggleReaderBold = () => {
-    const v = !readerBold;
-    setReaderBold(v);
-    localStorage.setItem("nr-font-reader-bold", v ? "1" : "0");
-    document.documentElement.style.setProperty("--font-reader-weight", v ? "700" : "400");
-  };
+  function setBoth(which: "reader" | "title" | "ui", v: string) {
+    const key = which === "reader" ? "nr-reader-font" : which === "title" ? "nr-font-title" : "nr-font-ui";
+    const setter = which === "reader" ? setReaderFont : which === "title" ? setTitleFont : setUiFont;
+    localStorage.setItem(key, v);
+    setter(v);
+    if (which === "reader") {
+      setStoreReaderFont(v);
+      document.documentElement.style.setProperty("--font-reader", v || "'Georgia','Noto Serif SC',serif");
+    } else if (which === "title") {
+      document.documentElement.style.setProperty("--font-title", v || "'Georgia','Noto Serif SC',serif");
+    } else {
+      document.documentElement.style.setProperty("--font-ui", v || "inherit");
+    }
+  }
 
+  const readFontFace = readerFont || "'Georgia','Noto Serif SC',serif";
   const titleFontFace = titleFont || "'Georgia','Noto Serif SC',serif";
   const uiFontFace = uiFont || "inherit";
-  const readFontFace = readerFont || "'Georgia','Noto Serif SC',serif";
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0 }}>
-        <span style={{ fontSize: ".85rem", color: "var(--text)", fontWeight: 600 }}>🔤 字体设置</span>
-      </div>
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <div style={{ flex: "none", width: 320, overflow: "hidden", display: "flex", flexDirection: "column", borderRight: "1px solid var(--border-glass)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{ overflowY: "auto", padding: "20px", minHeight: 0 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>📖 阅读器字体</span>
-                <label style={{ fontSize: ".72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none" }}>
-                  <input type="checkbox" checked={readerBold} onChange={toggleReaderBold} style={{ accentColor: "var(--accent)" }} /> 加粗
-                </label>
-              </div>
-              <FontSearchDropdown
-                fonts={FONT_LIST}
-                current={readerFont}
-                onSelect={(v) => {
-                  setReaderFont(v);
-                  localStorage.setItem("nr-reader-font", v);
-                }}
-              />
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+        <div style={{ maxWidth: 500, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* 阅读器字体 */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>📖 阅读器字体</span>
+              <label style={{ fontSize: ".72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                <input type="checkbox" checked={readerBold} onChange={() => { const v = !readerBold; setReaderBold(v); localStorage.setItem("nr-font-reader-bold", v ? "1" : "0"); document.documentElement.style.setProperty("--font-reader-weight", v ? "700" : "400"); }} style={{ accentColor: "var(--accent)" }} /> 加粗
+              </label>
             </div>
-
-            <div style={{ borderTop: "1px solid var(--border-glass)", paddingTop: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>📰 标题栏字体</span>
-                <label style={{ fontSize: ".72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none" }}>
-                  <input type="checkbox" checked={titleBold} onChange={toggleTitleBold} style={{ accentColor: "var(--accent)" }} /> 加粗
-                </label>
-              </div>
-              <FontSearchDropdown fonts={FONT_LIST} current={titleFont} onSelect={applyTitleFont} />
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: ".72rem", color: "var(--text-dim)" }}>大小</span>
-                <select value={titleSize} onChange={(e) => applyTitleSize(Number(e.target.value))}
-                  style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "4px 8px", fontSize: ".78rem", outline: "none", cursor: "pointer", maxWidth: 100 }}>
-                  {FONT_SIZES.map((sz, i) => (
-                    <option key={i} value={i}>{sz.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ borderTop: "1px solid var(--border-glass)", paddingTop: 16 }}>
-              <div style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600, marginBottom: 8 }}>🖥️ UI 组件字体</div>
-              <FontSearchDropdown fonts={FONT_LIST} current={uiFont} onSelect={applyUiFont} />
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: ".72rem", color: "var(--text-dim)" }}>大小</span>
-                <select value={uiSize} onChange={(e) => applyUiSize(Number(e.target.value))}
-                  style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "4px 8px", fontSize: ".78rem", outline: "none", cursor: "pointer", maxWidth: 100 }}>
-                  {FONT_SIZES.map((sz, i) => (
-                    <option key={i} value={i}>{sz.label}</option>
-                  ))}
-                </select>
-              </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ flex: 1 }}><FontSelect value={readerFont} onChange={(v) => setBoth("reader", v)} /></div>
+              <select value={readerSize} onChange={(e) => { const i = Number(e.target.value); setReaderSize(i); localStorage.setItem("nr-font-reader-size", String(i)); document.documentElement.style.setProperty("--font-reader-size", FONT_SIZES[i].value); }}
+                style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "6px 8px", fontSize: ".78rem", outline: "none", cursor: "pointer" }}>
+                {FONT_SIZES.map((sz, i) => (<option key={i} value={i}>{sz.label}</option>))}
+              </select>
             </div>
           </div>
-          </div>
-        </div>
 
-        <div style={{ flex: 2, overflowY: "auto", padding: "20px" }}>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>📰 标题栏</div>
+          {/* 标题栏字体 */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>📰 标题栏字体</span>
+              <label style={{ fontSize: ".72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                <input type="checkbox" checked={titleBold} onChange={() => { const v = !titleBold; setTitleBold(v); localStorage.setItem("nr-font-title-bold", v ? "1" : "0"); document.documentElement.style.setProperty("--font-title-weight", v ? "700" : "600"); }} style={{ accentColor: "var(--accent)" }} /> 加粗
+              </label>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ flex: 1 }}><FontSelect value={titleFont} onChange={(v) => setBoth("title", v)} /></div>
+              <select value={titleSize} onChange={(e) => { const i = Number(e.target.value); setTitleSize(i); localStorage.setItem("nr-font-title-size", String(i)); document.documentElement.style.setProperty("--font-title-size", FONT_SIZES[i].value); }}
+                style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "6px 8px", fontSize: ".78rem", outline: "none", cursor: "pointer" }}>
+                {FONT_SIZES.map((sz, i) => (<option key={i} value={i}>{sz.label}</option>))}
+              </select>
+            </div>
+          </div>
+
+          {/* UI 组件字体 */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>🖥️ UI 组件字体</span>
+              <label style={{ fontSize: ".72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                <input type="checkbox" checked={uiBold} onChange={() => { const v = !uiBold; setUiBold(v); localStorage.setItem("nr-font-ui-bold", v ? "1" : "0"); document.documentElement.style.setProperty("--font-ui-weight", v ? "700" : "400"); }} style={{ accentColor: "var(--accent)" }} /> 加粗
+              </label>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ flex: 1 }}><FontSelect value={uiFont} onChange={(v) => setBoth("ui", v)} /></div>
+              <select value={uiSize} onChange={(e) => { const i = Number(e.target.value); setUiSize(i); localStorage.setItem("nr-font-ui-size", String(i)); document.documentElement.style.setProperty("--font-ui-size", FONT_SIZES[i].value); }}
+                style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "6px 8px", fontSize: ".78rem", outline: "none", cursor: "pointer" }}>
+                {FONT_SIZES.map((sz, i) => (<option key={i} value={i}>{sz.label}</option>))}
+              </select>
+            </div>
+          </div>
+
+          {/* 预览 */}
+          <div style={{ borderTop: "1px solid var(--border-glass)", paddingTop: 20 }}>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>📰 标题栏预览</div>
+            <div style={{ background: "var(--glass-bg)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)", padding: "14px 20px" }}>
+              <div style={{ fontFamily: titleFontFace, fontSize: FONT_SIZES[titleSize].value, fontWeight: titleBold ? 700 : 600, color: "var(--text)" }}>墨读</div>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>📖 阅读正文预览</div>
+            <div style={{ background: "var(--reader-bg)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)", padding: "20px 24px", lineHeight: 1.9 }}>
+              <p style={{ fontFamily: readFontFace, fontSize: FONT_SIZES[readerSize].value, fontWeight: readerBold ? 700 : 400, color: "var(--text)", margin: 0, textIndent: "2em" }}>
+                却说那唐僧在马上，手指远处道："悟空，你看那山色青翠，好似有仙家之气。"行者笑道："师父好眼力！那山唤作浮云山，乃是五百年前老君炼丹之所。"</p>
+              <p style={{ fontFamily: readFontFace, fontSize: FONT_SIZES[readerSize].value, fontWeight: readerBold ? 700 : 400, color: "var(--text)", margin: "8px 0 0", textIndent: "2em" }}>
+                沙僧道："大师兄，这山中可有什么妖怪？"行者摆手道："莫怕莫怕，有俺老孙在，天塌下来也顶得住！"</p>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>🖥️ UI 组件预览</div>
             <div style={{
               background: "var(--glass-bg)", border: "1px solid var(--border-glass)",
-              borderRadius: "var(--radius-md)", padding: "14px 20px",
-              backdropFilter: "blur(var(--glass-blur))",
-            }}>
-              <div style={{
-                fontFamily: titleFontFace,
-                fontSize: FONT_SIZES[titleSize].value,
-                fontWeight: titleBold ? 700 : 600, color: "var(--text)",
-              }}>墨读</div>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>🖥️ UI 组件</div>
-            <div style={{
-              background: "var(--glass-bg)", border: "1px solid var(--border-glass)",
-              borderRadius: "var(--radius-md)", padding: "14px 20px",
-              display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap",
+              borderRadius: "var(--radius-md)", padding: "16px 20px",
+              display: "flex", flexDirection: "column", gap: 12,
               fontFamily: uiFontFace,
               fontSize: FONT_SIZES[uiSize].value,
+              fontWeight: uiBold ? 700 : 400,
             }}>
-              <span style={{ padding: "6px 14px", background: "rgba(var(--accent-rgb),0.12)", borderRadius: "var(--radius-sm)", color: "var(--text)" }}>📖 小说</span>
-              <span style={{ padding: "6px 14px", color: "var(--text-dim)" }}>🎴 漫画</span>
-              <span style={{ padding: "6px 14px", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
-                <span>☀️</span>
-                <span>导入</span>
-                <span>⋯</span>
-              </span>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>📖 阅读正文</div>
-            <div style={{
-              background: "var(--reader-bg)", border: "1px solid var(--border-glass)",
-              borderRadius: "var(--radius-md)", padding: "20px 24px",
-              lineHeight: 1.9,
-            }}>
-              <p style={{
-                fontFamily: readFontFace, fontSize: "1rem",
-                fontWeight: readerBold ? 700 : 400,
-                color: "var(--text)", margin: 0, textIndent: "2em",
-              }}>却说那唐僧在马上，手指远处道："悟空，你看那山色青翠，好似有仙家之气。"行者笑道："师父好眼力！那山唤作浮云山，乃是五百年前老君炼丹之所。"</p>
-              <p style={{
-                fontFamily: readFontFace, fontSize: "1rem",
-                fontWeight: readerBold ? 700 : 400,
-                color: "var(--text)", margin: "8px 0 0", textIndent: "2em",
-              }}>沙僧道："大师兄，这山中可有什么妖怪？"行者摆手道："莫怕莫怕，有俺老孙在，天塌下来也顶得住！"</p>
+              {/* 导航标签 */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ padding: "6px 14px", background: "rgba(var(--accent-rgb),0.12)", borderRadius: "var(--radius-sm)", color: "var(--text)", cursor: "pointer" }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "rgba(var(--accent-rgb),0.22)"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"}>📖 小说</span>
+                <span style={{ padding: "6px 14px", color: "var(--text-dim)", cursor: "pointer" }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = "var(--text)"}
+                  onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-dim)"}>🎴 漫画</span>
+                <span style={{ padding: "6px 14px", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", color: "var(--text)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                  <span>☀️</span><span>导入</span><span>⋯</span>
+                </span>
+              </div>
+              {/* 按钮行 */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>📂 更改路径</button>
+                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>🔄 扫描书库</button>
+                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>🗑️ 清除日志</button>
+              </div>
+              {/* 下拉 + 输入框 */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <select style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "6px 8px", fontSize: "inherit", fontFamily: "inherit", fontWeight: uiBold ? 700 : 400, outline: "none", cursor: "pointer" }}>
+                  <option>全部来源</option>
+                  <option>仅前端</option>
+                </select>
+                <label style={{ fontSize: ".9em", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                  <input type="checkbox" defaultChecked style={{ accentColor: "var(--accent)" }} /> 自动滚动
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -677,60 +652,10 @@ function FontSettings() {
   );
 }
 
-// ===== 带搜索的下拉字体选择器 =====
-function FontSearchDropdown({ fonts, current, onSelect }: {
-  fonts: { value: string; label: string }[];
-  current: string;
-  onSelect: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const filtered = fonts.filter((f) => f.label.toLowerCase().includes(search.toLowerCase()));
-  const currentLabel = fonts.find((f) => f.value === current)?.label || "默认衬线";
-
+/** 普通 select 字体下拉 */
+function FontSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <div onClick={() => setOpen(!open)}
-        style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: ".82rem", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {currentLabel}
-      </div>
-      {open && createPortal(
-        <div style={{
-          position: "fixed", zIndex: 99999,
-          background: "var(--bg)", border: "1px solid var(--border-glass)",
-          borderRadius: "var(--radius-sm)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-          overflow: "hidden", minWidth: 260,
-        }} ref={(el) => {
-          if (!el || !ref.current) return;
-          const rect = ref.current.getBoundingClientRect();
-          el.style.left = rect.left + "px";
-          el.style.top = (rect.bottom + 4) + "px";
-          el.style.width = Math.max(rect.width, 260) + "px";
-        }}>
-          <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索字体..."
-            style={{ width: "100%", padding: "8px 10px", background: "var(--glass-bg)", color: "var(--text)", border: "none", borderBottom: "1px solid var(--border-glass)", fontSize: ".8rem", outline: "none" }} />
-          <div style={{ maxHeight: 140, overflowY: "auto" }}>
-            {filtered.map((f) => (
-              <div key={f.value} onClick={() => { onSelect(f.value); setOpen(false); setSearch(""); }}
-                style={{ padding: "8px 10px", fontSize: ".8rem", color: f.value === current ? "var(--accent)" : "var(--text)", background: f.value === current ? "rgba(var(--accent-rgb),0.06)" : "transparent", cursor: "pointer" }}>
-                  {f.label}
-                </div>
-              ))}
-              {filtered.length === 0 && <div style={{ padding: "8px 10px", fontSize: ".78rem", color: "var(--text-dim)", textAlign: "center" }}>未找到匹配字体</div>}
-            </div>
-          </div>,
-        document.body
-      )}
-    </div>
-  );
-}
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      style={{ width: "100%", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "6px 8px", fontSize: ".82rem", outline: "none", cursor: "pointer" }}>
+      {FONT_OPTIONS.map((f) => (
+        <option key={f.value} value={f.value}>{f.label
