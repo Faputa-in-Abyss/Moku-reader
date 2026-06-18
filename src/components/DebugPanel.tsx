@@ -658,4 +658,8 @@ function FontSelect({ value, onChange }: { value: string; onChange: (v: string) 
     <select value={value} onChange={(e) => onChange(e.target.value)}
       style={{ width: "100%", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "6px 8px", fontSize: ".82rem", outline: "none", cursor: "pointer" }}>
       {FONT_OPTIONS.map((f) => (
-        <option key={f.value} value={f.value}>{f.label
+        <option key={f.value} value={f.value}>{f.label}</option>
+      ))}
+    </select>
+  );
+}

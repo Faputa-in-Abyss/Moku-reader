@@ -87,4 +87,15 @@ export default function ImportToast() {
       {isProcessing && (
         <div style={{
           width: 80, height: 3, borderRadius: 2,
-          ba
+          background: "rgba(var(--accent-rgb),0.12)", overflow: "hidden", flexShrink: 0,
+        }}>
+          <div style={{
+            width: "40%", height: "100%", borderRadius: 2,
+            background: "var(--accent)",
+            animation: "importBar 1.4s ease-in-out infinite",
+          }} />
+        </div>
+      )}
+    </div>
+  );
+}

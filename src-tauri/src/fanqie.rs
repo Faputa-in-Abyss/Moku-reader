@@ -512,4 +512,19 @@ pub fn clean_content(content: &str) -> String {
     // &lt; → <
     result = result.replace("&lt;", "<");
     // &gt; → >
-    result = result.replace("&gt;"
+    result = result.replace("&gt;", ">");
+    // &#x0D; 等
+    if let Ok(re) = regex_lite::Regex::new(r"&#x[0-9a-fA-F]+;") {
+        result = re.replace_all(&result, "").to_string();
+    }
+
+    // 多余空白行
+    if let Ok(re) = regex_lite::Regex::new(r"\n{3,}") {
+        result = re.replace_all(&result, "\n\n").to_string();
+    }
+
+    // 行首行尾空白
+    let lines: Vec<&str> = result.lines().collect();
+    let paragraphs: Vec<&str> = lines.iter().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+    paragraphs.join("\n\n")
+}
