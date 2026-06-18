@@ -282,14 +282,4 @@ export function parseSearchUrl(raw: string, keyword: string, page: number): Pars
   }
 
   const finalUrl = urlStr
-    .replace(/\{\{key\}\}|\{\{searchKey\}\}/g, encodeURIComponent(keyword))
-    .replace(/\{\{page\}\}|\{\{searchPage\}\}/g, String(page));
-
-  if (body) {
-    body = body
-      .replace(/\{\{key\}\}|\{\{searchKey\}\}/g, keyword)
-      .replace(/\{\{page\}\}|\{\{searchPage\}\}/g, String(page));
-  }
-
-  return { url: finalUrl, method, body, charset };
-}
+    .replace(/\{\{key\}\}|\{\{searchKey\}\}/g, encodeURIComponent(key
