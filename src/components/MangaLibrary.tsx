@@ -700,4 +700,201 @@ export default function MangaLibrary() {
         <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setSeriesDialogOpen(false)}>
           <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 360, width: "90%" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>新建系列</div>
-            <input id="new-series-input" placeholder="输入系列名称..." autoFocus style=
+            <input id="new-series-input" placeholder="输入系列名称..." autoFocus style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: ".9rem", outline: "none", marginBottom: 16 }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const inp = document.getElementById("new-series-input") as HTMLInputElement;
+                  const name = inp?.value?.trim();
+                  if (!name) return;
+                  if (seriesMap[name]) { alert("系列已存在"); return; }
+                  setSeriesMap({ ...seriesMap, [name]: [] });
+                  setActiveSeries(name);
+                  setSeriesDialogOpen(false);
+                }
+              }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => setSeriesDialogOpen(false)}>取消</button>
+              <button className="btn btn-primary" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => {
+                const inp = document.getElementById("new-series-input") as HTMLInputElement;
+                const name = inp?.value?.trim();
+                if (!name) return;
+                if (seriesMap[name]) { alert("系列已存在"); return; }
+                setSeriesMap({ ...seriesMap, [name]: [] });
+                setActiveSeries(name);
+                setSeriesDialogOpen(false);
+              }}>确定</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 重命名弹窗 */}
+      {renameTarget && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setRenameTarget(null)}>
+          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 360, width: "90%" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 8, textAlign: "center" }}>重命名</div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 16, textAlign: "center" }}>将「{renameTarget.title}」重命名为</div>
+            <input id="rename-input" defaultValue={renameTarget.title} autoFocus style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: ".9rem", outline: "none", marginBottom: 16 }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const inp = document.getElementById("rename-input") as HTMLInputElement;
+                  const newName = inp?.value?.trim();
+                  if (!newName || newName === renameTarget.title) { setRenameTarget(null); return; }
+                  (async () => {
+                    try {
+                      const { invoke } = await import("@tauri-apps/api/core");
+                      await invoke("rename_comic", { comicId: renameTarget.id, newTitle: newName });
+                      setRenameTarget(null);
+                      triggerRefresh();
+                    } catch {}
+                  })();
+                }
+              }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => setRenameTarget(null)}>取消</button>
+              <button className="btn btn-primary" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => {
+                const inp = document.getElementById("rename-input") as HTMLInputElement;
+                const newName = inp?.value?.trim();
+                if (!newName || newName === renameTarget.title) { setRenameTarget(null); return; }
+                (async () => {
+                  try {
+                    const { invoke } = await import("@tauri-apps/api/core");
+                    await invoke("rename_comic", { comicId: renameTarget.id, newTitle: newName });
+                    setRenameTarget(null);
+                    triggerRefresh();
+                  } catch {}
+                })();
+              }}>确定</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// 模块级封面内存缓存：组件卸载后保留，切换系列标签时无需重新加载
+const coverCache = new Map<string, string>();
+
+function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolean }) {
+  // 从内存缓存取封面，标记是否为缓存命中（避免重新挂载时触发 coverFadeIn 动画）
+  const fromCache = coverCache.has(comicId);
+  const [cover, setCover] = useState<string | null>(() => {
+    if (hasIcon) return null;
+    return coverCache.get(comicId) ?? null;
+  });
+  const ref = useRef<HTMLDivElement>(null);
+  const loadedRef = useRef(fromCache);
+
+  useEffect(() => {
+    // 用户设置了 emoji 图标时，不显示第一页封面
+    if (hasIcon) {
+      setCover(null);
+      return;
+    }
+
+    // 内存中已有缓存，无需任何操作
+    if (coverCache.has(comicId)) {
+      loadedRef.current = true;
+      return;
+    }
+
+    // 先查 localStorage（浏览器重启后的持久化缓存）
+    const cached = localStorage.getItem(`nr-manga-cover-${comicId}`);
+    if (cached) {
+      coverCache.set(comicId, cached);
+      setCover(cached);
+      loadedRef.current = true;
+      return;
+    }
+
+    // 缓存已清除（选了原封面），直接加载不等待 IntersectionObserver
+    const loadCover = async () => {
+      loadedRef.current = true;
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const b64: string = await invoke("get_comic_thumbnail", { comicId });
+        if (b64) {
+          coverCache.set(comicId, b64);
+          setCover(b64);
+          try { localStorage.setItem(`nr-manga-cover-${comicId}`, b64); } catch {}
+        }
+      } catch {}
+    };
+
+    if (loadedRef.current) {
+      loadCover();
+      return;
+    }
+
+    const el = ref.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !loadedRef.current) {
+          loadedRef.current = true;
+          obs.disconnect();
+          loadCover();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [comicId, hasIcon]);
+
+  if (cover) {
+    return (
+      <>
+        <img className="book-cover-img" src={cover} alt="" style={fromCache ? { animation: "none" } : undefined} />
+        <div className="book-cover-gradient" />
+      </>
+    );
+  }
+
+  // 不渲染占位 div，等进入视口才加载
+  return <div ref={ref} style={{ position: "absolute", inset: 0, zIndex: 1 }} />;
+}
+
+function CtxMenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        padding: "10px 16px",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        cursor: "pointer",
+        fontSize: ".9rem",
+        color: hover ? "var(--accent)" : "var(--text)",
+        background: hover ? "rgba(var(--accent-rgb),0.06)" : "transparent",
+        transition: "all 0.15s ease",
+      }}
+    >
+      <span style={{ fontSize: "1rem" }}>{icon}</span>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function sourceTypeLabel(t: string): string {
+  switch (t) {
+    case "cbz": return "CBZ";
+    case "pdf": return "PDF";
+    case "folder": return "📁";
+    default: return t;
+  }
+}
+
+function getMangaIcon(comic: ComicMeta): string {
+  if (comic.book_icon) return comic.book_icon;
+  if (comic.source_type === "pdf") return "📕";
+  const icons: Record<string, string> = { "海贼王": "🏴‍☠️", "火影忍者": "🍥", "鬼灭之刃": "⚔️", "进击的巨人": "🧱", "咒术回战": "🌀", "龙珠": "🐉", "名侦探柯南": "🔍", "灌篮高手": "🏀", "死神": "⚔️" };
+  return icons[comic.title] || "🎴";
+}

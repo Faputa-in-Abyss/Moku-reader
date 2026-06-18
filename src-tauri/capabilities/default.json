@@ -21,4 +21,6 @@
     "fs:allow-write-text-file",
     "fs:allow-read-dir",
     "fs:allow-exists",
-    "fs
+    "fs:allow-app-read"
+  ]
+}
