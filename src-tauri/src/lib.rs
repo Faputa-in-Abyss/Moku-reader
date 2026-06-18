@@ -786,4 +786,529 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                             comic::save_comic_library(&data_dir, &mem).ok();
                         }
                         comics_imported += 1;
-                    
+                        let _ = app.emit("comics-refreshed", "");
+                    }
+                    Err(e) => errors.push(format!("导入漫画文件夹失败 {}: {}", path, e)),
+                }
+            } else {
+                let result = comic::import_comic(path, &data_dir, render_dpi);
+                let mut need_cleanup = false;
+                match result {
+                    Ok(book) => {
+                        let title = book.title.clone();
+                        let total_pages = book.total_pages;
+                        // 直接推入内存 Mutex 再写磁盘
+                        if let Ok(mut mem) = app.state::<AppState>().comic_library.lock() {
+                            mem.comics.push(book);
+                            comic::save_comic_library(&data_dir, &mem).ok();
+                        }
+                        comics_imported += 1;
+                        need_cleanup = true;
+                        if let Some(handle) = crate::APP_HANDLE.get() {
+                            let _ = handle.emit("comic-import-progress", &crate::ImportProgress {
+                                title: title.clone(),
+                                status: "done".to_string(),
+                                message: format!("扫描导入：{} ({} 页)", title, total_pages),
+                            });
+                        }
+                        let _ = app.emit("comics-refreshed", "");
+                    }
+                    Err(e) => {
+                        errors.push(format!("导入漫画失败 {}: {}", path, e));
+                    }
+                }
+                // 清理 PDF/CBZ 的源文件副本
+                if need_cleanup {
+                    let p = std::path::Path::new(path);
+                    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                    if ext == "pdf" || ext == "cbz" || ext == "zip" {
+                        // 判断是否在 data_dir/comics/ 下（被复制过的）
+                        let comics_dir = data_dir.join("comics");
+                        if p.starts_with(&comics_dir) {
+                            let _ = std::fs::remove_file(p);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 将磁盘上最新的漫画库和小说库状态同步回内存（兜底）
+        {
+            let fresh_comic_lib = comic::load_comic_library(&data_dir);
+            if let Ok(mut comic_lib) = app.state::<AppState>().comic_library.lock() {
+                *comic_lib = fresh_comic_lib;
+            }
+        }
+        {
+            let fresh_novel_lib = load_library(&data_dir);
+            if let Ok(mut novel_lib) = app.state::<AppState>().library.lock() {
+                *novel_lib = fresh_novel_lib;
+            }
+        }
+
+        // 发送完成事件
+        let _ = app.emit("scan-complete", &ScanResult {
+            novels_found, novels_imported,
+            comics_found, comics_imported,
+            errors: errors.clone(),
+        });
+
+        debug_log!("📂 书库扫描完成: 发现 {} 本小说/{} 本漫画, 导入 {} 本小说/{} 本漫画, {} 个错误",
+            novels_found, comics_found, novels_imported, comics_imported, errors.len());
+    });
+
+    // 先返回，前台不阻塞
+    Ok(format!("SCAN_STARTED:{}:{}", novels_found, comics_found))
+}
+
+/// 取消扫描
+#[tauri::command]
+fn cancel_scan(state: State<'_, AppState>) -> Result<(), String> {
+    *state.scan_cancel.lock().unwrap() = true;
+    Ok(())
+}
+
+// ===== 漫画命令 =====
+
+#[tauri::command]
+async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic::ComicBook, String> {
+    debug_log!("📥 导入漫画: {}", &path);
+
+    let title = std::path::Path::new(&path)
+        .file_stem().and_then(|s| s.to_str()).unwrap_or("未知").to_string();
+
+    // 发送开始事件
+    if let Some(handle) = APP_HANDLE.get() {
+        let _ = handle.emit("comic-import-progress", &ImportProgress {
+            title: title.clone(),
+            status: "processing".to_string(),
+            message: format!("正在渲染 {} …", &title),
+        });
+    }
+
+    // mutool draw 可能耗时（几十秒），用 oneshot 通道异步等待
+    let data_dir = state.data_dir.clone();
+    let path_c = path.clone();
+    let render_dpi = *state.render_dpi.lock().unwrap();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let app_handle = APP_HANDLE.get().cloned();
+    std::thread::spawn(move || {
+        let result = comic::import_comic(&path_c, &data_dir, render_dpi);
+        // 导入完成或失败后发送事件
+        if let Some(handle) = app_handle {
+            match &result {
+                Ok(book) => {
+                    let _ = handle.emit("comic-import-progress", &ImportProgress {
+                        title: book.title.clone(),
+                        status: "done".to_string(),
+                        message: format!("导入完成：{} ({} 页)", book.title, book.total_pages),
+                    });
+                }
+                Err(e) => {
+                    let _ = handle.emit("comic-import-progress", &ImportProgress {
+                        title: title,
+                        status: "error".to_string(),
+                        message: format!("导入失败: {}", e),
+                    });
+                }
+            }
+        }
+        let _ = tx.send(result);
+    });
+
+    let book = rx.await.map_err(|_| "导入线程意外终止".to_string())?
+        .map_err(|e| format!("导入失败: {}", e))?;
+
+    let mut lib = state.comic_library.lock().unwrap();
+    lib.comics.push(book.clone());
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+
+    Ok(book)
+}
+
+/// 从图片文件夹原地导入漫画（不复制）
+fn import_comic_folder_impl(folder: &Path) -> Result<comic::ComicBook, String> {
+    let (files, title) = comic::import_folder(folder)?;
+    let pages: Vec<comic::ComicPage> = files.iter().enumerate().map(|(i, fname)| {
+        let full_path = folder.join(fname);
+        let (w, h) = comic::probe_image_size(&full_path);
+        comic::ComicPage { index: i, filename: fname.clone(), width: w, height: h }
+    }).collect();
+    let total = pages.len();
+    let id = generate_id();
+    Ok(comic::ComicBook {
+        id, title,
+        source_type: "folder".to_string(),
+        source_path: folder.to_string_lossy().to_string(),
+        image_dir: folder.to_string_lossy().to_string(),
+        pages, total_pages: total,
+        current_page: 0, direction: "ltr".to_string(),
+        favorite: false, book_icon: String::new(),
+    })
+}
+
+#[tauri::command]
+fn get_comic_library(state: State<AppState>) -> Vec<comic::ComicBook> {
+    let lib = state.comic_library.lock().unwrap();
+    debug_log!("📚 获取漫画书库: {} 本", lib.comics.len());
+    lib.comics.clone()
+}
+
+#[tauri::command]
+fn get_comic_page(comic_id: String, page_index: usize, state: State<AppState>) -> Result<String, String> {
+    let lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    let page = comic.pages.get(page_index).ok_or("页码超出范围")?;
+    comic::get_page_base64(&comic.image_dir, &page.filename)
+}
+
+#[tauri::command]
+fn get_comic_thumbnail(comic_id: String, state: State<AppState>) -> Result<String, String> {
+    let lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    if comic.pages.is_empty() {
+        return Err("漫画没有页面".to_string());
+    }
+    // 所有类型都尝试读取第一页作为缩略图（PDF 首次已渲染为图片）
+    let page = &comic.pages[0];
+    comic::get_page_base64(&comic.image_dir, &page.filename)
+}
+
+#[tauri::command]
+fn update_comic_progress(comic_id: String, page_index: usize, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.current_page = page_index;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn update_comic_direction(comic_id: String, direction: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.direction = direction;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_comic(comic_id: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    // 删除前清理文件
+    if let Some(comic) = lib.comics.iter().find(|c| c.id == comic_id) {
+        comic::cleanup_comic_files(comic);
+    }
+    lib.comics.retain(|c| c.id != comic_id);
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn rename_comic(comic_id: String, new_title: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.title = new_title;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_comic_favorite(comic_id: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.favorite = !comic.favorite;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn set_comic_icon(comic_id: String, icon: String, state: State<AppState>) -> Result<(), String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    comic.book_icon = icon;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+/// 获取系统资源信息（内存、存储）
+#[tauri::command]
+fn get_system_resources() -> SystemResource {
+    use sysinfo::ProcessesToUpdate;
+    static LAST_SYS: OnceLock<std::sync::Mutex<sysinfo::System>> = OnceLock::new();
+    let mut sys = LAST_SYS.get_or_init(|| std::sync::Mutex::new(sysinfo::System::new_all())).lock().unwrap();
+    sys.refresh_memory();
+    sys.refresh_processes(ProcessesToUpdate::All, false);
+
+    let total_mem_mb = sys.total_memory() as f64 / (1024.0 * 1024.0);
+    let used_mem_mb = sys.used_memory() as f64 / (1024.0 * 1024.0);
+    let mem_pct = if total_mem_mb > 0.0 { (used_mem_mb / total_mem_mb) * 100.0 } else { 0.0 };
+
+    let process_mem_mb = {
+        let current_pid = sysinfo::get_current_pid().ok();
+        let mut total_bytes: u64 = 0;
+
+        // 当前进程
+        if let Some(pid) = current_pid {
+            if let Some(proc) = sys.process(pid) {
+                total_bytes += proc.memory();
+            }
+        }
+
+        // 只累加直系子进程（WebView2 子进程）
+        if let Some(parent_pid) = current_pid {
+            for (_pid, proc) in sys.processes() {
+                if proc.parent() == Some(parent_pid) {
+                    total_bytes += proc.memory();
+                }
+            }
+        }
+
+        total_bytes as f64 / (1024.0 * 1024.0)
+    };
+
+    // 计算存储目录大小（应用本身 vs 内容）
+    let data_dir = dirs_next::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("novel-reader");
+    let storage_app_mb = dir_size_mb(&data_dir);
+    let comics_dir = data_dir.join("comics");
+    let storage_content_mb = if comics_dir.exists() { dir_size_mb(&comics_dir) } else { 0.0 };
+    // 应用自身 = 总 - 内容
+    let storage_app_mb = (storage_app_mb - storage_content_mb).max(0.0);
+
+    SystemResource {
+        memory_used_mb: used_mem_mb,
+        memory_total_mb: total_mem_mb,
+        memory_pct: mem_pct,
+        process_mem_mb,
+        storage_app_mb,
+        storage_content_mb,
+    }
+}
+
+/// 递归计算目录大小（MB）
+fn dir_size_mb(dir: &Path) -> f64 {
+    let mut total = 0u64;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                total += fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            } else if path.is_dir() {
+                total += (dir_size_mb(&path) * 1024.0 * 1024.0) as u64;
+            }
+        }
+    }
+    total as f64 / (1024.0 * 1024.0)
+}
+
+#[tauri::command]
+fn rescan_comic_folder(comic_id: String, state: State<AppState>) -> Result<usize, String> {
+    let mut lib = state.comic_library.lock().unwrap();
+    let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    let new_pages = comic::rescan_folder(&comic.image_dir)?;
+    let count = new_pages.len();
+    comic.pages = new_pages;
+    comic.total_pages = count;
+    comic::save_comic_library(&state.data_dir, &lib).ok();
+    Ok(count)
+}
+
+// ===== 番茄小说 API 命令 =====
+
+/// 搜索番茄小说
+#[tauri::command]
+async fn fanqie_search(keyword: String, offset: Option<i32>, state: State<'_, AppState>) -> Result<FanqieSearchResult, String> {
+    debug_log!("🍅 番茄搜索: {} (offset={:?})", &keyword, offset);
+    let result = state.fanqie.search_books(&keyword, offset.unwrap_or(0)).await;
+    match &result {
+        Ok(r) => debug_log!("   结果: {} 本书", r.books.len()),
+        Err(e) => debug_log!("   ❌ {}", e),
+    }
+    result
+}
+
+/// 获取番茄小说详情
+#[tauri::command]
+async fn fanqie_detail(book_id: String, state: State<'_, AppState>) -> Result<FanqieBookInfo, String> {
+    debug_log!("🍅 番茄详情: book_id={}", &book_id);
+    state.fanqie.get_book_detail(&book_id).await
+}
+
+/// 获取番茄小说目录
+#[tauri::command]
+async fn fanqie_catalog(book_id: String, state: State<'_, AppState>) -> Result<Vec<FanqieChapter>, String> {
+    debug_log!("🍅 番茄目录: book_id={}", &book_id);
+    state.fanqie.get_chapters(&book_id).await
+}
+
+/// 获取番茄小说章节内容
+#[tauri::command]
+async fn fanqie_content(item_id: String, state: State<'_, AppState>) -> Result<String, String> {
+    debug_log!("🍅 番茄章节内容: item_id={}", &item_id);
+    state.fanqie.get_chapter_content(&item_id).await
+}
+
+/// 下载整本番茄小说（逐章下载，发送进度事件）
+#[tauri::command]
+async fn fanqie_download(book_id: String, title: String, author: String, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<String, String> {
+    debug_log!("🍅 番茄下载: {} ({}) - {}", &title, &book_id, &author);
+
+    let chapters = state.fanqie.get_chapters(&book_id).await?;
+    let total = chapters.len();
+    if total == 0 {
+        return Err("没有可下载的章节".to_string());
+    }
+
+    debug_log!("   共 {} 章", total);
+
+    let mut full_text = format!("{}\n作者：{}\n来源：番茄小说\n\n", &title, &author);
+    let batch_size = 3;
+    let mut failed = 0usize;
+
+    for start in (0..total).step_by(batch_size) {
+        let end = (start + batch_size).min(total);
+        let batch = &chapters[start..end];
+
+        let mut batch_results: Vec<(usize, String)> = Vec::new();
+        for (i, ch) in batch.iter().enumerate() {
+            let idx = start + i;
+            match state.fanqie.get_chapter_content(&ch.id).await {
+                Ok(content) => {
+                    let header = format!("\n{}\n\n", ch.title);
+                    batch_results.push((idx, header + &content + "\n"));
+                }
+                Err(_) => {
+                    debug_log!("   ⚠️ 第{}章下载失败: {}", idx + 1, ch.title);
+                    batch_results.push((idx, format!("\n{}\n(下载失败)\n\n", ch.title)));
+                    failed += 1;
+                }
+            }
+        }
+
+        // 按原始顺序拼接
+        batch_results.sort_by_key(|r| r.0);
+        for (_, text) in batch_results {
+            full_text += &text;
+        }
+
+        // 发送进度事件
+        let _ = app.emit("fanqie-download-progress", &fanqie::FanqieDownloadProgress {
+            current: end,
+            total,
+            message: format!("{}/{} 章", end, total),
+        });
+    }
+
+    // 保存到书库
+    let save_result = save_online_book_inner(
+        &title, &author, &full_text, state
+    ).map_err(|e| format!("保存失败: {}", e))?;
+
+    let book_id_saved = save_result.id;
+
+    if failed > 0 {
+        debug_log!("   ⚠️ {} 章下载失败", failed);
+    }
+    debug_log!("   ✅ 下载完成，共 {} 章", total);
+
+    Ok(book_id_saved)
+}
+
+/// 内部：保存在线书籍（避免重复代码）
+fn save_online_book_inner(title: &str, author: &str, content: &str, state: State<'_, AppState>) -> Result<Book, String> {
+    let content = content.replace("\r\n", "\n").replace('\r', "\n");
+    let chapters = parse_chapters(&content);
+    let id = generate_id();
+    let total_chapters = chapters.len();
+
+    let book = Book {
+        id,
+        title: if author.is_empty() { title.to_string() } else { format!("{} - {}", title, author) },
+        file_path: String::new(),
+        file_type: "online".to_string(),
+        total_chapters,
+        current_chapter: 0,
+        progress: 0.0,
+        chapters,
+        content,
+        favorite: false,
+        book_icon: String::new(),
+    };
+
+    let mut lib = state.library.lock().unwrap();
+    lib.books.push(book.clone());
+    save_library(&state.data_dir, &lib).ok();
+    Ok(book)
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let data_dir = dirs_next::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("novel-reader");
+    fs::create_dir_all(&data_dir).ok();
+
+    let library = load_library(&data_dir);
+    let comic_library = comic::load_comic_library(&data_dir);
+    let settings = load_settings(&data_dir);
+    let library_path = settings.get("library_path").cloned().unwrap_or_default();
+    let render_dpi: u32 = settings.get("render_dpi")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(150u32)
+        .clamp(72, 300);
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .manage(AppState {
+            library: Mutex::new(library),
+            data_dir,
+            library_path: Mutex::new(library_path),
+            fanqie: fanqie::FanqieApi::new(),
+            comic_library: Mutex::new(comic_library),
+            render_dpi: Mutex::new(render_dpi),
+            scan_cancel: Mutex::new(false),
+        })
+        .setup(|app| {
+            APP_HANDLE.set(app.handle().clone()).map_err(|_| "APP_HANDLE already set")?;
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            import_book,
+            get_library,
+            get_chapter_content,
+            update_progress,
+            remove_book,
+            reparse_book_chapters,
+            rename_book,
+            toggle_favorite,
+            save_book_order,
+            set_book_icon,
+            open_file_location,
+            fetch_url,
+            save_online_book,
+            get_workspace_dir,
+            import_comic,
+            get_comic_library,
+            get_comic_page,
+            get_comic_thumbnail,
+            update_comic_progress,
+            update_comic_direction,
+            remove_comic,
+            rename_comic,
+            toggle_comic_favorite,
+            set_comic_icon,
+            rescan_comic_folder,
+            get_system_resources,
+            get_library_path,
+            set_library_path,
+            get_render_dpi,
+            set_render_dpi,
+            scan_library,
+            cancel_scan,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

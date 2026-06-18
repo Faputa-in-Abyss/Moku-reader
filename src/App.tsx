@@ -53,4 +53,61 @@ export default function App() {
       <div
         className="theme-fade"
         id="theme-fade"
-        style={{
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 9999,
+          pointerEvents: "none",
+          opacity: 0,
+          transition: "opacity 0.5s ease",
+          background: "radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb),0.08) 0%, transparent 60%)",
+        }}
+      />
+      <Header />
+      <div ref={scrollRef} style={{
+        display: "grid",
+        gridTemplateColumns: "1fr",
+        gridTemplateRows: "1fr",
+        overflow: "hidden",
+      }}>
+        <div style={{
+          gridArea: "1 / 1",
+          opacity: viewMode === "library" && !reading ? 1 : 0,
+          pointerEvents: viewMode === "library" && !reading ? "auto" : "none",
+          transition: "opacity 0.4s ease",
+          overflowY: "auto",
+        }}>
+          <Library />
+        </div>
+        <div style={{
+          gridArea: "1 / 1",
+          opacity: viewMode === "manga" && !mangaReading ? 1 : 0,
+          pointerEvents: viewMode === "manga" && !mangaReading ? "auto" : "none",
+          transition: "opacity 0.4s ease",
+          overflowY: "auto",
+        }}>
+          <MangaLibrary />
+        </div>
+      </div>
+      {reading && <Reader />}
+      {mangaReading && <MangaReader />}
+      <DebugPanel />
+      <OnlineSearch />
+      <ImportToast />
+    </>
+  );
+}
+
+export function flashThemeFade(x?: number, y?: number) {
+  const el = document.getElementById("theme-fade");
+  if (!el) return;
+  if (x !== undefined) {
+    el.style.setProperty("--tx", x + "px");
+    el.style.setProperty("--ty", y + "px");
+  }
+  el.classList.remove("active");
+  void el.offsetHeight;
+  el.classList.add("active");
+  clearTimeout((el as any)._t);
+  (el as any)._t = setTimeout(() => el.classList.remove("active"), 500);
+}

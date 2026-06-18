@@ -27,4 +27,8 @@ chrono = "0.4"
 reqwest = { version = "0.12", features = ["json", "cookies"] }
 url = "2"
 zip = "2"
-base64 = 
+base64 = "0.22"
+sysinfo = "0.33"
+
+[package.metadata]
+

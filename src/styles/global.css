@@ -334,4 +334,132 @@ body {
 /* ===== 空状态 ===== */
 .empty-state { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; padding: 80px 32px; text-align: center; }
 .empty-icon { width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, rgba(var(--accent-rgb),0.06), transparent); display: flex; align-items: center; justify-content: center; font-size: 2.4rem; margin-bottom: 20px; animation: pulseGlow 4s ease-in-out infinite; }
-@keyframes
+@keyframes pulseGlow { 0%,100% { box-shadow: 0 0 16px rgba(var(--accent-rgb),0.05); } 50% { box-shadow: 0 0 40px rgba(var(--accent-rgb),0.08), 0 0 60px rgba(var(--accent-rgb),0.03); } }
+.empty-title { font-family: 'Georgia','Noto Serif SC',serif; font-size: 1.4rem; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+.empty-desc { color: var(--text-dim); font-size: .95rem; max-width: 360px; line-height: 1.6; margin-bottom: 24px; }
+
+/* ===== 响应式 ===== */
+@media(max-width:768px){
+  .library { padding: 24px 16px 60px; min-height: calc(100vh - 160px); }
+  .book-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
+}
+
+/* ===== reader-topbar 可见状态 ===== */
+.reader-topbar.visible {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+/* ===== 过渡光效 ===== */
+.theme-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--tx, 50%) var(--ty, 50%),
+    rgba(var(--accent-rgb), 0.08) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.theme-fade.active {
+  opacity: 1;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.15);
+  border-radius: 4px;
+}
+
+/* 阅读器内滚动条用更浅的颜色 */
+.reader-view::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.08);
+  border-radius: 4px;
+}
+.reader-view:hover::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+@media(max-width:768px){
+  .comic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
+}
+
+@keyframes tipIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* 章节过滚提示脉冲动画 */
+@keyframes overScrollPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes importBar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(150%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* 收藏星星入场动画：由小到大弹出然后落下 */
+@keyframes starPop {
+  0% { transform: scale(0) translateY(-30px); opacity: 0; }
+  35% { transform: scale(1.5) translateY(8px); opacity: 1; }
+  50% { transform: scale(0.9) translateY(-6px); opacity: 1; }
+  70% { transform: scale(1.1) translateY(3px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* 收藏星星消散为粒子 */
+@keyframes starBurst {
+  0% { transform: scale(1) translateY(0) rotate(0deg); opacity: 1; filter: blur(0); box-shadow: 0 0 0 transparent; }
+  20% { transform: scale(1.8) translateY(-12px) rotate(15deg); opacity: 0.9; filter: blur(1px); box-shadow: 0 0 20px rgba(var(--accent-rgb),0.6); }
+  100% { transform: scale(0.15) translateY(60px) rotate(180deg); opacity: 0; filter: blur(10px); box-shadow: 0 0 0 transparent; }
+}
+
+/* 关于面板入场动画 */
+@keyframes aboutFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes aboutScaleIn {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* 关于面板：logo 飞入动画 */
+@keyframes aboutZoomIn {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  60% { opacity: 0.6; }
+  100% {
+    opacity: 0;
+    transform:
+      translate(
+        calc((50vw - var(--about-origin-x, 50vw)) * 2),
+        calc((50vh - var(--about-origin-y, 50vh)) * 2)
+      )
+      scale(6);
+  }
+}
+
+@keyframes pulseHint {
+  0%, 100% { opacity: 0.4; transform: translateY(-50%) scale(1); }
+  50% { opacity: 0.9; transform: translateY(-50%) scale(1.1); }
+}

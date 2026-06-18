@@ -257,4 +257,72 @@ export default function Header() {
           display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
         }} onClick={(e) => e.stopPropagation()}>
           <div style={{
-            width: 56, height: 56
+            width: 56, height: 56, borderRadius: "var(--radius-lg)",
+            background: "linear-gradient(135deg, var(--accent), #b8895a)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", fontSize: "1.6rem", fontWeight: 700, marginBottom: 20,
+            boxShadow: "0 4px 20px rgba(var(--accent-rgb),0.3)",
+          }}>墨</div>
+          <h2 style={{ margin: "0 0 4px", fontSize: "1.3rem", fontWeight: 600, color: "var(--text)" }}>墨读</h2>
+          <p style={{ margin: "0 0 16px", color: "var(--text-dim)", fontSize: ".82rem", lineHeight: 1.6 }}>
+            一个基于 Tauri v2 的本地小说与漫画阅读器，支持毛玻璃 UI、点光源光效、翻页/滚动双模式。
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: ".82rem", color: "var(--text-dim)" }}>
+            <span>版本 1.0.0</span>
+            <span>技术栈：Tauri v2 / React 18 / TypeScript / Rust</span>
+            <span>漫画 PDF 采用 MuPDF / mutool 渲染</span>
+          </div>
+          <button className="btn" style={{ marginTop: 24, padding: "10px 36px", fontSize: ".85rem" }}
+            onClick={() => setAboutOpen(false)}>关闭</button>
+        </div>
+      </div>
+    )}
+    </>
+  );
+}
+
+const headerStyle: React.CSSProperties = {
+  transition: "background 0.6s ease, border-color 0.3s ease, box-shadow 0.3s ease",
+};
+
+const glassPanelStyle: React.CSSProperties = {
+  position: "sticky", top: 0, zIndex: 100,
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  padding: "14px 32px",
+  background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
+  backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+  WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+  borderBottom: "1px solid var(--border-glass)",
+  boxShadow: "var(--shadow)",
+};
+
+const logoStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  fontFamily: "var(--font-title)",
+  fontSize: "var(--font-title-size)",
+  fontWeight: 600,
+  letterSpacing: "0.08em",
+  color: "var(--text)",
+  textDecoration: "none",
+  position: "relative",
+  zIndex: 1,
+  cursor: "pointer",
+  transition: "color 0.3s ease, transform 0.3s ease, text-shadow 0.3s ease",
+};
+
+const logoIconStyle: React.CSSProperties = {
+  width: 36,
+  height: 36,
+  background: "linear-gradient(135deg, var(--accent), #b8895a)",
+  borderRadius: "var(--radius-md)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#fff",
+  fontSize: "1.1rem",
+  fontWeight: 700,
+  boxShadow: "0 2px 16px rgba(var(--accent-rgb),0.2)",
+  transition: "box-shadow 0.3s ease, transform 0.3s ease",
+};
