@@ -421,4 +421,19 @@ export default function OnlineSearch() {
                   </div>
                 )}
               </div>
-              <button className="btn" style={{ flexShrink:
+              <button className="btn" style={{ flexShrink: 0, padding: "5px 14px", fontSize: ".75rem" }} onClick={() => downloadBook(item)} disabled={downloading}>
+                {downloading ? "下载中..." : "下载"}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {downloadProgress && (
+          <div style={{ padding: "8px 24px", borderTop: "1px solid var(--border-glass)", fontSize: ".75rem", color: "var(--accent)", flexShrink: 0 }}>
+            {downloadProgress}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

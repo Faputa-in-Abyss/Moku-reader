@@ -148,4 +148,9 @@ export default function ParticleCanvas() {
       window.removeEventListener("resize", resize);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseleave", onLeave);
-      delete (win
+      delete (window as any).__burstParticles;
+      delete (window as any).__onThemeChange;
+    };
+  }, []);
+  return <canvas ref={canvasRef} id="particleCanvas" />;
+}

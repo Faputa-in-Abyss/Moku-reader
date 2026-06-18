@@ -192,11 +192,14 @@ export default function Header() {
           background: "rgba(var(--accent-rgb),0.06)",
           borderRadius: "var(--radius-sm)", padding: 3,
           position: "relative",
-          transition: "box-shadow 0.3s ease, border-color 0.3s ease",
           border: "1px solid rgba(var(--accent-rgb),0.08)",
         }}
-          onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 2px 20px rgba(var(--accent-rgb),0.15)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.18)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.08)"; }}
+          onMouseMove={(e) => {
+            const el = e.currentTarget;
+            const rect = el.getBoundingClientRect();
+            el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
+            el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
+          }}
         onClick={() => switchViewMode(viewMode === "library" ? "manga" : "library")}>
           {/* 跟随滑块 */}
           <div style={{
@@ -215,11 +218,14 @@ export default function Header() {
           <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "manga" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease" }}>🎴 漫画</span>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, padding: 4, background: "rgba(var(--accent-rgb),0.04)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-glass)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))", transition: "box-shadow 0.3s ease, border-color 0.3s ease" }}
-        onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 32px rgba(var(--accent-rgb),0.08)"; el.style.borderColor = "rgba(var(--accent-rgb),0.12)"; const glow = el.querySelector("div") as HTMLDivElement; if (glow) glow.style.opacity = "1"; }}
-        onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "none"; el.style.borderColor = "var(--border-glass)"; const glow = el.querySelector("div") as HTMLDivElement; if (glow) glow.style.opacity = "0"; }}
+      <div className="header-actions" style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, padding: 4, background: "rgba(var(--accent-rgb),0.04)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-glass)" }}
+        onMouseMove={(e) => {
+          const el = e.currentTarget;
+          const rect = el.getBoundingClientRect();
+          el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
+          el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
+        }}
       >
-        {/* 顶部光效 */}
         <div style={{ position: "absolute", top: -1, left: "10%", right: "10%", height: 1, background: "linear-gradient(90deg, transparent, rgba(var(--accent-rgb),0.4), transparent)", opacity: 0, transition: "opacity 0.3s ease", pointerEvents: "none" }} />
         <button className="btn" onClick={cycleTheme} title="切换主题" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span>{THEME_ICONS[theme]}</span>
@@ -257,4 +263,78 @@ export default function Header() {
         <div style={{
           background: "var(--glass-bg)",
           backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-          border: "1px solid var(-
+          border: "1px solid var(--border-glass)", borderRadius: "var(--radius-full)",
+          padding: "40px 48px", maxWidth: 420, width: "90%",
+          boxShadow: "0 24px 80px var(--shadow)",
+          animation: "aboutScaleIn 0.4s cubic-bezier(0.22, 0.61, 0.36, 1)",
+          display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
+        }} onClick={(e) => e.stopPropagation()}>
+          <div style={{
+            width: 56, height: 56, borderRadius: "var(--radius-lg)",
+            background: "linear-gradient(135deg, var(--accent), #b8895a)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", fontSize: "1.6rem", fontWeight: 700, marginBottom: 20,
+            boxShadow: "0 4px 20px rgba(var(--accent-rgb),0.3)",
+          }}>墨</div>
+          <h2 style={{ margin: "0 0 4px", fontSize: "1.3rem", fontWeight: 600, color: "var(--text)" }}>墨读</h2>
+          <p style={{ margin: "0 0 16px", color: "var(--text-dim)", fontSize: ".82rem", lineHeight: 1.6 }}>
+            一个基于 Tauri v2 的本地小说与漫画阅读器，支持毛玻璃 UI、点光源光效、翻页/滚动双模式。
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: ".82rem", color: "var(--text-dim)" }}>
+            <span>版本 1.0.0</span>
+            <span>技术栈：Tauri v2 / React 18 / TypeScript / Rust</span>
+            <span>漫画 PDF 采用 MuPDF / mutool 渲染</span>
+          </div>
+          <button className="btn" style={{ marginTop: 24, padding: "10px 36px", fontSize: ".85rem" }}
+            onClick={() => setAboutOpen(false)}>关闭</button>
+        </div>
+      </div>
+    )}
+    </>
+  );
+}
+
+const headerStyle: React.CSSProperties = {
+  transition: "background 0.6s ease, border-color 0.3s ease, box-shadow 0.3s ease",
+};
+
+const glassPanelStyle: React.CSSProperties = {
+  position: "sticky", top: 0, zIndex: 100,
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  padding: "14px 32px",
+  background: "var(--glass-bg)",
+  backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+  WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+  borderBottom: "1px solid var(--border-glass)",
+};
+
+const logoStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  fontFamily: "var(--font-title)",
+  fontSize: "var(--font-title-size)",
+  fontWeight: 600,
+  letterSpacing: "0.08em",
+  color: "var(--text)",
+  textDecoration: "none",
+  position: "relative",
+  zIndex: 1,
+  cursor: "pointer",
+  transition: "color 0.3s ease, transform 0.3s ease, text-shadow 0.3s ease",
+};
+
+const logoIconStyle: React.CSSProperties = {
+  width: 36,
+  height: 36,
+  background: "linear-gradient(135deg, var(--accent), #b8895a)",
+  borderRadius: "var(--radius-md)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#fff",
+  fontSize: "1.1rem",
+  fontWeight: 700,
+  boxShadow: "0 2px 16px rgba(var(--accent-rgb),0.2)",
+  transition: "box-shadow 0.3s ease, transform 0.3s ease",
+};

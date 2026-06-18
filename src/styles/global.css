@@ -111,6 +111,132 @@ body {
 }
 header:hover .light-follow { opacity: 1; }
 
+/* 滑块外壳边框发光跟随鼠标 — 仅边框发光 */
+.header-tabs::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: radial-gradient(80px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.5) 0%, transparent 70%) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.header-tabs:hover::after { opacity: 1; }
+.header-tabs::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.1) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+.header-tabs:hover::before { opacity: 1; }
+
+/* 右上角操作按钮组边框发光 */
+.header-actions::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: radial-gradient(80px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.5) 0%, transparent 70%) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.header-actions:hover::after { opacity: 1; }
+.header-actions::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.1) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+.header-actions:hover::before { opacity: 1; }
+
+/* 漫画库系列标签切换 — 外壳边框发光 + 内部点光源 */
+#series-tabs {
+  overflow: visible !important;
+}
+#series-tabs::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: radial-gradient(80px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.5) 0%, transparent 70%) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+#series-tabs:hover::after { opacity: 1; }
+#series-tabs::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.1) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+#series-tabs:hover::before { opacity: 1; }
+
+/* 单个排序按钮的发光效果 */
+.sort-btn {
+  position: relative;
+}
+.sort-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: radial-gradient(80px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.5) 0%, transparent 70%) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.sort-btn:hover::after { opacity: 1; }
+.sort-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.1) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+.sort-btn:hover::before { opacity: 1; }
+
 /* 按钮 */
 .btn {
   padding: 8px 20px;
@@ -172,14 +298,15 @@ header:hover .light-follow { opacity: 1; }
   border: 1px solid var(--border-glass);
   box-shadow: 0 2px 16px var(--shadow);
   transition: box-shadow 0.5s ease, border-color 0.5s ease, background 0.6s ease;
-  position: relative; overflow: hidden;
 }
-.book-cover::before {
+.book-cover-container { position: relative; border-radius: var(--radius-lg); }
+/* 点光源（不是边框发光） */
+.book-cover::after {
   content: ''; position: absolute; inset: 0;
   background: radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(var(--accent-rgb),0.08) 0%, transparent 60%);
   opacity: 0; transition: opacity 0.5s ease; pointer-events: none; z-index: 1;
 }
-.book-card:hover .book-cover::before { opacity: 1; }
+.book-card:hover .book-cover::after { opacity: 1; }
 .book-card:hover .book-cover {
   box-shadow: 0 12px 48px var(--shadow);
   border-color: rgba(var(--accent-rgb),0.10);
@@ -314,4 +441,130 @@ header:hover .light-follow { opacity: 1; }
 .empty-icon { width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, rgba(var(--accent-rgb),0.06), transparent); display: flex; align-items: center; justify-content: center; font-size: 2.4rem; margin-bottom: 20px; animation: pulseGlow 4s ease-in-out infinite; }
 @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 16px rgba(var(--accent-rgb),0.05); } 50% { box-shadow: 0 0 40px rgba(var(--accent-rgb),0.08), 0 0 60px rgba(var(--accent-rgb),0.03); } }
 .empty-title { font-family: 'Georgia','Noto Serif SC',serif; font-size: 1.4rem; font-weight: 500; color: var(--text); margin-bottom: 8px; }
-.empty-desc { color: var(--text-dim); font-size: .95rem; max-width: 360px; li
+.empty-desc { color: var(--text-dim); font-size: .95rem; max-width: 360px; line-height: 1.6; margin-bottom: 24px; }
+
+/* ===== 响应式 ===== */
+@media(max-width:768px){
+  .library { padding: 24px 16px 60px; min-height: calc(100vh - 160px); }
+  .book-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
+}
+
+/* ===== reader-topbar 可见状态 ===== */
+.reader-topbar.visible {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+/* ===== 过渡光效 ===== */
+.theme-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--tx, 50%) var(--ty, 50%),
+    rgba(var(--accent-rgb), 0.08) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.theme-fade.active {
+  opacity: 1;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.15);
+  border-radius: 4px;
+}
+
+/* 阅读器内滚动条用更浅的颜色 */
+.reader-view::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.08);
+  border-radius: 4px;
+}
+.reader-view:hover::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+@media(max-width:768px){
+  .comic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
+}
+
+@keyframes tipIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* 章节过滚提示脉冲动画 */
+@keyframes overScrollPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes importBar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(150%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* 收藏星星入场动画：由小到大弹出然后落下 */
+@keyframes starPop {
+  0% { transform: scale(0) translateY(-30px); opacity: 0; }
+  35% { transform: scale(1.5) translateY(8px); opacity: 1; }
+  50% { transform: scale(0.9) translateY(-6px); opacity: 1; }
+  70% { transform: scale(1.1) translateY(3px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* 收藏星星消散为粒子 */
+@keyframes starBurst {
+  0% { transform: scale(1) translateY(0) rotate(0deg); opacity: 1; filter: blur(0); box-shadow: 0 0 0 transparent; }
+  20% { transform: scale(1.8) translateY(-12px) rotate(15deg); opacity: 0.9; filter: blur(1px); box-shadow: 0 0 20px rgba(var(--accent-rgb),0.6); }
+  100% { transform: scale(0.15) translateY(60px) rotate(180deg); opacity: 0; filter: blur(10px); box-shadow: 0 0 0 transparent; }
+}
+
+/* 关于面板入场动画 */
+@keyframes aboutFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes aboutScaleIn {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* 关于面板：logo 飞入动画 */
+@keyframes aboutZoomIn {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  60% { opacity: 0.6; }
+  100% {
+    opacity: 0;
+    transform:
+      translate(
+        calc((50vw - var(--about-origin-x, 50vw)) * 2),
+        calc((50vh - var(--about-origin-y, 50vh)) * 2)
+      )
+      scale(6);
+  }
+}
+
+@keyframes pulseHint {
+  0%, 100% { opacity: 0.4; transform: translateY(-50%) scale(1); }
+  50% { opacity: 0.9; transform: translateY(-50%) scale(1.1); }
+}
