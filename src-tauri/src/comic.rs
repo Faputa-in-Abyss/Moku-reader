@@ -408,22 +408,4 @@ pub fn cleanup_comic_files(comic: &ComicBook) {
 
 pub fn get_page_base64(image_dir: &str, filename: &str) -> Result<String, String> {
     let path = Path::new(image_dir).join(filename);
-    let data = fs::read(&path).map_err(|e| format!("读取图片失败: {}", e))?;
-    let mime = if data.len() > 4 && data[..4] == [0x89, 0x50, 0x4E, 0x47] { "image/png" }
-    else if data.len() > 2 && data[..2] == [0xFF, 0xD8] { "image/jpeg" }
-    else if data.len() > 3 && data[..3] == [0x47, 0x49, 0x46] { "image/gif" }
-    else { "image/png" };
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
-    Ok(format!("data:{};base64,{}", mime, b64))
-}
-
-pub fn rescan_folder(image_dir: &str) -> Result<Vec<ComicPage>, String> {
-    let dir = Path::new(image_dir);
-    let files = scan_image_dir(dir)?;
-    let pages: Vec<ComicPage> = files.iter().enumerate().map(|(i, fname)| {
-        let full_path = dir.join(fname);
-        let (w, h) = probe_image_size(&full_path);
-        ComicPage { index: i, filename: fname.clone(), width: w, height: h }
-    }).collect();
-    Ok(pages)
-}
+    let data = fs::

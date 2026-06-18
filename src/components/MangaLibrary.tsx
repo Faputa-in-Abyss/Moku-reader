@@ -11,6 +11,7 @@ export default function MangaLibrary() {
   const setSeriesMap = useStore((s) => s.setSeriesMap);
   const seriesMap = useStore((s) => s.seriesMap);
   const [seriesTarget, setSeriesTarget] = useState<ComicData | null>(null);
+  const [seriesCtx, setSeriesCtx] = useState<{ name: string; x: number; y: number } | null>(null);
   const [activeSeries, setActiveSeries] = useState<string>("全部");
   const [sliderStyle, setSliderStyle] = useState<React.CSSProperties>({});
   const [animStars, setAnimStars] = useState<Record<string, boolean>>({});
@@ -84,6 +85,22 @@ export default function MangaLibrary() {
     }
     return map;
   }, [seriesTabs, seriesMap, displayList]);
+
+  const handleDeleteSeries = (seriesName: string, deleteFiles: boolean) => {
+    setSeriesCtx(null);
+    const ids = seriesMap[seriesName] || [];
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        for (const id of ids) {
+          await invoke("remove_comic", { comicId: id, deleteFile: deleteFiles });
+        }
+      } catch {}
+      const { [seriesName]: _, ...rest } = seriesMap;
+      setSeriesMap(rest);
+      triggerRefresh();
+    })();
+  };
 
   // 当前选中的系列被删除时自动回到"全部"
   useEffect(() => {
@@ -176,6 +193,13 @@ export default function MangaLibrary() {
     const y = e.clientY + menuH > viewH ? Math.max(8, viewH - menuH - 8) : e.clientY;
     setCtxMenu({ comic: comicData as any, x, y });
   };
+
+  // 点击空白关闭右键菜单
+  useEffect(() => {
+    const handler = () => { setCtxMenu(null); setSeriesCtx(null); };
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, []);
 
   const triggerRefresh = () => {
     const { triggerRefresh } = useStore.getState();
@@ -360,7 +384,7 @@ export default function MangaLibrary() {
         <div id="series-tabs" style={{
           display: "flex", gap: 0, cursor: "pointer", userSelect: "none",
           background: "rgba(var(--accent-rgb),0.06)",
-          borderRadius: "var(--radius-sm)", padding: 3,
+          borderRadius: "var(--radius-md)", padding: 3,
           position: "relative",
           maxWidth: 500, flexShrink: 1, minWidth: 0,
           overflow: "hidden",
@@ -368,8 +392,7 @@ export default function MangaLibrary() {
           <div style={{
             position: "absolute", top: 3, bottom: 3,
             background: "rgba(var(--accent-rgb),0.18)",
-            borderRadius: "var(--radius-sm)",
-            transform: "translateZ(0)",
+            borderRadius: "var(--radius-md)",
             willChange: "left, width",
             transition: "left 0.4s cubic-bezier(0.22, 0.61, 0.36, 1), width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1)",
             zIndex: 0, ...sliderStyle,
@@ -381,6 +404,11 @@ export default function MangaLibrary() {
                 onClick={() => {
                   if (name === activeSeries) return;
                   setActiveSeries(name);
+                }}
+                onContextMenu={(e) => {
+                  if (name === "全部") return;
+                  e.preventDefault();
+                  setSeriesCtx({ name, x: e.clientX, y: e.clientY });
                 }}
                 style={{
                   fontSize: ".78rem", padding: "5px 14px", position: "relative", zIndex: 1,
@@ -556,6 +584,40 @@ export default function MangaLibrary() {
         </div>
       )}
 
+      {seriesCtx && (
+        <div
+          style={{
+            position: "fixed",
+            left: seriesCtx.x,
+            top: seriesCtx.y,
+            zIndex: 300,
+            background: "var(--surface-glass, var(--glass-bg))",
+            backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+            WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
+            border: "1px solid var(--border-glass)",
+            borderRadius: "var(--radius-md)",
+            padding: "6px 0",
+            minWidth: 220,
+            boxShadow: "0 8px 40px var(--shadow)",
+            overflow: "hidden",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ padding: "8px 16px", fontSize: ".78rem", color: "var(--text-dim)", borderBottom: "1px solid var(--border-glass)", marginBottom: 4 }}>
+            系列：{seriesCtx.name}
+          </div>
+          <CtxMenuItem icon="✏️" label="重命名系列" onClick={() => { setSeriesCtx(null); setRenameTarget(null); /* TODO: rename */ }} />
+          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
+          <CtxMenuItem icon="🗑️" label="仅删除文件夹（保留漫画）" onClick={() => handleDeleteSeries(seriesCtx.name, false)} />
+          <CtxMenuItem icon="🗑️" label="删除文件夹及里面所有漫画" onClick={() => {
+            setSeriesCtx(null);
+            if (confirm(`确定要删除系列「${seriesCtx.name}」及其包含的所有漫画吗？此操作不可恢复。`)) {
+              handleDeleteSeries(seriesCtx.name, true);
+            }
+          }} danger />
+        </div>
+      )}
+
       {/* 批量操作栏 */}
       {selectMode && (
         <div style={{
@@ -663,238 +725,4 @@ export default function MangaLibrary() {
             <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 8, textAlign: "center" }}>添加到系列</div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 16, textAlign: "center" }}>将「{seriesTarget.title}」添加到系列</div>
             <input id="series-name-input" defaultValue={(seriesTarget as any).series_id || ""} placeholder="输入系列名称..." style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", marginBottom: 12 }} />
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button className="btn" style={{ flex: 1, fontSize: ".8rem", justifyContent: "center" }} onClick={() => setSeriesTarget(null)}>取消</button>
-              <button className="btn btn-primary" style={{ flex: 1, fontSize: ".8rem", justifyContent: "center" }} onClick={() => {
-                const inp = document.getElementById("series-name-input") as HTMLInputElement;
-                const name = inp?.value?.trim(); if (!name) return;
-                const existing = seriesMap[name] || [];
-                if (!existing.includes(seriesTarget.id)) {
-                  setSeriesMap({ ...seriesMap, [name]: [...existing, seriesTarget.id] });
-                }
-                setSeriesTarget(null); triggerRefresh();
-              }}>确定</button>
-            </div>
-            {Object.keys(seriesMap).length > 0 && (
-              <><div style={{ height: 1, background: "var(--border-glass)", margin: "8px 0" }} />
-              <div style={{ fontSize: ".85rem", fontWeight: 500, color: "var(--text)", marginBottom: 8 }}>已有系列</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {Object.entries(seriesMap).map(([name, ids]) => (
-                  <span key={name} onClick={() => {
-                    if (!ids.includes(seriesTarget.id)) {
-                      setSeriesMap({ ...seriesMap, [name]: [...ids, seriesTarget.id] });
-                    }
-                    setSeriesTarget(null); triggerRefresh();
-                  }} style={{ fontSize: ".78rem", cursor: "pointer", padding: "4px 10px", borderRadius: "var(--radius-sm)", background: "rgba(var(--accent-rgb),0.08)", border: "1px solid rgba(var(--accent-rgb),0.15)", color: "var(--text)" }}>
-                    {name} ({ids.length})
-                  </span>
-                ))}
-              </div></>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 新建系列弹窗 */}
-      {seriesDialogOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setSeriesDialogOpen(false)}>
-          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 360, width: "90%" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>新建系列</div>
-            <input id="new-series-input" placeholder="输入系列名称..." autoFocus style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: ".9rem", outline: "none", marginBottom: 16 }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const inp = document.getElementById("new-series-input") as HTMLInputElement;
-                  const name = inp?.value?.trim();
-                  if (!name) return;
-                  if (seriesMap[name]) { alert("系列已存在"); return; }
-                  setSeriesMap({ ...seriesMap, [name]: [] });
-                  setActiveSeries(name);
-                  setSeriesDialogOpen(false);
-                }
-              }} />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => setSeriesDialogOpen(false)}>取消</button>
-              <button className="btn btn-primary" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => {
-                const inp = document.getElementById("new-series-input") as HTMLInputElement;
-                const name = inp?.value?.trim();
-                if (!name) return;
-                if (seriesMap[name]) { alert("系列已存在"); return; }
-                setSeriesMap({ ...seriesMap, [name]: [] });
-                setActiveSeries(name);
-                setSeriesDialogOpen(false);
-              }}>确定</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 重命名弹窗 */}
-      {renameTarget && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setRenameTarget(null)}>
-          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 360, width: "90%" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 8, textAlign: "center" }}>重命名</div>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 16, textAlign: "center" }}>将「{renameTarget.title}」重命名为</div>
-            <input id="rename-input" defaultValue={renameTarget.title} autoFocus style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: ".9rem", outline: "none", marginBottom: 16 }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const inp = document.getElementById("rename-input") as HTMLInputElement;
-                  const newName = inp?.value?.trim();
-                  if (!newName || newName === renameTarget.title) { setRenameTarget(null); return; }
-                  (async () => {
-                    try {
-                      const { invoke } = await import("@tauri-apps/api/core");
-                      await invoke("rename_comic", { comicId: renameTarget.id, newTitle: newName });
-                      setRenameTarget(null);
-                      triggerRefresh();
-                    } catch {}
-                  })();
-                }
-              }} />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => setRenameTarget(null)}>取消</button>
-              <button className="btn btn-primary" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => {
-                const inp = document.getElementById("rename-input") as HTMLInputElement;
-                const newName = inp?.value?.trim();
-                if (!newName || newName === renameTarget.title) { setRenameTarget(null); return; }
-                (async () => {
-                  try {
-                    const { invoke } = await import("@tauri-apps/api/core");
-                    await invoke("rename_comic", { comicId: renameTarget.id, newTitle: newName });
-                    setRenameTarget(null);
-                    triggerRefresh();
-                  } catch {}
-                })();
-              }}>确定</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-// 模块级封面内存缓存：组件卸载后保留，切换系列标签时无需重新加载
-const coverCache = new Map<string, string>();
-
-function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolean }) {
-  // 从内存缓存取封面，标记是否为缓存命中（避免重新挂载时触发 coverFadeIn 动画）
-  const fromCache = coverCache.has(comicId);
-  const [cover, setCover] = useState<string | null>(() => {
-    if (hasIcon) return null;
-    return coverCache.get(comicId) ?? null;
-  });
-  const ref = useRef<HTMLDivElement>(null);
-  const loadedRef = useRef(fromCache);
-
-  useEffect(() => {
-    // 用户设置了 emoji 图标时，不显示第一页封面
-    if (hasIcon) {
-      setCover(null);
-      return;
-    }
-
-    // 内存中已有缓存，无需任何操作
-    if (coverCache.has(comicId)) {
-      loadedRef.current = true;
-      return;
-    }
-
-    // 先查 localStorage（浏览器重启后的持久化缓存）
-    const cached = localStorage.getItem(`nr-manga-cover-${comicId}`);
-    if (cached) {
-      coverCache.set(comicId, cached);
-      setCover(cached);
-      loadedRef.current = true;
-      return;
-    }
-
-    // 缓存已清除（选了原封面），直接加载不等待 IntersectionObserver
-    const loadCover = async () => {
-      loadedRef.current = true;
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const b64: string = await invoke("get_comic_thumbnail", { comicId });
-        if (b64) {
-          coverCache.set(comicId, b64);
-          setCover(b64);
-          try { localStorage.setItem(`nr-manga-cover-${comicId}`, b64); } catch {}
-        }
-      } catch {}
-    };
-
-    if (loadedRef.current) {
-      loadCover();
-      return;
-    }
-
-    const el = ref.current;
-    if (!el) return;
-
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !loadedRef.current) {
-          loadedRef.current = true;
-          obs.disconnect();
-          loadCover();
-        }
-      },
-      { rootMargin: "200px" }
-    );
-
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [comicId, hasIcon]);
-
-  if (cover) {
-    return (
-      <>
-        <img className="book-cover-img" src={cover} alt="" style={fromCache ? { animation: "none" } : undefined} />
-        <div className="book-cover-gradient" />
-      </>
-    );
-  }
-
-  // 不渲染占位 div，等进入视口才加载
-  return <div ref={ref} style={{ position: "absolute", inset: 0, zIndex: 1 }} />;
-}
-
-function CtxMenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        padding: "10px 16px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        cursor: "pointer",
-        fontSize: ".9rem",
-        color: hover ? "var(--accent)" : "var(--text)",
-        background: hover ? "rgba(var(--accent-rgb),0.06)" : "transparent",
-        transition: "all 0.15s ease",
-      }}
-    >
-      <span style={{ fontSize: "1rem" }}>{icon}</span>
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function sourceTypeLabel(t: string): string {
-  switch (t) {
-    case "cbz": return "CBZ";
-    case "pdf": return "PDF";
-    case "folder": return "📁";
-    default: return t;
-  }
-}
-
-function getMangaIcon(comic: ComicMeta): string {
-  if (comic.book_icon) return comic.book_icon;
-  if (comic.source_type === "pdf") return "📕";
-  const icons: Record<string, string> = { "海贼王": "🏴‍☠️", "火影忍者": "🍥", "鬼灭之刃": "⚔️", "进击的巨人": "🧱", "咒术回战": "🌀", "龙珠": "🐉", "名侦探柯南": "🔍", "灌篮高手": "🏀", "死神": "⚔️" };
-  return icons[comic.title] || "🎴";
-}
+            

@@ -869,42 +869,4 @@ function FontSearchDropdown({ fonts, current, onSelect }: {
   onSelect: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const filtered = fonts.filter((f) => f.label.toLowerCase().includes(search.toLowerCase()));
-  const currentLabel = fonts.find((f) => f.value === current)?.label || "默认衬线";
-
-  return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <div onClick={() => setOpen(!open)}
-        style={{ background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: ".82rem", cursor: "pointer", userSelect: "none" }}>
-        {currentLabel}
-      </div>
-      {open && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "var(--bg)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", zIndex: 10, overflow: "hidden" }}>
-          <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索字体..."
-            style={{ width: "100%", padding: "8px 10px", background: "var(--glass-bg)", color: "var(--text)", border: "none", borderBottom: "1px solid var(--border-glass)", fontSize: ".8rem", outline: "none" }} />
-          <div style={{ maxHeight: 140, overflowY: "auto" }}>
-            {filtered.map((f) => (
-              <div key={f.value} onClick={() => { onSelect(f.value); setOpen(false); setSearch(""); }}
-                style={{ padding: "8px 10px", fontSize: ".8rem",                  color: f.value === current ? "var(--accent)" : "var(--text)", background: f.value === current ? "rgba(var(--accent-rgb),0.06)" : "transparent" }}>
-                  {f.label}
-                </div>
-              ))}
-              {filtered.length === 0 && <div style={{ padding: "8px 10px", fontSize: ".78rem", color: "var(--text-dim)", textAlign: "center" }}>未找到匹配字体</div>}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
+  co
