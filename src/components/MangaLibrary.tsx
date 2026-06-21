@@ -57,15 +57,29 @@ export default function MangaLibrary() {
       }))
     : comicsMeta;
 
-  const displayList = useMemo(() => {
-    const list = rawList.slice();
-    list.sort((a, b) => {
-      let cmp = 0;
-      if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
-      else if (sortField === "pages") cmp = a.total_pages - b.total_pages;
-      return sortAsc ? cmp : -cmp;
-    });
-    return list;
+  const [displayList, setDisplayList] = useState<ComicMeta[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const result = await invoke("sort_comics", { field: sortField, asc: sortAsc, meta: rawList });
+        if (!cancelled) setDisplayList(result as ComicMeta[]);
+      } catch {
+        // fallback to frontend sort
+        if (!cancelled) {
+          const list = rawList.slice();
+          list.sort((a, b) => {
+            let cmp = 0;
+            if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
+            else if (sortField === "pages") cmp = a.total_pages - b.total_pages;
+            return sortAsc ? cmp : -cmp;
+          });
+          setDisplayList(list);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [rawList, sortField, sortAsc]);
 
   // 系列标签

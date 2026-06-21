@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useStore, BookData } from "../store";
 import { handleCardGlow } from "../utils/glow";
 
@@ -38,16 +38,30 @@ export default function Library() {
     }
   };
 
-  const sortedBooks = useMemo(() => {
-    const list = books.slice();
-    list.sort((a, b) => {
-      let cmp = 0;
-      if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
-      else if (sortField === "progress") cmp = a.progress - b.progress;
-      else if (sortField === "chapters") cmp = a.total_chapters - b.total_chapters;
-      return sortAsc ? cmp : -cmp;
-    });
-    return list;
+  const [sortedBooks, setSortedBooks] = useState<BookData[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const result = await invoke("sort_books", { field: sortField, asc: sortAsc });
+        if (!cancelled) setSortedBooks(result as BookData[]);
+      } catch {
+        // fallback to frontend sort
+        if (!cancelled) {
+          const list = books.slice();
+          list.sort((a, b) => {
+            let cmp = 0;
+            if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
+            else if (sortField === "progress") cmp = a.progress - b.progress;
+            else if (sortField === "chapters") cmp = a.total_chapters - b.total_chapters;
+            return sortAsc ? cmp : -cmp;
+          });
+          setSortedBooks(list);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [books, sortField, sortAsc]);
 
   const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
