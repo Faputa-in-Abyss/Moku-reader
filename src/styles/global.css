@@ -111,12 +111,13 @@ body {
 }
 header:hover .light-follow { opacity: 1; }
 
-/* 滑块外壳边框发光跟随鼠标 — 仅边框发光 */
-.header-tabs::after {
+/* ===== 可复用发光效果 ===== */
+/* 边框发光 ::after — 父容器需 position: relative 并加 .glow-border 类 */
+.glow-border::after {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--glow-radius, var(--radius-md));
   border: 1px solid transparent;
   background: radial-gradient(80px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.5) 0%, transparent 70%) border-box;
   -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
@@ -127,115 +128,26 @@ header:hover .light-follow { opacity: 1; }
   transition: opacity 0.3s ease;
   pointer-events: none;
 }
-.header-tabs:hover::after { opacity: 1; }
-.header-tabs::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-sm);
-  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.1) 0%, transparent 55%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-  z-index: 1;
-}
-.header-tabs:hover::before { opacity: 1; }
+.glow-border:hover::after { opacity: 1; }
 
-/* 右上角操作按钮组边框发光 */
-.header-actions::after {
+/* 内部光晕 ::before */
+.glow-inner::before {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: radial-gradient(80px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.5) 0%, transparent 70%) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  z-index: 2;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-.header-actions:hover::after { opacity: 1; }
-.header-actions::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--glow-radius, var(--radius-md));
   background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.1) 0%, transparent 55%);
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
   z-index: 1;
 }
-.header-actions:hover::before { opacity: 1; }
+.glow-inner:hover::before { opacity: 1; }
 
-/* 漫画库系列标签切换 — 外壳边框发光 + 内部点光源 */
-#series-tabs {
-  overflow: visible !important;
-}
-#series-tabs::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: radial-gradient(80px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.5) 0%, transparent 70%) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  z-index: 2;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-#series-tabs:hover::after { opacity: 1; }
-#series-tabs::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-md);
-  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.1) 0%, transparent 55%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-  z-index: 1;
-}
-#series-tabs:hover::before { opacity: 1; }
-
-/* 单个排序按钮的发光效果 */
-.sort-btn {
-  position: relative;
-}
-.sort-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: radial-gradient(80px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.5) 0%, transparent 70%) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  z-index: 2;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-.sort-btn:hover::after { opacity: 1; }
-.sort-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-md);
-  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.1) 0%, transparent 55%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-  z-index: 1;
-}
-.sort-btn:hover::before { opacity: 1; }
+/* 各容器微调 */
+.header-tabs { --glow-radius: var(--radius-sm); }
+#series-tabs { overflow: visible !important; }
+.sort-btn { position: relative; }
 
 /* 按钮 */
 .btn {
@@ -407,19 +319,13 @@ header:hover .light-follow { opacity: 1; }
 /* 有封面图时移除 flex 居中 padding */
 .book-cover:has(.book-cover-img) { padding: 0; }
 
-/* 封面图淡入 */
+/* 封面图淡入 — 用 transition 代替 @keyframes */
 .book-cover-img {
-  animation: coverFadeIn 0.35s ease;
+  opacity: 0;
+  transition: opacity 0.35s ease;
 }
-@keyframes coverFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* 侧栏手柄淡入滑入 */
-@keyframes handleIn {
-  from { opacity: 0; transform: translateY(-50%) translateX(-6px); }
-  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+.book-cover-img[src] {
+  opacity: 1;
 }
 
 /* 漫画侧栏弹出 */
@@ -506,16 +412,6 @@ header:hover .light-follow { opacity: 1; }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* 章节过滚提示脉冲动画 */
-@keyframes overScrollPulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.85; }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 @keyframes importBar {
   0% { transform: translateX(-100%); }
   50% { transform: translateX(150%); }
@@ -538,30 +434,20 @@ header:hover .light-follow { opacity: 1; }
   100% { transform: scale(0.15) translateY(60px) rotate(180deg); opacity: 0; filter: blur(10px); box-shadow: 0 0 0 transparent; }
 }
 
-/* 关于面板入场动画 */
-@keyframes aboutFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+/* 关于面板入场渐入 + 缩放 — 用 transition 简化 */
+.about-overlay {
+  opacity: 0;
+  transition: opacity 0.35s ease;
 }
-
-@keyframes aboutScaleIn {
-  from { opacity: 0; transform: scale(0.3); }
-  to { opacity: 1; transform: scale(1); }
+.about-overlay.open {
+  opacity: 1;
 }
-
-/* 关于面板：logo 飞入动画 */
-@keyframes aboutZoomIn {
-  0% { opacity: 1; transform: translate(0, 0) scale(1); }
-  60% { opacity: 0.6; }
-  100% {
-    opacity: 0;
-    transform:
-      translate(
-        calc((50vw - var(--about-origin-x, 50vw)) * 2),
-        calc((50vh - var(--about-origin-y, 50vh)) * 2)
-      )
-      scale(6);
-  }
+.about-panel {
+  transform: scale(0.3);
+  transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.about-panel.open {
+  transform: scale(1);
 }
 
 @keyframes pulseHint {

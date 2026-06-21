@@ -10,9 +10,10 @@ export default function ImportToast() {
   const timerRef = useRef<number>(0);
 
   useEffect(() => {
-    async function init() {
+    let unlisten: (() => void) | undefined;
+    (async () => {
       const { listen } = await import("@tauri-apps/api/event");
-      const unlisten = await listen<{ title: string; status: string; message: string }>(
+      unlisten = await listen<{ title: string; status: string; message: string }>(
         "comic-import-progress",
         (event) => {
           const { status, message, title } = event.payload;
@@ -31,9 +32,11 @@ export default function ImportToast() {
           }
         }
       );
-    }
-    init();
-    return () => { clearTimeout(timerRef.current); };
+    })();
+    return () => {
+      unlisten?.();
+      clearTimeout(timerRef.current);
+    };
   }, []);
 
   if (!importProgress || mangaReading || reading) return null;
@@ -66,8 +69,8 @@ export default function ImportToast() {
       {isProcessing ? (
         <span style={{
           width: 18, height: 18, borderRadius: "var(--radius-full)",
-          border: "2px solid var(--accent)",
-          borderTopColor: "transparent",
+          border: "2px solid rgba(var(--accent-rgb),0.2)",
+          borderTopColor: "var(--accent)",
           animation: "spin 0.8s linear infinite",
           flexShrink: 0,
         }} />

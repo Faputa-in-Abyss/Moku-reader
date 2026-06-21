@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useStore, BookData } from "../store";
+import { handleCardGlow } from "../utils/glow";
 
 export default function Library() {
   const books = useStore((s) => s.books);
@@ -16,7 +17,12 @@ export default function Library() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   type SortField = "name" | "progress" | "chapters";
-  const [sortField, setSortField] = useState<SortField>(() => (localStorage.getItem("nr-novel-sort-field") as SortField) || "name");
+  // D1: Add runtime validation for sortField from localStorage
+  const [sortField, setSortField] = useState<SortField>(() => {
+    const saved = localStorage.getItem("nr-novel-sort-field");
+    if (saved === "name" || saved === "progress" || saved === "chapters") return saved;
+    return "name";
+  });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-novel-sort-asc") !== "false");
 
   const setSort = (field: SortField) => {
@@ -67,19 +73,6 @@ export default function Library() {
     window.addEventListener("click", close);
     return () => window.removeEventListener("click", close);
   }, []);
-
-  const handleCardGlow = (e: React.MouseEvent, el: HTMLElement) => {
-    const rect = el.getBoundingClientRect();
-    const pctX = ((e.clientX - rect.left) / rect.width) * 100 + "%";
-    const pctY = ((e.clientY - rect.top) / rect.height) * 100 + "%";
-    el.style.setProperty("--mx", pctX);
-    el.style.setProperty("--my", pctY);
-    // 子元素 .book-cover 的 ::after 需要单独设变量
-    el.querySelectorAll(".book-cover").forEach((cover) => {
-      (cover as HTMLElement).style.setProperty("--mx", pctX);
-      (cover as HTMLElement).style.setProperty("--my", pctY);
-    });
-  };
 
   const handleCtxMenu = (e: React.MouseEvent, book: BookData) => {
     e.preventDefault();
@@ -182,23 +175,26 @@ export default function Library() {
   };
 
   // 批量收藏
+  // NOTE: 乐观更新 (optimisticFav) 在批量操作中与后端状态可能短暂脱节。
+  // 逐本 toggle 时，前一本已完成但后一本还没开始，optimisticFav 并未反映中间态。
+  // 这是乐观更新的已知 tradeoff：如果某本书在批量执行期间被外部修改，
+  // 最终 optimisticFav 可能落后于真实服务端状态，触发 refresh 后会重新同步。
+  // D3: Read fresh state before each toggle to reduce inconsistency window
   const handleBatchFavorite = async () => {
     if (selectedIds.size === 0) return;
     setCtxMenu(null);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const favs: Record<string, boolean> = {};
-      const booksData = useStore.getState().books;
-      // 先判断是否有未收藏的，有则全部收藏，否则全部取消收藏
+      // 逐本处理时每次都从 store 读最新 books
       const anyUnfav = Array.from(selectedIds).some(id => {
-        const b = booksData.find(b => b.id === id);
+        const b = useStore.getState().books.find(b => b.id === id);
         return !b || !(optimisticFav[id] ?? b.favorite);
       });
       const newFav = anyUnfav;
       for (const id of selectedIds) {
         favs[id] = newFav;
-        // 每个都 toggle 到目标状态
-        const b = booksData.find(b => b.id === id);
+        const b = useStore.getState().books.find(b => b.id === id);
         if ((optimisticFav[id] ?? b?.favorite) !== newFav) {
           await invoke("toggle_favorite", { bookId: id }).catch(() => {});
         }
@@ -234,7 +230,8 @@ export default function Library() {
     });
   };
 
-  if (books.length === 0) {
+  // D2: Use sortedBooks.length instead of books.length for empty state and count
+  if (sortedBooks.length === 0) {
     return (
       <section className="library">
         <div className="library-header">
@@ -254,11 +251,11 @@ export default function Library() {
     <section className="library">
       <div className="library-header">
         <h1 className="library-title">我的书库</h1>
-        <span className="library-count">{books.length} 本书</span>
+        <span className="library-count">{sortedBooks.length} 本书</span>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         {(["name", "progress", "chapters"] as const).map((field) => (
-          <button key={field} className="btn sort-btn" onClick={() => setSort(field)} style={{
+          <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
             fontSize: ".78rem", padding: "4px 12px",
             background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
             borderColor: sortField === field ? "var(--accent)" : undefined,
