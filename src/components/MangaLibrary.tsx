@@ -6,7 +6,6 @@ export default function MangaLibrary() {
   const comics = useStore((s) => s.comics);
   const setComics = useStore((s) => s.setComics);
   const comicsMeta = useStore((s) => s.comicsMeta);
-  const setComicsMeta = useStore((s) => s.setComicsMeta);
   const openMangaReader = useStore((s) => s.openMangaReader);
   const refreshKey = useStore((s) => s.refreshKey);
   const setSeriesMap = useStore((s) => s.setSeriesMap);
@@ -132,8 +131,7 @@ export default function MangaLibrary() {
           for (const id of ids) seriesReverse[id] = sn;
         }
         const enriched = lib.map((c) => ({ ...c, series_id: c.series_id || seriesReverse[c.id] || undefined }));
-        const meta = enriched.map((c): ComicMeta => ({ id: c.id, title: c.title, source_type: c.source_type, total_pages: c.total_pages, current_page: c.current_page, direction: c.direction, favorite: c.favorite, book_icon: c.book_icon, series_id: c.series_id }));
-        setComics(enriched); setComicsMeta(meta);
+        setComics(enriched);
       } catch {
         if (!cancelled) setComics([]);
       }
@@ -847,16 +845,40 @@ export default function MangaLibrary() {
   );
 }
 
-// 模块级封面内存缓存：组件卸载后保留，切换系列标签时无需重新加载
+// 模块级封面内存缓存（组件卸载后保留，切换系列标签时无需重新加载）
+// LRU 上限 100 条，防止无限增长
+const COVER_CACHE_MAX = 100;
 const coverCache = new Map<string, string>();
+
+function coverCacheGet(id: string): string | undefined {
+  const val = coverCache.get(id);
+  if (val !== undefined) {
+    // 重新插入以更新访问顺序（LRU）
+    coverCache.delete(id);
+    coverCache.set(id, val);
+  }
+  return val;
+}
+function coverCacheSet(id: string, val: string) {
+  if (coverCache.has(id)) coverCache.delete(id);
+  else if (coverCache.size >= COVER_CACHE_MAX) {
+    // Map 按插入顺序迭代，删最早一条
+    const firstKey = coverCache.keys().next().value;
+    if (firstKey !== undefined) coverCache.delete(firstKey);
+  }
+  coverCache.set(id, val);
+}
+function coverCacheHas(id: string): boolean {
+  return coverCache.get(id) !== undefined;
+}
 
 function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolean }) {
   const [cover, setCover] = useState<string | null>(() => {
     if (hasIcon) return null;
-    return coverCache.get(comicId) ?? null;
+    return coverCacheGet(comicId) ?? null;
   });
   const ref = useRef<HTMLDivElement>(null);
-  const loadedRef = useRef(coverCache.has(comicId));
+  const loadedRef = useRef(coverCacheHas(comicId));
 
   useEffect(() => {
     // 用户设置了 emoji 图标时，不显示第一页封面
@@ -866,7 +888,7 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
     }
 
     // 内存中已有缓存，无需任何操作
-    if (coverCache.has(comicId)) {
+    if (coverCacheHas(comicId)) {
       loadedRef.current = true;
       return;
     }
@@ -874,22 +896,28 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
     // 先查 localStorage（浏览器重启后的持久化缓存）
     const cached = localStorage.getItem(`nr-manga-cover-${comicId}`);
     if (cached) {
-      coverCache.set(comicId, cached);
-      setCover(cached);
-      loadedRef.current = true;
-      return;
+      // 迁移：旧缓存是 data:image 的 base64，删除后让新代码重新获取 URL
+      if (cached.startsWith("data:")) {
+        try { localStorage.removeItem(`nr-manga-cover-${comicId}`); } catch {}
+      } else {
+        coverCacheSet(comicId, cached);
+        setCover(cached);
+        loadedRef.current = true;
+        return;
+      }
     }
 
     // 缓存已清除（选了原封面），直接加载不等待 IntersectionObserver
     const loadCover = async () => {
       loadedRef.current = true;
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const b64: string = await invoke("get_comic_thumbnail", { comicId });
-        if (b64) {
-          coverCache.set(comicId, b64);
-          setCover(b64);
-          try { localStorage.setItem(`nr-manga-cover-${comicId}`, b64); } catch {}
+        const { invoke, convertFileSrc } = await import("@tauri-apps/api/core");
+        const path: string = await invoke("get_comic_thumbnail", { comicId });
+        if (path) {
+          const url = convertFileSrc(path);
+          coverCacheSet(comicId, url);
+          setCover(url);
+          try { localStorage.setItem(`nr-manga-cover-${comicId}`, url); } catch {}
         }
       } catch {}
     };

@@ -33,7 +33,6 @@ export default function MangaReader() {
   // D6: Lazy init — call useStore.getState() once at mount, not on every render
   const [sidebarComics, setSidebarComics] = useState(() => useStore.getState().comics);
   const [comicSearch, setComicSearch] = useState("");
-  const sidebarRefreshRef = useRef(false);
   // 同系列章节列表
   const seriesChapters = useMemo(() => {
     if (!manga || !manga.series_id) return [];
@@ -57,7 +56,7 @@ export default function MangaReader() {
   }, []);
 
   useEffect(() => {
-    return () => { clearTimeout(tipTimer.current); };
+    return () => { clearTimeout(tipTimer.current); clearTimeout(sideTimer.current); };
   }, []);
 
   useEffect(() => {
@@ -174,24 +173,21 @@ export default function MangaReader() {
     // 侧栏提示：扩大触发范围（100px），让用户更早看到 > 箭头；实际侧栏触发仍保持 30px
     setSidebarHint(e.clientX >= 28 && e.clientX < 100 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && mangaZoom === 1 && !mangaSidebar);
 
-    // 鼠标靠近左边缘弹出漫画侧栏——弹出时重新拉取漫画列表与主页同步
+    // 鼠标靠近左边缘弹出漫画侧栏——直接从 store 取漫画列表，避免全量 IPC
     // 缩窄触发区（30px）且避开顶部工具栏区域（Y > 120），避免误触
     if (e.clientX < 30 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && mangaZoom === 1) {
-      if (!mangaSidebar && !sidebarRefreshRef.current) {
-        sidebarRefreshRef.current = true;
-        (async () => {
-          try {
-            const { invoke } = await import("@tauri-apps/api/core");
-            const lib: any[] = await invoke("get_comic_library");
-            setSidebarComics(lib);
-          } catch {}
-        })();
+      if (!mangaSidebar) {
+        // 优先用已有 comics，为空时兜底读 store
+        if (sidebarComics.length === 0) {
+          const storeComics = useStore.getState().comics;
+          if (storeComics.length > 0) setSidebarComics(storeComics);
+        }
       }
       setMangaSidebar(true);
     } else if (e.clientX >= 260) {
       if (mangaSidebar) {
         clearTimeout(sideTimer.current);
-        sideTimer.current = window.setTimeout(() => { setMangaSidebar(false); sidebarRefreshRef.current = false; }, 400);
+        sideTimer.current = window.setTimeout(() => { setMangaSidebar(false); }, 400);
       }
     } else {
       clearTimeout(sideTimer.current);
@@ -572,17 +568,26 @@ function SidebarCover({ comicId }: { comicId: string }) {
   useEffect(() => {
     // 先用 MangaLibrary 一样的缓存
     const cached = localStorage.getItem(`nr-manga-cover-${comicId}`);
-    if (cached) { setCover(cached); return; }
+    if (cached) {
+      // 迁移：旧缓存是 data: 开头的 base64，删掉让新代码重新读取
+      if (cached.startsWith("data:")) {
+        try { localStorage.removeItem(`nr-manga-cover-${comicId}`); } catch {}
+      } else {
+        setCover(cached);
+        return;
+      }
+    }
 
     if (fetchedRef.current) return;
     fetchedRef.current = true;
     (async () => {
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const b64: string = await invoke("get_comic_thumbnail", { comicId });
-        if (b64) {
-          setCover(b64);
-          try { localStorage.setItem(`nr-manga-cover-${comicId}`, b64); } catch {}
+        const { invoke, convertFileSrc } = await import("@tauri-apps/api/core");
+        const path: string = await invoke("get_comic_thumbnail", { comicId });
+        if (path) {
+          const url = convertFileSrc(path);
+          setCover(url);
+          try { localStorage.setItem(`nr-manga-cover-${comicId}`, url); } catch {}
         }
       } catch {}
     })();

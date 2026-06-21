@@ -246,25 +246,61 @@ fn get_pdf_page_count(mutool: &Path, path: &Path) -> usize {
     1 // 降级
 }
 
-/// 渲染单页 PNG
+/// 渲染单页 PNG（带 60 秒超时防止 mutool 挂死）
 fn render_single_page(mutool: &Path, pdf_path: &Path, page_index: usize, dpi: u32, out_path: &Path) -> Result<(), String> {
     if out_path.exists() { return Ok(()); }
     fs::create_dir_all(out_path.parent().unwrap()).ok();
-    let range = format!("{},{},{}", page_index + 1, page_index + 1, dpi);
-    let output = Command::new(mutool)
+
+    let mut child = Command::new(mutool)
         .arg("draw")
         .arg("-o")
         .arg(out_path)
         .arg("-r")
         .arg(&dpi.to_string())
         .arg(pdf_path)
-        .arg(&range)
-        .output()
-        .map_err(|e| format!("mutool 调用失败: {}", e))?;
-    if !output.status.success() {
-        return Err(format!("mutool 渲染失败: {}", String::from_utf8_lossy(&output.stderr)));
+        .arg(&format!("{},{},{}", page_index + 1, page_index + 1, dpi))
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("mutool 启动失败: {}", e))?;
+
+    let timeout = std::time::Duration::from_secs(60);
+    let start = std::time::Instant::now();
+
+    // 收集 stderr（失败时输出到日志）
+    let capture_stderr = |child: &mut std::process::Child| -> String {
+        child.stderr.take()
+            .and_then(|mut s| {
+                let mut buf = Vec::new();
+                std::io::Read::read_to_end(&mut s, &mut buf).ok();
+                Some(buf)
+            })
+            .map(|b| String::from_utf8_lossy(&b).to_string())
+            .unwrap_or_default()
+    };
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let stderr = capture_stderr(&mut child);
+                if status.success() { return Ok(()); }
+                let _ = child.kill();
+                return Err(format!("mutool 渲染失败: {}", stderr));
+            }
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let pid = child.id();
+                    let _ = child.kill();
+                    let _ = child.wait(); // 回收僵尸进程
+                    return Err(format!("mutool 渲染超时（>60s），已终止进程 {}", pid));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                return Err(format!("mutool wait 错误: {}", e));
+            }
+        }
     }
-    Ok(())
 }
 
 fn find_mutool() -> Option<PathBuf> {
