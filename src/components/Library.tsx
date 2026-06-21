@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useStore, BookData } from "../store";
 import { handleCardGlow } from "../utils/glow";
 
@@ -12,8 +12,6 @@ export default function Library() {
   const [ctxMenu, setCtxMenu] = useState<{ book: BookData; x: number; y: number } | null>(null);
   const [iconPicker, setIconPicker] = useState<BookData | null>(null);
   const [batchIconPicker, setBatchIconPicker] = useState(false);
-  const [animStars, setAnimStars] = useState<Record<string, boolean>>({});
-  const animRef = useRef<number>(0);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   type SortField = "name" | "progress" | "chapters";
