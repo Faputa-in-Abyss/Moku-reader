@@ -142,7 +142,7 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
 
 fn save_library(data_dir: &PathBuf, lib: &LibraryData) -> Result<(), String> {
     let path = data_dir.join("library.json");
-    // 先清空 content 再保存（content 只用于运行时读取章节切片，不持久化）
+    // 持久化时清空所有书的 content：有本地文件的可以从文件重读，在线的重新下载
     let stripped: Vec<Book> = lib.books.iter().map(|b| {
         let mut book = b.clone();
         book.content = String::new();
@@ -349,10 +349,13 @@ fn scan_directory(dir: &Path, known_books: &[Book], known_comics: &[comic::Comic
 fn get_library(state: State<AppState>) -> Result<Vec<Book>, String> {
     let lib = lock_mutex(&state.library)?;
     debug_log!("📚 获取书库: {} 本书", lib.books.len());
-    // 去掉 content 大字段再序列化，避免栈溢出
+    // 去掉 content 大字段再序列化，避免栈溢出。
+    // 在线书籍保留 content（无文件路径无法重读），本地书籍清掉（从文件读）
     let books = lib.books.iter().map(|b| {
         let mut book = b.clone();
-        book.content = String::new();
+        if !book.file_path.is_empty() {
+            book.content = String::new();
+        }
         book
     }).collect();
     Ok(books)
@@ -362,48 +365,44 @@ fn get_library(state: State<AppState>) -> Result<Vec<Book>, String> {
 fn get_chapter_content(book_id: String, chapter_index: usize, state: State<AppState>) -> Result<String, String> {
     debug_log!("📖 读取章节: book={}, chapter={}", &book_id, chapter_index);
 
-    // 先提取必要信息后释放 lib 锁，避免借用冲突
-    //
-    // 注意：这里分两次获取锁（第一次获取释放后，第二次再获取），
-    // 两次获取之间可能被其他线程插队，但不会导致死锁，因为：
-    //   - 两次 lock() 的生命周期不重叠（第一次的锁在 } 处就释放了）
-    //   - 第二次获取锁时如果内容已在内存中则不读文件，快速返回
-    //   - 如果内容不在内存中，先在无锁状态下读文件，再二次获取锁取 content
-    //   - 不存在两个线程相互等待对方释放锁的场景，因此不会死锁
-    let need_reload: bool;
-    let file_path: String;
-    let start_pos: usize;
-    let end_pos: usize;
-    {
+    // 第一阶段：从库中提取书籍元信息和章节范围，提前释放锁
+    let (file_path, start_pos, end_pos, content_online) = {
         let lib = lock_mutex(&state.library)?;
         let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
         let chapter = book.chapters.get(chapter_index).ok_or("章节索引超出范围")?;
         debug_log!("   章节标题: {:?}", chapter.title);
-        need_reload = book.content.is_empty();
-        file_path = book.file_path.clone();
-        start_pos = chapter.start_pos;
-        end_pos = chapter.end_pos;
-    }
-    // 第一次锁在此处已释放
-
-    let content = if need_reload {
-        debug_log!("   content 为空，从文件重新读取: {}", file_path);
-        read_txt_file(&file_path)?.replace("\r\n", "\n").replace('\r', "\n")
-    } else {
-        // content 在内存中，第二次获取锁读取 content
-        // 注意：两次 lock 之间没有嵌套，不会死锁
-        let lib = lock_mutex(&state.library)?;
-        let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
-        book.content.clone()
+        // 先尝试内存中的 content（在线书籍存了全文）
+        if !book.content.is_empty() {
+            (book.file_path.clone(), chapter.start_pos, chapter.end_pos, Some(book.content.clone()))
+        } else {
+            (book.file_path.clone(), chapter.start_pos, chapter.end_pos, None)
+        }
     };
-    // 第二次锁在此处已释放
 
-    let end = end_pos.min(content.len());
+    // 有在线 content，直接从内存取切片
+    if let Some(online_content) = content_online {
+        let end = end_pos.min(online_content.len());
+        let start = start_pos.min(end);
+        if start >= end {
+            return Ok("(章节内容为空)".to_string());
+        }
+        return Ok(online_content[start..end].to_string());
+    }
+
+    // 无在线 content → 从文件读取（本地导入书）
+    if file_path.is_empty() {
+        debug_log!("   ❌ 书籍既无内存 content 也无文件路径，可能是序列化后重新加载的在线书");
+        return Err("该书无本地文件且内容不可用，请重新下载".to_string());
+    }
+
+    debug_log!("   content 为空，从文件重新读取: {}", file_path);
+    let full_content = read_txt_file(&file_path)?.replace("\r\n", "\n").replace('\r', "\n");
+    let end = end_pos.min(full_content.len());
     let start = start_pos.min(end);
     if start >= end {
         return Ok("(章节内容为空)".to_string());
     }
-    Ok(content[start..end].to_string())
+    Ok(full_content[start..end].to_string())
 }
 
 #[tauri::command]
@@ -757,14 +756,17 @@ fn save_online_book(title: String, author: String, content: String, save_path: O
         book_icon: String::new(),
     };
 
-    // 内存中的 Book 不保留 content
-    let mut book_for_memory = book.clone();
-    book_for_memory.content = String::new();
-    {
-        let mut lib = lock_mutex(&state.library)?;
-        lib.books.push(book_for_memory);
-        save_library(&state.data_dir, &lib).ok();
+    // 在线书籍无本地文件（file_path = ""），必须保留 content 在内存中
+    // 只有本地导入书才能清空 content 通过文件重读
+    let mut lib = lock_mutex(&state.library)?;
+    if !book.file_path.is_empty() {
+        let mut slim = book.clone();
+        slim.content = String::new();
+        lib.books.push(slim);
+    } else {
+        lib.books.push(book.clone());
     }
+    save_library(&state.data_dir, &lib).ok();
 
     // 如果提供了 save_path，额外另存一份 .txt 文件
     if let Some(dir) = save_path {
