@@ -15,13 +15,10 @@ export default function MangaLibrary() {
   const [seriesCtx, setSeriesCtx] = useState<{ name: string; x: number; y: number } | null>(null);
   const [activeSeries, setActiveSeries] = useState<string>("全部");
   const [sliderStyle, setSliderStyle] = useState<React.CSSProperties>({});
-  const [animStars, setAnimStars] = useState<Record<string, boolean>>({});
-
   const [ctxMenu, setCtxMenu] = useState<{ comic: ComicData; x: number; y: number } | null>(null);
   const [iconPicker, setIconPicker] = useState<ComicData | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const toggleLockRef = useRef<Set<string>>(new Set());
   const [seriesDialogOpen, setSeriesDialogOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ComicData | null>(null);
   type SortField = "name" | "pages";
@@ -622,7 +619,6 @@ export default function MangaLibrary() {
           <div style={{ padding: "8px 16px", fontSize: ".78rem", color: "var(--text-dim)", borderBottom: "1px solid var(--border-glass)", marginBottom: 4 }}>
             系列：{seriesCtx.name}
           </div>
-          <CtxMenuItem icon="✏️" label="重命名系列" onClick={() => { setSeriesCtx(null); setRenameTarget(null); /* TODO: rename */ }} />
           <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
           <CtxMenuItem icon="🗑️" label="仅删除文件夹（保留漫画）" onClick={() => handleDeleteSeries(seriesCtx.name, false)} />
           <CtxMenuItem icon="🗑️" label="删除文件夹及里面所有漫画" onClick={() => {
@@ -957,15 +953,6 @@ function CtxMenuItem({ icon, label, onClick, danger }: { icon: string; label: st
       <span>{label}</span>
     </div>
   );
-}
-
-function sourceTypeLabel(t: string): string {
-  switch (t) {
-    case "cbz": return "CBZ";
-    case "pdf": return "PDF";
-    case "folder": return "📁";
-    default: return t;
-  }
 }
 
 function getMangaIcon(comic: ComicMeta): string {

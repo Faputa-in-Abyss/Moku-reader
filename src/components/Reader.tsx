@@ -41,9 +41,7 @@ export default function Reader() {
   const fadeTimer = useRef<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const topbarTimer = useRef<number>(0);
-  const settingsTimer = useRef<number>(0);
   const isProgrammaticRef = useRef(false);
-  const particleReadyRef = useRef(false);
   const charPosRef = useRef(0);
   const sidebarOpenRef = useRef(false);
   const settingsOpenRef = useRef(false);
@@ -346,7 +344,6 @@ export default function Reader() {
   useEffect(() => {
     return () => {
       clearTimeout(topbarTimer.current);
-      clearTimeout(settingsTimer.current);
       clearTimeout(fadeTimer.current);
       clearTimeout(tipTimer.current);
     };
@@ -393,17 +390,6 @@ export default function Reader() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [fontSize, keybindings, recordingKey, setFontSize]);
-
-  useEffect(() => {
-    const check = () => {
-      if (typeof (window as any).__burstParticles === 'function') {
-        particleReadyRef.current = true;
-      } else {
-        requestAnimationFrame(check);
-      }
-    };
-    check();
-  }, []);
 
   useEffect(() => {
     const canvas = document.getElementById("reader-particle-canvas") as HTMLCanvasElement;

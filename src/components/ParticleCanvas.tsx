@@ -133,8 +133,6 @@ export default function ParticleCanvas() {
     animate();
     // 用实例标记记录当前 instance 注册了这些全局属性
     const ownerKey = "__particleCanvasOwner";
-    (window as any).__onThemeChange = () => { _clr = getAccentRGB(); _clr2 = getAccentRGB2(); };
-    (window as any)[ownerKey + "__onThemeChange"] = instanceId;
     (window as any).__burstParticles = (cx: number, cy: number, count = 30) => {
       for (let i = 0; i < count; i++) {
         const p = createParticle(_W || window.innerWidth, _H || window.innerHeight);
@@ -155,10 +153,6 @@ export default function ParticleCanvas() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseleave", onLeave);
       // 只有当前实例"拥有"这些全局属性时才清理
-      if ((window as any)[ownerKey + "__onThemeChange"] === instanceId) {
-        delete (window as any).__onThemeChange;
-        delete (window as any)[ownerKey + "__onThemeChange"];
-      }
       if ((window as any)[ownerKey + "__burstParticles"] === instanceId) {
         delete (window as any).__burstParticles;
         delete (window as any)[ownerKey + "__burstParticles"];

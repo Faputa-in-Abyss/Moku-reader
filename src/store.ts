@@ -151,7 +151,7 @@ export const useStore = create<AppStore>((set, get) => ({
   books: JSON.parse(localStorage.getItem("nr-books-meta") || "[]") as BookData[],
   setBooks: (books) => {
     // 只缓存轻量字段，避免缓存 chapters/content 等大字段
-    const meta = books.map(b => ({ ...b, chapters: [], content: "" }));
+    const meta = books.map((b: any) => ({ ...b, chapters: [], content: "" }));
     localStorage.setItem("nr-books-meta", JSON.stringify(meta));
     set({ books });
   },

@@ -5,7 +5,6 @@ import SidebarHandle from "./SidebarHandle";
 
 export default function MangaReader() {
   const currentManga = useStore((s) => s.currentManga);
-  const comics = useStore((s) => s.comics);
   const mangaCurrentPage = useStore((s) => s.mangaCurrentPage);
   const setMangaPage = useStore((s) => s.setMangaPage);
   const closeMangaReader = useStore((s) => s.closeMangaReader);
