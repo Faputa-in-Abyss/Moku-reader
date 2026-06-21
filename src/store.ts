@@ -107,8 +107,6 @@ interface AppStore {
   setWindowSize: (s: number) => void;
   debugPanelOpen: boolean;
   setDebugPanelOpen: (o: boolean) => void;
-  onlineSearchOpen: boolean;
-  setOnlineSearchOpen: (o: boolean) => void;
   keybindings: { fontSizeUp: string; fontSizeDown: string };
   setKeybinding: (action: "fontSizeUp" | "fontSizeDown", key: string) => void;
   bookmarks: Bookmark[];
@@ -208,8 +206,6 @@ export const useStore = create<AppStore>((set, get) => ({
   setWindowSize: (s) => set({ windowSize: Math.max(0, Math.min(4, s)) }),
   debugPanelOpen: false,
   setDebugPanelOpen: (o) => set({ debugPanelOpen: o }),
-  onlineSearchOpen: false,
-  setOnlineSearchOpen: (o) => set({ onlineSearchOpen: o }),
   keybindings: (() => {
     try {
       return JSON.parse(localStorage.getItem("nr-keybindings") || "null") || DEFAULT_KEYBINDINGS;

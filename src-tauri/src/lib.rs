@@ -463,6 +463,85 @@ fn toggle_favorite(book_id: String, state: State<AppState>) -> Result<(), String
     Ok(())
 }
 
+// ===== 排序命令 =====
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SortBookData {
+    pub id: String,
+    pub title: String,
+    pub file_path: String,
+    pub file_type: String,
+    pub total_chapters: usize,
+    pub current_chapter: usize,
+    pub progress: f64,
+    #[serde(skip)]
+    pub chapters: Vec<crate::parser::Chapter>,
+    #[serde(skip)]
+    pub content: String,
+    pub favorite: bool,
+    #[serde(default)]
+    pub book_icon: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SortComicMeta {
+    pub id: String,
+    pub title: String,
+    pub source_type: String,
+    pub total_pages: usize,
+    pub current_page: usize,
+    pub direction: String,
+    pub favorite: bool,
+    #[serde(default)]
+    pub book_icon: String,
+    #[serde(default)]
+    pub series_id: Option<String>,
+}
+
+#[tauri::command]
+fn sort_books(field: String, asc: bool, state: State<AppState>) -> Result<Vec<SortBookData>, String> {
+    let mut books = lock_mutex(&state.library)?;
+    books.books.sort_by(|a, b| {
+        let cmp = match field.as_str() {
+            "name" => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
+            "progress" => a.progress.partial_cmp(&b.progress).unwrap_or(std::cmp::Ordering::Equal),
+            "chapters" => a.total_chapters.cmp(&b.total_chapters),
+            _ => std::cmp::Ordering::Equal,
+        };
+        if asc { cmp } else { cmp.reverse() }
+    });
+    let result: Vec<SortBookData> = books.books.iter().map(|b| SortBookData {
+        id: b.id.clone(),
+        title: b.title.clone(),
+        file_path: b.file_path.clone(),
+        file_type: b.file_type.clone(),
+        total_chapters: b.total_chapters,
+        current_chapter: b.current_chapter,
+        progress: b.progress,
+        chapters: Vec::new(),
+        content: String::new(),
+        favorite: b.favorite,
+        book_icon: b.book_icon.clone(),
+    }).collect();
+    Ok(result)
+}
+
+#[tauri::command]
+fn sort_comics(field: String, asc: bool, meta: Vec<SortComicMeta>) -> Result<Vec<SortComicMeta>, String> {
+    let mut list = meta;
+    list.sort_by(|a, b| {
+        let cmp = match field.as_str() {
+            "name" => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
+            "pages" => a.total_pages.cmp(&b.total_pages),
+            _ => std::cmp::Ordering::Equal,
+        };
+        if asc { cmp } else { cmp.reverse() }
+    });
+    Ok(list)
+}
+
 #[tauri::command]
 fn save_book_order(book_ids: Vec<String>, state: State<AppState>) -> Result<(), String> {
     debug_log!("🔄 保存书库排序: {} 本书", book_ids.len());
@@ -1314,6 +1393,8 @@ pub fn run() {
             reparse_book_chapters,
             rename_book,
             toggle_favorite,
+            sort_books,
+            sort_comics,
             save_book_order,
             set_book_icon,
             open_file_location,

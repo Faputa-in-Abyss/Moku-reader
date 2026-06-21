@@ -330,7 +330,6 @@ export default function DebugPanel() {
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={handleSetPath}>📂 更改书库路径</button>
           <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={!libraryPath} onClick={handleScan}>{scanning ? "⏳ 扫描中..点击停止" : "🔄 扫描书库"}</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
-            {false && <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { useStore.getState().setOnlineSearchOpen(true); }}>📚 联网搜书</button>}
             <div style={{ borderTop: "1px solid var(--border-glass)", margin: "14px 0 10px" }} />
             <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>面板</div>
             {(["settings", "logs", "fonts"] as const).map((tab) => (
