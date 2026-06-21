@@ -81,6 +81,7 @@ interface AppStore {
   setReadingMode: (m: ReadingMode) => void;
   books: BookData[];
   setBooks: (books: BookData[]) => void;
+  clearBooksCache: () => void;
   reading: boolean;
   currentBook: BookData | null;
   currentChapter: number;
@@ -149,10 +150,18 @@ export const useStore = create<AppStore>((set, get) => ({
   },
   books: JSON.parse(localStorage.getItem("nr-books-meta") || "[]") as BookData[],
   setBooks: (books) => {
-    // 只缓存轻量字段，避免缓存 chapters/content 等大字段
-    const meta = books.map((b: any) => ({ ...b, chapters: [], content: "" }));
-    localStorage.setItem("nr-books-meta", JSON.stringify(meta));
+    // 书架展示用轻量缓存（保留 chapters 用于目录，清除 content 大字段）
+    const meta = books.map((b: any) => {
+      const { content: _, ...rest } = b;
+      return rest;
+    });
+    try { localStorage.setItem("nr-books-meta", JSON.stringify(meta)); } catch {}
     set({ books });
+  },
+  // 清除 localStorage 缓存的书籍数据（修复：旧缓存 chapters 为空的问题）
+  clearBooksCache: () => {
+    try { localStorage.removeItem("nr-books-meta"); } catch {}
+    set({ books: [] });
   },
   reading: false,
   currentBook: null,

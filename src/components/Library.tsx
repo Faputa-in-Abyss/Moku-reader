@@ -5,6 +5,7 @@ import { handleCardGlow } from "../utils/glow";
 export default function Library() {
   const books = useStore((s) => s.books);
   const setBooks = useStore((s) => s.setBooks);
+  const clearBooksCache = useStore((s) => s.clearBooksCache);
   const openReader = useStore((s) => s.openReader);
   const refreshKey = useStore((s) => s.refreshKey);
   const triggerRefresh = useStore((s) => s.triggerRefresh);
@@ -63,6 +64,11 @@ export default function Library() {
   }, [books, sortField, sortAsc]);
 
   const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
+
+  useEffect(() => {
+    // 启动时清除旧的 localStorage 缓存（修复：旧缓存 chapters 为空的问题）
+    clearBooksCache();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

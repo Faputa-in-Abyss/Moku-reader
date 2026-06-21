@@ -35,6 +35,10 @@ export default function Reader() {
   const [recordingKey, setRecordingKey] = useState<string | null>(null);
   const book = currentBook;
 
+  // 从后端加载最新书籍数据（含完整 chapters），取代对 store 缓存的依赖
+  const [freshBook, setFreshBook] = useState<typeof book | null>(null);
+  const chapters = freshBook?.chapters || book?.chapters || [];
+
   const [chapterText, setChapterText] = useState("");
   const [chapterSearch, setChapterSearch] = useState("");
   const [fadeState, setFadeState] = useState<"in" | "out" | "visible">("visible");
@@ -66,31 +70,54 @@ export default function Reader() {
   const [flowKey, setFlowKey] = useState(0);
 
   useEffect(() => {
-    async function load() {
+    // 打开阅读器时从后端拉取最新的书数据（含完整 chapters），再加载章节内容
+    let cancelled = false;
+    async function loadAll() {
       if (!book) {
         showTip("书籍数据异常，请重新导入");
         return;
       }
-      if (!book.chapters || book.chapters.length === 0) {
-        showTip("该书没有可读的章节");
-        setChapterText("(没有章节内容)");
+
+      // 1. 从后端拉取最新书籍数据
+      let chaptersData = book.chapters;
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const lib: any[] = await invoke("get_library");
+        const found = lib.find((b: any) => b.id === book.id);
+        if (found && found.chapters?.length) {
+          chaptersData = found.chapters;
+          if (!cancelled) setFreshBook(found);
+        }
+      } catch {}
+
+      // 2. 加载当前章节内容
+      if (!chaptersData || chaptersData.length === 0) {
+        console.warn("[Reader] 无章节数据", book.id, book.title);
+        if (!cancelled) {
+          showTip("该书没有可读的章节");
+          setChapterText("(没有章节内容)");
+        }
         return;
       }
-      const idx = Math.min(currentChapter, book.chapters.length - 1);
+
+      const idx = Math.min(currentChapter, chaptersData.length - 1);
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         const text: string = await invoke("get_chapter_content", {
           bookId: book.id,
           chapterIndex: idx,
         });
-        setChapterText(text);
+        if (!cancelled) setChapterText(text);
       } catch (e) {
         console.error("读取章节失败:", e);
-        showTip("读取章节失败，请检查书籍文件");
-        setChapterText(`(读取章节失败: ${e})`);
+        if (!cancelled) {
+          showTip("读取章节失败，请检查书籍文件");
+          setChapterText(`(读取章节失败: ${e})`);
+        }
       }
     }
-    load();
+    loadAll();
+    return () => { cancelled = true; };
     scrollLockRef.current = true;
     lastScrollTopRef.current = 0;
     prevWheelAccumRef.current = 0;
@@ -252,14 +279,16 @@ export default function Reader() {
   }
 
   const nextChapter = () => {
-    if (book && book.chapters && currentChapter < book.chapters.length - 1) {
+    const b = freshBook || book;
+    if (b && b.chapters && currentChapter < b.chapters.length - 1) {
       setChapter(currentChapter + 1);
       setPageIndex(0);
     }
   };
 
   const prevChapter = () => {
-    if (book && book.chapters && currentChapter > 0) {
+    const b = freshBook || book;
+    if (b && b.chapters && currentChapter > 0) {
       setChapter(currentChapter - 1);
       setPageIndex(0);
     }
@@ -491,6 +520,8 @@ export default function Reader() {
         if (readingMode === "scroll") {
           const el = contentRef.current;
           if (!el || scrollLockRef.current) return;
+          // 内容还在加载时禁止滚轮切换章节
+          if (!chapterText || chapterText === "(没有章节内容)" || chapterText.startsWith("(读取章节失败")) return;
           if (e.deltaY < 0) {
             if (currentChapter <= 0) { prevWheelAccumRef.current = 0; return; }
             if (el.scrollTop <= 20) {
@@ -510,7 +541,7 @@ export default function Reader() {
               }
             } else { prevWheelAccumRef.current = 0; }
           } else {
-            const ch = book?.chapters;
+            const ch = chapters;
             if (!ch || currentChapter >= ch.length - 1) { nextWheelAccumRef.current = 0; return; }
             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) {
               nextWheelAccumRef.current += Math.abs(e.deltaY);
@@ -572,7 +603,7 @@ export default function Reader() {
           <div style={{ opacity: fadeState === "in" ? 0 : 1, transition: "opacity 0.3s ease" }}>
             {chapterText !== "(没有章节内容)" && chapterText !== "" && !chapterText.startsWith("(读取章节失败") && (
               <div style={{ textAlign: "center", marginBottom: 24, fontSize: "1.1rem", fontWeight: 600, color: "var(--text)" }}>
-                {book?.chapters?.[currentChapter]?.title || ""}
+                {chapters?.[currentChapter]?.title || ""}
               </div>
             )}
             {chapterText ? formatText(chapterText) : <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>加载中...</div>}
@@ -624,14 +655,14 @@ export default function Reader() {
           </div>
         )}
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
-          {(book?.chapters?.filter((ch: any, i: number) =>
+          {(chapters?.filter((ch: any, i: number) =>
             !chapterSearch || ch.title?.includes(chapterSearch) || `第${i+1}章`.includes(chapterSearch)
           ) || []).length === 0 ? (
             <div style={{ padding: "20px", textAlign: "center", color: "var(--text-dim)", fontSize: ".8rem" }}>未找到匹配章节</div>
-          ) : (book?.chapters?.filter((ch: any, i: number) =>
+          ) : (chapters?.filter((ch: any, i: number) =>
             !chapterSearch || ch.title?.includes(chapterSearch) || `第${i+1}章`.includes(chapterSearch)
           ) || []).map((ch: any, fi: number) => {
-            const realIdx = book?.chapters?.indexOf(ch) ?? fi;
+            const realIdx = chapters?.indexOf(ch) ?? fi;
               return (
             <div key={realIdx}
               onClick={() => { animateChapter(realIdx, window.innerWidth / 2, window.innerHeight / 2); setSidebarOpen(false); }}
@@ -760,7 +791,7 @@ export default function Reader() {
               if (bookmarks.find(b => b.chapterIndex === currentChapter)) {
                 removeBookmark(currentChapter);
               } else {
-                addBookmark(currentChapter, book?.chapters?.[currentChapter]?.title || `第${currentChapter+1}章`);
+                addBookmark(currentChapter, chapters?.[currentChapter]?.title || `第${currentChapter+1}章`);
               }
               setCtxMenu(null);
             }} />
