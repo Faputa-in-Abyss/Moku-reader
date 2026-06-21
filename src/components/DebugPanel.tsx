@@ -79,6 +79,9 @@ export default function DebugPanel() {
   const [dpiEditing, setDpiEditing] = useState(false);
   const [dpiEditValue, setDpiEditValue] = useState("150");
   const dpiInputRef = useRef<HTMLInputElement>(null);
+  const [renderThreads, setRenderThreads] = useState(1);
+  const [threadEditing, setThreadEditing] = useState(false);
+  const [threadEditValue, setThreadEditValue] = useState("1");
   const [glassIntensity, setGlassIntensity] = useState(() => {
     const saved = localStorage.getItem("nr-glass-intensity");
     return saved ? Number(saved) : 24;
@@ -139,6 +142,13 @@ export default function DebugPanel() {
         const { invoke } = await import("@tauri-apps/api/core");
         const dpi: number = await invoke("get_render_dpi");
         if (!cancelled) setRenderDpi(dpi);
+      } catch {}
+    })();
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const t: number = await invoke("get_render_threads");
+        if (!cancelled) { setRenderThreads(t); setThreadEditValue(String(t)); }
       } catch {}
     })();
 
@@ -382,6 +392,45 @@ export default function DebugPanel() {
                   <span>72</span><span>|</span><span>100</span><span>|</span><span>150</span><span>|</span><span>200</span><span>|</span><span>250</span><span>|</span><span>300</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "16px 0 4px" }}>
+                  <span style={{ color: "var(--text)" }}>🧵 PDF 渲染线程</span>
+                  {threadEditing ? (
+                    <input
+                      type="number" min={1} max={16}
+                      value={threadEditValue}
+                      onChange={(e) => setThreadEditValue(e.target.value)}
+                      onBlur={async () => {
+                        const v = Math.min(16, Math.max(1, Math.round(Number(threadEditValue)) || 1));
+                        setRenderThreads(v);
+                        setThreadEditValue(String(v));
+                        setThreadEditing(false);
+                        try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_threads", { threads: v }); console.log(`[墨读] 渲染线程已设为 ${v}`); } catch {}
+                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setThreadEditing(false); setThreadEditValue(String(renderThreads)); } }}
+                      style={{ width: 60, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "2px 8px", fontSize: ".75rem", textAlign: "center", outline: "none" }}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      onClick={() => { setThreadEditing(true); setThreadEditValue(String(renderThreads)); }}
+                      style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed var(--accent)" }}
+                      title="点击输入精确值"
+                    >{renderThreads} 线程</span>
+                  )}
+                </div>
+                <input
+                  type="range" min={1} max={16} step={1} value={renderThreads}
+                  onChange={async (e) => {
+                    const v = Number(e.target.value);
+                    setRenderThreads(v);
+                    setThreadEditValue(String(v));
+                    try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_threads", { threads: v }); console.log(`[墨读] 渲染线程已设为 ${v}`); } catch {}
+                  }}
+                  style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
+                  <span>1</span><span>|</span><span>4</span><span>|</span><span>8</span><span>|</span><span>12</span><span>|</span><span>16</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "16px 0 4px" }}>
                   <span style={{ color: "var(--text)" }}>🔍 毛玻璃强度</span>
                   <span style={{ color: "var(--accent)", fontWeight: 600 }}>{glassIntensity}px</span>
                 </div>
@@ -425,6 +474,9 @@ export default function DebugPanel() {
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
                   <span>2（直角）</span><span>|</span><span>8</span><span>|</span><span>12</span><span>|</span><span>18</span><span>|</span><span>24（圆润）</span>
                 </div>
+                <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 12 }} onClick={async () => {
+                  try { const { invoke } = await import("@tauri-apps/api/core"); const dir: string = await invoke("get_comics_dir"); await invoke("open_file_location", { path: dir }); } catch {}
+                }}>📁 打开渲染目录</button>
                 <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 16 }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
               </div>
             )}

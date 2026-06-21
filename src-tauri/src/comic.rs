@@ -2,6 +2,7 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// 支持的图片格式扩展名
 const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
@@ -218,7 +219,53 @@ pub fn import_folder(path: &Path) -> Result<(Vec<String>, String), String> {
 // ===== PDF 导入 =====
 
 /// 导入 PDF：使用 mutool 命令行将 PDF 每页渲染为 PNG
-use std::process::Command;
+use regex;
+
+/// 快速获取 PDF 页数
+fn get_pdf_page_count(mutool: &Path, path: &Path) -> usize {
+    if let Ok(out) = Command::new(mutool).arg("pages").arg(path).output() {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let count = stdout.lines().filter(|l| l.trim().starts_with("page ")).count();
+            if count > 0 { return count; }
+            // fallback: 正则提取
+            let re = regex::Regex::new(r"(?i)\bpage\s+(\d+)\b").expect("正则失败");
+            if let Some(max) = re.captures_iter(&stdout).filter_map(|c| c.get(1)?.as_str().parse::<usize>().ok()).max() {
+                if max > 0 { return max; }
+            }
+        }
+    }
+    // 尝试 mutool info
+    if let Ok(out) = Command::new(mutool).arg("info").arg(path).output() {
+        let text = String::from_utf8_lossy(&out.stdout);
+        let re = regex::Regex::new(r"(?i)\bpages?:\s*(\d+)").expect("正则失败");
+        if let Some(caps) = re.captures(&text) {
+            if let Ok(n) = caps[1].parse::<usize>() { if n > 0 { return n; } }
+        }
+    }
+    1 // 降级
+}
+
+/// 渲染单页 PNG
+fn render_single_page(mutool: &Path, pdf_path: &Path, page_index: usize, dpi: u32, out_path: &Path) -> Result<(), String> {
+    if out_path.exists() { return Ok(()); }
+    fs::create_dir_all(out_path.parent().unwrap()).ok();
+    let range = format!("{},{},{}", page_index + 1, page_index + 1, dpi);
+    let output = Command::new(mutool)
+        .arg("draw")
+        .arg("-o")
+        .arg(out_path)
+        .arg("-r")
+        .arg(&dpi.to_string())
+        .arg(pdf_path)
+        .arg(&range)
+        .output()
+        .map_err(|e| format!("mutool 调用失败: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("mutool 渲染失败: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(())
+}
 
 fn find_mutool() -> Option<PathBuf> {
     // 1. 从 exe 位置向上翻找 mutool/ 目录
@@ -254,7 +301,7 @@ fn find_mutool() -> Option<PathBuf> {
     None
 }
 
-fn import_pdf(path: &Path, dest_dir: &Path, dpi: u32) -> Result<(Vec<String>, String), String> {
+fn import_pdf(path: &Path, dest_dir: &Path, dpi: u32, num_threads: usize) -> Result<(Vec<String>, String), String> {
     let title = title_from_path(path.to_string_lossy().as_ref());
     let images_dir = dest_dir.join("images");
     fs::create_dir_all(&images_dir).map_err(|e| format!("创建目录失败: {}", e))?;
@@ -264,38 +311,58 @@ fn import_pdf(path: &Path, dest_dir: &Path, dpi: u32) -> Result<(Vec<String>, St
          下载地址: https://mupdf.com/downloads/"
     )?;
 
-    let dpi_str = dpi.to_string();
-    let output_pattern = images_dir.join("page%d.png");
-    let output = Command::new(&mutool)
-        .arg("draw")
-        .arg("-o")
-        .arg(output_pattern.to_string_lossy().as_ref())
-        .arg("-r")
-        .arg(&dpi_str)
-        .arg(path)
-        .output()
-        .map_err(|e| format!("调用 mutool 失败: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("mutool 渲染失败: {}", stderr));
+    // 先查页数
+    let total = get_pdf_page_count(&mutool, path);
+    if total == 0 {
+        return Err("无法获取 PDF 页数".to_string());
     }
 
-    let mut files: Vec<String> = fs::read_dir(&images_dir)
-        .map_err(|e| format!("读取输出目录失败: {}", e))?
-        .filter_map(|e| {
-            let e = e.ok()?;
-            let name = e.file_name().to_string_lossy().to_string();
-            if name.starts_with("page") && name.ends_with(".png") {
-                Some(name)
-            } else { None }
-        })
+    // 多线程并行渲染，用 Arc<AtomicUsize> 追踪进度
+    let num_threads = num_threads.max(1);
+    let batch_size = (total + num_threads - 1) / num_threads;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    let rendered = Arc::new(AtomicUsize::new(0));
+    let mut handles = Vec::new();
+    for t in 0..num_threads {
+        let m = mutool.clone();
+        let pdf = path.to_path_buf();
+        let out_dir = images_dir.clone();
+        let start = t * batch_size;
+        let end = total.min(start + batch_size);
+        if start >= total { break; }
+        let counter = Arc::clone(&rendered);
+        handles.push(std::thread::spawn(move || {
+            for i in start..end {
+                let page_file = format!("page_{:04}.png", i + 1);
+                let out_path = out_dir.join(&page_file);
+                if let Err(e) = render_single_page(&m, &pdf, i, dpi, &out_path) {
+                    println!("[墨读] ❌ 渲染失败 page {}: {}", i + 1, e);
+                }
+                let done = counter.fetch_add(1, Ordering::Relaxed) + 1;
+                if done % 10 == 0 || done == total {
+                    use tauri::Emitter;
+                    let msg = format!("🖼️ PDF 渲染进度: {}/{} 页 ({:.0}%)", done, total, done as f64 / total as f64 * 100.0);
+                    println!("[墨读] {}", &msg);
+                    if let Some(handle) = crate::APP_HANDLE.get() {
+                        let now = chrono::Local::now().format("%H:%M:%S%.3f").to_string();
+                        let _ = handle.emit("debug-log", &serde_json::json!({
+                            "level": "BACKEND",
+                            "message": msg,
+                            "timestamp": now,
+                        }));
+                    }
+                }
+            }
+        }));
+    }
+    for h in handles { let _ = h.join(); }
+
+    // 收集输出的文件
+    let mut files: Vec<String> = (0..total)
+        .map(|i| format!("page_{:04}.png", i + 1))
         .collect();
     sort_image_files(&mut files);
-
-    if files.is_empty() {
-        return Err("mutool 渲染 PDF 后没有生成页面图片".to_string());
-    }
 
     Ok((files, title))
 }
@@ -305,7 +372,7 @@ fn import_pdf(path: &Path, dest_dir: &Path, dpi: u32) -> Result<(Vec<String>, St
 
 // ===== 公开接口 =====
 
-pub fn import_comic(path: &str, data_dir: &Path, dpi: u32) -> Result<ComicBook, String> {
+pub fn import_comic(path: &str, data_dir: &Path, dpi: u32, num_threads: usize) -> Result<ComicBook, String> {
     let path_obj = Path::new(path);
     if !path_obj.exists() {
         return Err(format!("路径不存在: {}", path));
@@ -330,7 +397,7 @@ pub fn import_comic(path: &str, data_dir: &Path, dpi: u32) -> Result<ComicBook, 
         }
         "pdf" => {
             let dest = data_dir.join("comics").join(&generate_id());
-            let (f, t) = import_pdf(path_obj, &dest, dpi)?;
+            let (f, t) = import_pdf(path_obj, &dest, dpi, num_threads)?;
             files = f;
             title = t;
             source_type = "pdf".to_string();

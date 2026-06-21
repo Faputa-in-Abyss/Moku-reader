@@ -12,8 +12,8 @@ mod comic;
 use fanqie::{FanqieApi, FanqieSearchResult, FanqieBookInfo, FanqieChapter};
 use parser::{parse_chapters, read_txt_file, read_epub_file, read_html_file, extract_title, generate_id, Chapter};
 
-/// 全局 AppHandle，用于发送日志事件到前端
-static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
+/// 全局 AppHandle，用于发送日志事件到前端（pub(crate) 以便 comic.rs 使用）
+pub(crate) static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 /// Cookie 存储（Reqwest 要求 Arc）
 static COOKIE_JAR: OnceLock<Arc<reqwest::cookie::Jar>> = OnceLock::new();
@@ -103,6 +103,7 @@ pub struct AppState {
     pub fanqie: FanqieApi,
     pub comic_library: Mutex<comic::ComicLibraryData>,
     pub render_dpi: Mutex<u32>,
+    pub render_threads: Mutex<usize>,
     pub scan_cancel: Mutex<bool>,
 }
 
@@ -596,6 +597,18 @@ fn open_file_location(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// 获取漫画渲染目录路径（data_dir/comics/），用于打开资源管理器
+#[tauri::command]
+fn get_comics_dir() -> String {
+    let data_dir = dirs_next::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("novel-reader")
+        .join("comics");
+    let path = data_dir.to_string_lossy().to_string();
+    debug_log!("📂 漫画渲染目录: {}", &path);
+    path
+}
+
 // ===== 在线搜索/下载 =====
 
 /// 从 URL 中提取来源域名作为 Referer
@@ -798,6 +811,23 @@ fn set_render_dpi(dpi: u32, state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+/// 获取 PDF 渲染线程数
+#[tauri::command]
+fn get_render_threads(state: State<AppState>) -> Result<usize, String> {
+    let t = lock_mutex(&state.render_threads)?;
+    Ok(*t)
+}
+
+/// 设置 PDF 渲染线程数
+#[tauri::command]
+fn set_render_threads(threads: usize, state: State<AppState>) -> Result<(), String> {
+    let t = threads.clamp(1, 16);
+    *lock_mutex(&state.render_threads)? = t;
+    save_setting(&state.data_dir, "render_threads", &t.to_string());
+    debug_log!("🧵 PDF 渲染线程数已更改为: {} 线程", t);
+    Ok(())
+}
+
 /// 扫描结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
@@ -825,6 +855,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
 
     let data_dir = state.data_dir.clone();
     let render_dpi = *lock_mutex(&state.render_dpi)?;
+    let render_threads = *lock_mutex(&state.render_threads)?;
 
     let (lib, comic_lib) = {
         let l = lock_mutex(&state.library)?;
@@ -900,7 +931,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                     Err(e) => errors.push(format!("导入漫画文件夹失败 {}: {}", path, e)),
                 }
             } else {
-                let result = comic::import_comic(path, &data_dir, render_dpi);
+                let result = comic::import_comic(path, &data_dir, render_dpi, render_threads);
                 let mut need_cleanup = false;
                 match result {
                     Ok(book) => {
@@ -999,10 +1030,11 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
     let data_dir = state.data_dir.clone();
     let path_c = path.clone();
     let render_dpi = *lock_mutex(&state.render_dpi)?;
+    let render_threads = *lock_mutex(&state.render_threads)?;
     let (tx, rx) = tokio::sync::oneshot::channel();
     let app_handle = APP_HANDLE.get().cloned();
     std::thread::spawn(move || {
-        let result = comic::import_comic(&path_c, &data_dir, render_dpi);
+        let result = comic::import_comic(&path_c, &data_dir, render_dpi, render_threads);
         // 导入完成或失败后发送事件
         if let Some(handle) = app_handle {
             match &result {
@@ -1367,6 +1399,10 @@ pub fn run() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(150u32)
         .clamp(72, 300);
+    let render_threads: usize = settings.get("render_threads")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1)
+        .clamp(1, 16);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1378,6 +1414,7 @@ pub fn run() {
             fanqie: fanqie::FanqieApi::new(),
             comic_library: Mutex::new(comic_library),
             render_dpi: Mutex::new(render_dpi),
+            render_threads: Mutex::new(render_threads),
             scan_cancel: Mutex::new(false),
         })
         .setup(|app| {
@@ -1417,8 +1454,11 @@ pub fn run() {
             set_library_path,
             get_render_dpi,
             set_render_dpi,
+            get_render_threads,
+            set_render_threads,
             scan_library,
             cancel_scan,
+            get_comics_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
