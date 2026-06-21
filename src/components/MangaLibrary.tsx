@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useStore, ComicData, ComicMeta } from "../store";
+import { handleCardGlow } from "../utils/glow";
 
 export default function MangaLibrary() {
   const comics = useStore((s) => s.comics);
@@ -27,7 +28,6 @@ export default function MangaLibrary() {
   const [sortField, setSortField] = useState<SortField>(() => {
     const saved = localStorage.getItem("nr-manga-sort-field");
     if (saved === "pages") return "pages";
-    localStorage.setItem("nr-manga-sort-field", "name");
     return "name";
   });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-manga-sort-asc") !== "false");
@@ -95,10 +95,10 @@ export default function MangaLibrary() {
         for (const id of ids) {
           await invoke("remove_comic", { comicId: id, deleteFile: deleteFiles });
         }
+        const { [seriesName]: _, ...rest } = seriesMap;
+        setSeriesMap(rest);
+        triggerRefresh();
       } catch {}
-      const { [seriesName]: _, ...rest } = seriesMap;
-      setSeriesMap(rest);
-      triggerRefresh();
     })();
   };
 
@@ -156,12 +156,6 @@ export default function MangaLibrary() {
     return () => { unlisten?.(); };
   }, []);
 
-  useEffect(() => {
-    const close = () => setCtxMenu(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, []);
-
   // Escape 退出批量模式
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -172,19 +166,7 @@ export default function MangaLibrary() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectMode]);
-
-  const handleCardGlow = (e: React.MouseEvent, el: HTMLElement) => {
-    const rect = el.getBoundingClientRect();
-    const pctX = ((e.clientX - rect.left) / rect.width) * 100 + "%";
-    const pctY = ((e.clientY - rect.top) / rect.height) * 100 + "%";
-    el.style.setProperty("--mx", pctX);
-    el.style.setProperty("--my", pctY);
-    el.querySelectorAll(".book-cover").forEach((cover) => {
-      (cover as HTMLElement).style.setProperty("--mx", pctX);
-      (cover as HTMLElement).style.setProperty("--my", pctY);
-    });
-  };
+  }, []);
 
   const handleCtxMenu = (e: React.MouseEvent, comic: ComicMeta) => {
     e.preventDefault();
@@ -320,7 +302,7 @@ export default function MangaLibrary() {
   // 批量设置封面图标
   const handleBatchIcon = async (icon: string) => {
     if (selectedIds.size === 0) return;
-    setBatchIconPicker(null);
+    setBatchIconPicker(false);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       for (const id of selectedIds) {
@@ -364,7 +346,7 @@ export default function MangaLibrary() {
     }
   };
 
-  if (displayList.length === 0 && seriesTabs.length <= 1) {
+  if (displayList.length === 0) {
     return (
       <section className="library">
         <div className="library-header">
@@ -387,7 +369,7 @@ export default function MangaLibrary() {
         <span className="library-count">{displayList.length} 本漫画</span>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <div id="series-tabs" style={{
+        <div id="series-tabs" className="glow-border glow-inner" style={{
           display: "flex", gap: 0, cursor: "pointer", userSelect: "none",
           background: "rgba(var(--accent-rgb),0.06)",
           borderRadius: "var(--radius-md)", padding: 3,
@@ -437,7 +419,7 @@ export default function MangaLibrary() {
             onClick={() => setSeriesDialogOpen(true)}>+ 新建</span>
         </div>
         {(["name", "pages"] as const).map((field) => (
-          <button key={field} className="btn sort-btn" onClick={() => setSort(field)} style={{
+          <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
             fontSize: ".78rem", padding: "4px 12px",
             background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
             borderColor: sortField === field ? "var(--accent)" : undefined,
@@ -859,14 +841,12 @@ export default function MangaLibrary() {
 const coverCache = new Map<string, string>();
 
 function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolean }) {
-  // 从内存缓存取封面，标记是否为缓存命中（避免重新挂载时触发 coverFadeIn 动画）
-  const fromCache = coverCache.has(comicId);
   const [cover, setCover] = useState<string | null>(() => {
     if (hasIcon) return null;
     return coverCache.get(comicId) ?? null;
   });
   const ref = useRef<HTMLDivElement>(null);
-  const loadedRef = useRef(fromCache);
+  const loadedRef = useRef(coverCache.has(comicId));
 
   useEffect(() => {
     // 用户设置了 emoji 图标时，不显示第一页封面
@@ -930,7 +910,7 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
   if (cover) {
     return (
       <>
-        <img className="book-cover-img" src={cover} alt="" style={fromCache ? { animation: "none" } : undefined} />
+        <img className="book-cover-img" src={cover} alt="" />
         <div className="book-cover-gradient" />
       </>
     );

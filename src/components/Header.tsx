@@ -33,6 +33,10 @@ export default function Header() {
     const dx = (vw / 2) - (rect.left + rect.width / 2);
     const dy = (vh / 2) - (rect.top + rect.height / 2);
 
+    // 移除已有的同名 style 标签，防止重复插入
+    const existing = document.getElementById("about-fly-keyframes");
+    if (existing) existing.remove();
+
     const style = document.createElement("style");
     style.id = "about-fly-keyframes";
     style.textContent = `
@@ -187,7 +191,7 @@ export default function Header() {
           </span>
           墨读
         </a>
-        <div className="header-tabs" style={{
+        <div className="header-tabs glow-border glow-inner" style={{
           display: "flex", gap: 0, cursor: "pointer", userSelect: "none",
           background: "rgba(var(--accent-rgb),0.06)",
           borderRadius: "var(--radius-sm)", padding: 3,
@@ -218,7 +222,11 @@ export default function Header() {
           <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "manga" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease" }}>🎴 漫画</span>
         </div>
       </div>
-      <div className="header-actions" style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, padding: 4, background: "rgba(var(--accent-rgb),0.04)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-glass)" }}
+      <div className="header-actions glow-border glow-inner" style={{
+        display: "flex", gap: 8, position: "relative", zIndex: 1, padding: 4,
+        background: "rgba(var(--accent-rgb),0.04)", borderRadius: "var(--radius-md)",
+        border: "1px solid var(--border-glass)",
+      }}
         onMouseMove={(e) => {
           const el = e.currentTarget;
           const rect = el.getBoundingClientRect();

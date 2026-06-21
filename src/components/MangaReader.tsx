@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useStore } from "../store";
+import SidebarHandle from "./SidebarHandle";
 
 export default function MangaReader() {
   const currentManga = useStore((s) => s.currentManga);
@@ -30,7 +31,8 @@ export default function MangaReader() {
   const [mangaSidebar, setMangaSidebar] = useState(false);
   const [sidebarHint, setSidebarHint] = useState(false);
   const sideTimer = useRef<number>(0);
-  const [sidebarComics, setSidebarComics] = useState(useStore((s) => s.comics));
+  // D6: Lazy init — call useStore.getState() once at mount, not on every render
+  const [sidebarComics, setSidebarComics] = useState(() => useStore.getState().comics);
   const [comicSearch, setComicSearch] = useState("");
   const sidebarRefreshRef = useRef(false);
   // 同系列章节列表
@@ -549,26 +551,9 @@ export default function MangaReader() {
         </div>
       </div>
 
-      {/* 侧栏把手 > — 独立定位，侧栏关闭时贴左边缘，打开时滑到侧栏右侧，与侧栏连为一体 */}
-      <div style={{
-        position: "fixed", zIndex: 319,
-        left: mangaSidebar ? 240 : 0, top: "50%", transform: "translateY(-50%)",
-        transition: "left 0.45s cubic-bezier(0.22, 1.3, 0.36, 1), opacity 0.3s ease",
-        opacity: sidebarHint || mangaSidebar ? 1 : 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 24, height: 80,
-        background: "var(--glass-bg)",
-        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-        borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
-        border: "1px solid var(--border-glass)",
-        borderLeft: "none",
-        boxShadow: sidebarHint || mangaSidebar ? "2px 0 12px rgba(var(--accent-rgb),0.15), inset 0 0 8px rgba(var(--accent-rgb),0.05)" : "none",
-        fontSize: "1.3rem",
-        fontWeight: 700,
-        color: "var(--text)",
-        pointerEvents: "none",
-        animation: sidebarHint && !mangaSidebar ? "pulseHint 2s ease-in-out infinite" : "none",
-      }}>{'>'}</div>
+      {/* 侧栏把手 */}
+      <SidebarHandle open={mangaSidebar} hint={sidebarHint}
+        transition="left 0.45s cubic-bezier(0.22, 1.3, 0.36, 1), opacity 0.3s ease" />
 
       {loading && !loadedPages[mangaCurrentPage] ? (
         <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", padding: "8px 20px", borderRadius: "var(--radius-full)", border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>

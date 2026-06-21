@@ -41,6 +41,12 @@ macro_rules! debug_log {
     }};
 }
 
+/// 辅助函数：给 Mutex 加锁，锁中毒时返回 String 错误
+/// 适用于 Result<T, String> 的 Tauri command
+fn lock_mutex<T>(m: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>, String> {
+    m.lock().map_err(|e| format!("锁错误: {}", e))
+}
+
 // ===== 数据结构 =====
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,6 +131,14 @@ fn save_setting(data_dir: &Path, key: &str, value: &str) {
 
 // ===== 书库文件存储 =====
 
+/// 原子写入：先写临时文件，再重命名，防止写入过程中崩溃导致 library.json 损坏
+fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
+    let tmp_path = path.with_extension("json.tmp");
+    fs::write(&tmp_path, content).map_err(|e| format!("写入临时文件失败: {}", e))?;
+    fs::rename(&tmp_path, path).map_err(|e| format!("重命名临时文件失败: {}", e))?;
+    Ok(())
+}
+
 fn save_library(data_dir: &PathBuf, lib: &LibraryData) -> Result<(), String> {
     let path = data_dir.join("library.json");
     // 先清空 content 再保存（content 只用于运行时读取章节切片，不持久化）
@@ -135,8 +149,7 @@ fn save_library(data_dir: &PathBuf, lib: &LibraryData) -> Result<(), String> {
     }).collect();
     let slim = LibraryData { books: stripped };
     let json = serde_json::to_string_pretty(&slim).map_err(|e| format!("序列化失败: {}", e))?;
-    fs::write(&path, &json).map_err(|e| format!("写入失败: {}", e))?;
-    Ok(())
+    atomic_write(&path, &json)
 }
 
 fn load_library(data_dir: &PathBuf) -> LibraryData {
@@ -199,7 +212,7 @@ fn import_book(path: String, state: State<AppState>) -> Result<Book, String> {
         book_icon: String::new(),
     };
 
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     lib.books.push(book.clone());
     save_library(&state.data_dir, &lib).ok();
 
@@ -329,8 +342,8 @@ fn scan_directory(dir: &Path, known_books: &[Book], known_comics: &[comic::Comic
 }
 
 #[tauri::command]
-fn get_library(state: State<AppState>) -> Vec<Book> {
-    let lib = state.library.lock().unwrap();
+fn get_library(state: State<AppState>) -> Result<Vec<Book>, String> {
+    let lib = lock_mutex(&state.library)?;
     debug_log!("📚 获取书库: {} 本书", lib.books.len());
     // 去掉 content 大字段再序列化，避免栈溢出
     let books = lib.books.iter().map(|b| {
@@ -338,7 +351,7 @@ fn get_library(state: State<AppState>) -> Vec<Book> {
         book.content = String::new();
         book
     }).collect();
-    books
+    Ok(books)
 }
 
 #[tauri::command]
@@ -346,12 +359,19 @@ fn get_chapter_content(book_id: String, chapter_index: usize, state: State<AppSt
     debug_log!("📖 读取章节: book={}, chapter={}", &book_id, chapter_index);
 
     // 先提取必要信息后释放 lib 锁，避免借用冲突
+    //
+    // 注意：这里分两次获取锁（第一次获取释放后，第二次再获取），
+    // 两次获取之间可能被其他线程插队，但不会导致死锁，因为：
+    //   - 两次 lock() 的生命周期不重叠（第一次的锁在 } 处就释放了）
+    //   - 第二次获取锁时如果内容已在内存中则不读文件，快速返回
+    //   - 如果内容不在内存中，先在无锁状态下读文件，再二次获取锁取 content
+    //   - 不存在两个线程相互等待对方释放锁的场景，因此不会死锁
     let need_reload: bool;
     let file_path: String;
     let start_pos: usize;
     let end_pos: usize;
     {
-        let lib = state.library.lock().map_err(|e| format!("锁错误: {}", e))?;
+        let lib = lock_mutex(&state.library)?;
         let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
         let chapter = book.chapters.get(chapter_index).ok_or("章节索引超出范围")?;
         debug_log!("   章节标题: {:?}", chapter.title);
@@ -360,16 +380,19 @@ fn get_chapter_content(book_id: String, chapter_index: usize, state: State<AppSt
         start_pos = chapter.start_pos;
         end_pos = chapter.end_pos;
     }
+    // 第一次锁在此处已释放
 
     let content = if need_reload {
         debug_log!("   content 为空，从文件重新读取: {}", file_path);
         read_txt_file(&file_path)?.replace("\r\n", "\n").replace('\r', "\n")
     } else {
-        // content 在内存中，可以正常读取
-        let lib = state.library.lock().map_err(|e| format!("锁错误: {}", e))?;
+        // content 在内存中，第二次获取锁读取 content
+        // 注意：两次 lock 之间没有嵌套，不会死锁
+        let lib = lock_mutex(&state.library)?;
         let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
         book.content.clone()
     };
+    // 第二次锁在此处已释放
 
     let end = end_pos.min(content.len());
     let start = start_pos.min(end);
@@ -382,7 +405,7 @@ fn get_chapter_content(book_id: String, chapter_index: usize, state: State<AppSt
 #[tauri::command]
 fn update_progress(book_id: String, chapter_index: usize, state: State<AppState>) -> Result<(), String> {
     debug_log!("💾 更新进度: book={}, chapter={}", &book_id, chapter_index);
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
     book.current_chapter = chapter_index;
     book.progress = if book.total_chapters > 0 {
@@ -398,7 +421,7 @@ fn update_progress(book_id: String, chapter_index: usize, state: State<AppState>
 #[tauri::command]
 fn remove_book(book_id: String, state: State<AppState>) -> Result<(), String> {
     debug_log!("🗑️ 删除书籍: {}", &book_id);
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     lib.books.retain(|b| b.id != book_id);
     save_library(&state.data_dir, &lib).ok();
     Ok(())
@@ -407,7 +430,7 @@ fn remove_book(book_id: String, state: State<AppState>) -> Result<(), String> {
 #[tauri::command]
 fn reparse_book_chapters(book_id: String, state: State<AppState>) -> Result<(), String> {
     debug_log!("🔄 重新解析章节: book={}", &book_id);
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
     let new_chapters = parse_chapters(&book.content);
     debug_log!("   旧章节数: {}, 新章节数: {}", book.chapters.len(), new_chapters.len());
@@ -423,7 +446,7 @@ fn reparse_book_chapters(book_id: String, state: State<AppState>) -> Result<(), 
 #[tauri::command]
 fn rename_book(book_id: String, new_title: String, state: State<AppState>) -> Result<(), String> {
     debug_log!("✏️ 重命名: book={} -> {}", &book_id, &new_title);
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
     book.title = new_title;
     save_library(&state.data_dir, &lib).ok();
@@ -433,7 +456,7 @@ fn rename_book(book_id: String, new_title: String, state: State<AppState>) -> Re
 #[tauri::command]
 fn toggle_favorite(book_id: String, state: State<AppState>) -> Result<(), String> {
     debug_log!("⭐ 切换收藏: book={}", &book_id);
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
     book.favorite = !book.favorite;
     save_library(&state.data_dir, &lib).ok();
@@ -443,7 +466,7 @@ fn toggle_favorite(book_id: String, state: State<AppState>) -> Result<(), String
 #[tauri::command]
 fn save_book_order(book_ids: Vec<String>, state: State<AppState>) -> Result<(), String> {
     debug_log!("🔄 保存书库排序: {} 本书", book_ids.len());
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     let mut reordered: Vec<Book> = Vec::with_capacity(book_ids.len());
     for id in &book_ids {
         if let Some(idx) = lib.books.iter().position(|b| b.id == *id) {
@@ -464,7 +487,7 @@ fn save_book_order(book_ids: Vec<String>, state: State<AppState>) -> Result<(), 
 #[tauri::command]
 fn set_book_icon(book_id: String, icon: String, state: State<AppState>) -> Result<(), String> {
     debug_log!("🎨 设置封面图标: book={}, icon={}", &book_id, &icon);
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
     book.book_icon = icon;
     save_library(&state.data_dir, &lib).ok();
@@ -542,6 +565,11 @@ async fn fetch_url(url: String, method: Option<String>, body: Option<String>, re
     debug_log!("   Referer: {}", &final_referer);
 
     // 构造真实浏览器请求头
+    //
+    // A2 修复：body 传空字符串 "" 时仍应作为 POST body 发送（而不是不发送 body）
+    // body.unwrap_or_default() 在 body=None 时返回 ""，在 body=Some("") 时也返回 ""
+    // 但行为是对的——只要是 POST 就用 body(b) 发送，无论 body 是 "" 还是非空
+    // 关键是 method=POST 才会进入此分支，不存在退化为 GET 的问题
     let is_post = method.as_deref() == Some("POST");
     let req = if is_post {
         let b = body.unwrap_or_default();
@@ -653,21 +681,22 @@ fn get_workspace_dir() -> String {
 
 /// 获取当前书库路径
 #[tauri::command]
-fn get_library_path(state: State<AppState>) -> String {
-    state.library_path.lock().unwrap().clone()
+fn get_library_path(state: State<AppState>) -> Result<String, String> {
+    let path = lock_mutex(&state.library_path)?;
+    Ok(path.clone())
 }
 
 /// 设置新书库路径
 #[tauri::command]
 fn set_library_path(new_path: String, state: State<AppState>) -> Result<(), String> {
-    let path = PathBuf::from(&new_path);
-    if !path.exists() {
+    let path_obj = PathBuf::from(&new_path);
+    if !path_obj.exists() {
         return Err("路径不存在".to_string());
     }
-    if !path.is_dir() {
+    if !path_obj.is_dir() {
         return Err("请选择一个文件夹".to_string());
     }
-    *state.library_path.lock().unwrap() = new_path.clone();
+    *lock_mutex(&state.library_path)? = new_path.clone();
     save_setting(&state.data_dir, "library_path", &new_path);
     debug_log!("📂 书库路径已更改: {}", &new_path);
     Ok(())
@@ -675,15 +704,16 @@ fn set_library_path(new_path: String, state: State<AppState>) -> Result<(), Stri
 
 /// 获取 PDF 渲染精度（DPI）
 #[tauri::command]
-fn get_render_dpi(state: State<AppState>) -> u32 {
-    *state.render_dpi.lock().unwrap()
+fn get_render_dpi(state: State<AppState>) -> Result<u32, String> {
+    let dpi = lock_mutex(&state.render_dpi)?;
+    Ok(*dpi)
 }
 
 /// 设置 PDF 渲染精度（DPI），仅对新导入生效
 #[tauri::command]
 fn set_render_dpi(dpi: u32, state: State<AppState>) -> Result<(), String> {
     let dpi = dpi.clamp(72, 300);
-    *state.render_dpi.lock().unwrap() = dpi;
+    *lock_mutex(&state.render_dpi)? = dpi;
     save_setting(&state.data_dir, "render_dpi", &dpi.to_string());
     debug_log!("🖼️ PDF 渲染精度已更改为: {} DPI", dpi);
     Ok(())
@@ -703,9 +733,9 @@ pub struct ScanResult {
 #[tauri::command]
 async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<String, String> {
     // 清除取消标记
-    *state.scan_cancel.lock().unwrap() = false;
+    *lock_mutex(&state.scan_cancel)? = false;
 
-    let lib_path = state.library_path.lock().unwrap().clone();
+    let lib_path = lock_mutex(&state.library_path)?.clone();
     if lib_path.is_empty() {
         return Err("请先设置书库路径".to_string());
     }
@@ -715,11 +745,11 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
     }
 
     let data_dir = state.data_dir.clone();
-    let render_dpi = *state.render_dpi.lock().unwrap();
+    let render_dpi = *lock_mutex(&state.render_dpi)?;
 
     let (lib, comic_lib) = {
-        let l = state.library.lock().unwrap();
-        let cl = state.comic_library.lock().unwrap();
+        let l = lock_mutex(&state.library)?;
+        let cl = lock_mutex(&state.comic_library)?;
         (l.books.clone(), cl.comics.clone())
     };
 
@@ -864,7 +894,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
 /// 取消扫描
 #[tauri::command]
 fn cancel_scan(state: State<'_, AppState>) -> Result<(), String> {
-    *state.scan_cancel.lock().unwrap() = true;
+    *lock_mutex(&state.scan_cancel)? = true;
     Ok(())
 }
 
@@ -889,7 +919,7 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
     // mutool draw 可能耗时（几十秒），用 oneshot 通道异步等待
     let data_dir = state.data_dir.clone();
     let path_c = path.clone();
-    let render_dpi = *state.render_dpi.lock().unwrap();
+    let render_dpi = *lock_mutex(&state.render_dpi)?;
     let (tx, rx) = tokio::sync::oneshot::channel();
     let app_handle = APP_HANDLE.get().cloned();
     std::thread::spawn(move || {
@@ -919,7 +949,7 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
     let book = rx.await.map_err(|_| "导入线程意外终止".to_string())?
         .map_err(|e| format!("导入失败: {}", e))?;
 
-    let mut lib = state.comic_library.lock().unwrap();
+    let mut lib = lock_mutex(&state.comic_library)?;
     lib.comics.push(book.clone());
     comic::save_comic_library(&state.data_dir, &lib).ok();
 
@@ -948,15 +978,15 @@ fn import_comic_folder_impl(folder: &Path) -> Result<comic::ComicBook, String> {
 }
 
 #[tauri::command]
-fn get_comic_library(state: State<AppState>) -> Vec<comic::ComicBook> {
-    let lib = state.comic_library.lock().unwrap();
+fn get_comic_library(state: State<AppState>) -> Result<Vec<comic::ComicBook>, String> {
+    let lib = lock_mutex(&state.comic_library)?;
     debug_log!("📚 获取漫画书库: {} 本", lib.comics.len());
-    lib.comics.clone()
+    Ok(lib.comics.clone())
 }
 
 #[tauri::command]
 fn get_comic_page(comic_id: String, page_index: usize, state: State<AppState>) -> Result<String, String> {
-    let lib = state.comic_library.lock().unwrap();
+    let lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     let page = comic.pages.get(page_index).ok_or("页码超出范围")?;
     comic::get_page_base64(&comic.image_dir, &page.filename)
@@ -964,7 +994,7 @@ fn get_comic_page(comic_id: String, page_index: usize, state: State<AppState>) -
 
 #[tauri::command]
 fn get_comic_thumbnail(comic_id: String, state: State<AppState>) -> Result<String, String> {
-    let lib = state.comic_library.lock().unwrap();
+    let lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     if comic.pages.is_empty() {
         return Err("漫画没有页面".to_string());
@@ -976,7 +1006,7 @@ fn get_comic_thumbnail(comic_id: String, state: State<AppState>) -> Result<Strin
 
 #[tauri::command]
 fn update_comic_progress(comic_id: String, page_index: usize, state: State<AppState>) -> Result<(), String> {
-    let mut lib = state.comic_library.lock().unwrap();
+    let mut lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     comic.current_page = page_index;
     comic::save_comic_library(&state.data_dir, &lib).ok();
@@ -985,7 +1015,7 @@ fn update_comic_progress(comic_id: String, page_index: usize, state: State<AppSt
 
 #[tauri::command]
 fn update_comic_direction(comic_id: String, direction: String, state: State<AppState>) -> Result<(), String> {
-    let mut lib = state.comic_library.lock().unwrap();
+    let mut lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     comic.direction = direction;
     comic::save_comic_library(&state.data_dir, &lib).ok();
@@ -994,7 +1024,7 @@ fn update_comic_direction(comic_id: String, direction: String, state: State<AppS
 
 #[tauri::command]
 fn remove_comic(comic_id: String, state: State<AppState>) -> Result<(), String> {
-    let mut lib = state.comic_library.lock().unwrap();
+    let mut lib = lock_mutex(&state.comic_library)?;
     // 删除前清理文件
     if let Some(comic) = lib.comics.iter().find(|c| c.id == comic_id) {
         comic::cleanup_comic_files(comic);
@@ -1006,7 +1036,7 @@ fn remove_comic(comic_id: String, state: State<AppState>) -> Result<(), String> 
 
 #[tauri::command]
 fn rename_comic(comic_id: String, new_title: String, state: State<AppState>) -> Result<(), String> {
-    let mut lib = state.comic_library.lock().unwrap();
+    let mut lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     comic.title = new_title;
     comic::save_comic_library(&state.data_dir, &lib).ok();
@@ -1015,7 +1045,7 @@ fn rename_comic(comic_id: String, new_title: String, state: State<AppState>) -> 
 
 #[tauri::command]
 fn toggle_comic_favorite(comic_id: String, state: State<AppState>) -> Result<(), String> {
-    let mut lib = state.comic_library.lock().unwrap();
+    let mut lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     comic.favorite = !comic.favorite;
     comic::save_comic_library(&state.data_dir, &lib).ok();
@@ -1024,7 +1054,7 @@ fn toggle_comic_favorite(comic_id: String, state: State<AppState>) -> Result<(),
 
 #[tauri::command]
 fn set_comic_icon(comic_id: String, icon: String, state: State<AppState>) -> Result<(), String> {
-    let mut lib = state.comic_library.lock().unwrap();
+    let mut lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     comic.book_icon = icon;
     comic::save_comic_library(&state.data_dir, &lib).ok();
@@ -1105,7 +1135,7 @@ fn dir_size_mb(dir: &Path) -> f64 {
 
 #[tauri::command]
 fn rescan_comic_folder(comic_id: String, state: State<AppState>) -> Result<usize, String> {
-    let mut lib = state.comic_library.lock().unwrap();
+    let mut lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     let new_pages = comic::rescan_folder(&comic.image_dir)?;
     let count = new_pages.len();
@@ -1237,7 +1267,7 @@ fn save_online_book_inner(title: &str, author: &str, content: &str, state: State
         book_icon: String::new(),
     };
 
-    let mut lib = state.library.lock().unwrap();
+    let mut lib = lock_mutex(&state.library)?;
     lib.books.push(book.clone());
     save_library(&state.data_dir, &lib).ok();
     Ok(book)

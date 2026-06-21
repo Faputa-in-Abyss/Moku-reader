@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { useStore } from "../store";
+import SidebarHandle from "./SidebarHandle";
 
 export default function Reader() {
   const currentBook = useStore((s) => s.currentBook);
@@ -51,6 +52,8 @@ export default function Reader() {
   const prevWheelAccumRef = useRef(0);
   const nextWheelAccumRef = useRef(0);
   const sideTimer = useRef<number>(0);
+  // D5: Track wheel animation timeouts for cleanup
+  const wheelTimerRef = useRef<number>(0);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxSubMenu, setCtxSubMenu] = useState<string | null>(null);
   const [tip, setTip] = useState("");
@@ -95,10 +98,12 @@ export default function Reader() {
     prevWheelAccumRef.current = 0;
     nextWheelAccumRef.current = 0;
     contentRef.current?.scrollTo({ top: 0 });
-    setTimeout(() => {
+    // D5: Track and cleanup scroll lock timeout
+    const scrollTimer = setTimeout(() => {
       scrollLockRef.current = false;
       lastScrollTopRef.current = 0;
     }, 600);
+    return () => clearTimeout(scrollTimer);
   }, [currentChapter]);
 
   useEffect(() => {
@@ -195,8 +200,10 @@ export default function Reader() {
 
   useEffect(() => {
     if (readingMode !== "page") return;
+    // D5: Track and cleanup fullscreen debounce timeout
+    let fullscreenTimer: number;
     const onResize = () => setFlowKey(k => k + 1);
-    const onFullscreen = () => setTimeout(() => setFlowKey(k => k + 1), 300);
+    const onFullscreen = () => { clearTimeout(fullscreenTimer); fullscreenTimer = window.setTimeout(() => setFlowKey(k => k + 1), 300); };
     window.addEventListener("resize", onResize);
     document.addEventListener("fullscreenchange", onFullscreen);
     document.addEventListener("webkitfullscreenchange", onFullscreen);
@@ -204,6 +211,7 @@ export default function Reader() {
       window.removeEventListener("resize", onResize);
       document.removeEventListener("fullscreenchange", onFullscreen);
       document.removeEventListener("webkitfullscreenchange", onFullscreen);
+      clearTimeout(fullscreenTimer);
     };
   }, [readingMode]);
 
@@ -348,6 +356,12 @@ export default function Reader() {
     if (book) loadBookmarks(book.id);
   }, [book?.id]);
 
+  // D4: Use refs for nextPage/prevPage so keydown handler doesn't depend on them directly
+  const nextPageRef = useRef(nextPage);
+  const prevPageRef = useRef(prevPage);
+  useEffect(() => { nextPageRef.current = nextPage; }, [nextPage]);
+  useEffect(() => { prevPageRef.current = prevPage; }, [prevPage]);
+
   useEffect(() => {
     function matchKey(e: KeyboardEvent, shortcut: string): boolean {
       const parts = shortcut.toLowerCase().split("+");
@@ -368,6 +382,12 @@ export default function Reader() {
       } else if (matchKey(e, keybindings.fontSizeDown)) {
         e.preventDefault();
         setFontSize(fontSize - 0.1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        nextPageRef.current();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        prevPageRef.current();
       }
     };
     window.addEventListener("keydown", handler);
@@ -494,7 +514,9 @@ export default function Reader() {
                 scrollLockRef.current = true;
                 el.style.transition = "transform 0.25s cubic-bezier(.25,.46,.45,.94)";
                 el.style.transform = "translateY(60px)";
-                setTimeout(() => {
+                // D5: track wheel animation timeout
+                clearTimeout(wheelTimerRef.current);
+                wheelTimerRef.current = window.setTimeout(() => {
                   el.style.transition = "none";
                   el.style.transform = "";
                   animateChapter(currentChapter - 1, el.clientWidth / 2, 20);
@@ -511,7 +533,9 @@ export default function Reader() {
                 scrollLockRef.current = true;
                 el.style.transition = "transform 0.25s cubic-bezier(.25,.46,.45,.94)";
                 el.style.transform = "translateY(-60px)";
-                setTimeout(() => {
+                // D5: track wheel animation timeout
+                clearTimeout(wheelTimerRef.current);
+                wheelTimerRef.current = window.setTimeout(() => {
                   el.style.transition = "none";
                   el.style.transform = "";
                   animateChapter(currentChapter + 1, el.clientWidth / 2, el.clientHeight - 20);
@@ -570,26 +594,8 @@ export default function Reader() {
         )}
       </div>
 
-      {/* 侧栏把手 >，贴在目录侧栏右侧，与侧栏连为一体 */}
-      <div style={{
-        position: "fixed", zIndex: 399,
-        left: sidebarOpen ? 280 : 0, top: "50%", transform: "translateY(-50%)",
-        transition: "left 0.35s ease, opacity 0.3s ease",
-        opacity: sidebarHint || sidebarOpen ? 1 : 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 24, height: 80,
-        background: "var(--glass-bg)",
-        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-        borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
-        border: "1px solid var(--border-glass)",
-        borderLeft: "none",
-        boxShadow: sidebarHint || sidebarOpen ? "2px 0 12px rgba(var(--accent-rgb),0.15), inset 0 0 8px rgba(var(--accent-rgb),0.05)" : "none",
-        fontSize: "1.3rem",
-        fontWeight: 700,
-        color: "var(--text)",
-        pointerEvents: "none",
-        animation: sidebarHint && !sidebarOpen ? "pulseHint 2s ease-in-out infinite" : "none",
-      }}>{'>'}</div>
+      {/* 侧栏把手 */}
+      <SidebarHandle open={sidebarOpen} hint={sidebarHint} sidebarWidth={280} zIndex={399} />
 
       {/* 目录侧栏 */}
       <div style={{
@@ -907,4 +913,3 @@ function FontSearchDropdown({ fonts, current, onSelect }: {
       </div>
     );
   }
-

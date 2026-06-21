@@ -45,9 +45,11 @@ function initParticles(W: number, H: number) {
 
 export default function ParticleCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const instanceIdRef = useRef<symbol>(Symbol("particleCanvasInstance"));
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
+    const instanceId = instanceIdRef.current;
     let W: number, H: number, running = true;
     function resize() {
       W = canvas.width = window.innerWidth;
@@ -129,8 +131,11 @@ export default function ParticleCanvas() {
     }
     initParticles(W, H);
     animate();
-    window.__onThemeChange = () => { _clr = getAccentRGB(); _clr2 = getAccentRGB2(); };
-    window.__burstParticles = (cx: number, cy: number, count = 30) => {
+    // 用实例标记记录当前 instance 注册了这些全局属性
+    const ownerKey = "__particleCanvasOwner";
+    (window as any).__onThemeChange = () => { _clr = getAccentRGB(); _clr2 = getAccentRGB2(); };
+    (window as any)[ownerKey + "__onThemeChange"] = instanceId;
+    (window as any).__burstParticles = (cx: number, cy: number, count = 30) => {
       for (let i = 0; i < count; i++) {
         const p = createParticle(_W || window.innerWidth, _H || window.innerHeight);
         p.x = cx; p.y = cy;
@@ -143,13 +148,21 @@ export default function ParticleCanvas() {
       }
       if (_particles.length > 400) _particles.splice(0, _particles.length - 400);
     };
+    (window as any)[ownerKey + "__burstParticles"] = instanceId;
     return () => {
       running = false; cancelAnimationFrame(_animId);
       window.removeEventListener("resize", resize);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseleave", onLeave);
-      delete (window as any).__burstParticles;
-      delete (window as any).__onThemeChange;
+      // 只有当前实例"拥有"这些全局属性时才清理
+      if ((window as any)[ownerKey + "__onThemeChange"] === instanceId) {
+        delete (window as any).__onThemeChange;
+        delete (window as any)[ownerKey + "__onThemeChange"];
+      }
+      if ((window as any)[ownerKey + "__burstParticles"] === instanceId) {
+        delete (window as any).__burstParticles;
+        delete (window as any)[ownerKey + "__burstParticles"];
+      }
     };
   }, []);
   return <canvas ref={canvasRef} id="particleCanvas" />;
