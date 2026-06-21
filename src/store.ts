@@ -120,7 +120,6 @@ interface AppStore {
   comics: ComicData[];
   setComics: (comics: ComicData[]) => void;
   comicsMeta: ComicMeta[];
-  setComicsMeta: (meta: ComicMeta[]) => void;
   mangaReading: boolean;
   currentManga: ComicData | null;
   mangaCurrentPage: number;
@@ -244,10 +243,6 @@ export const useStore = create<AppStore>((set, get) => ({
   },
   // 持久化漫画列表（仅存 id / title / source_type / total_pages / current_page / direction / favorite / book_icon，不含 pages 和 image_dir）
   comicsMeta: JSON.parse(localStorage.getItem("nr-comics-meta") || "[]") as ComicMeta[],
-  setComicsMeta: (meta) => {
-    localStorage.setItem("nr-comics-meta", JSON.stringify(meta));
-    set({ comicsMeta: meta });
-  },
   // 系列映射：series_id → 排序后的 comic id 列表（纯前端，用于多章节）
   seriesMap: JSON.parse(localStorage.getItem("nr-comic-series") || "{}") as Record<string, string[]>,
   setSeriesMap: (m) => {
@@ -261,7 +256,16 @@ export const useStore = create<AppStore>((set, get) => ({
     set({ viewMode: m });
   },
   comics: [],
-  setComics: (comics) => set({ comics }),
+  setComics: (comics) => {
+    const meta = comics.map((c): ComicMeta => ({
+      id: c.id, title: c.title, source_type: c.source_type,
+      total_pages: c.total_pages, current_page: c.current_page,
+      direction: c.direction, favorite: c.favorite, book_icon: c.book_icon,
+      series_id: c.series_id,
+    }));
+    localStorage.setItem("nr-comics-meta", JSON.stringify(meta));
+    set({ comics, comicsMeta: meta });
+  },
   mangaReading: false,
   currentManga: null,
   mangaCurrentPage: 0,
@@ -273,10 +277,6 @@ export const useStore = create<AppStore>((set, get) => ({
     }),
   closeMangaReader: () => {
     set({ mangaReading: false, currentManga: null, mangaCurrentPage: 0 });
-    setTimeout(() => {
-      const { triggerRefresh } = useStore.getState();
-      triggerRefresh();
-    }, 100);
   },
   setMangaPage: (idx) => set({ mangaCurrentPage: idx }),
   mangaViewMode: (localStorage.getItem("nr-manga-view") as MangaViewMode) || "single",

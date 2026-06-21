@@ -214,10 +214,13 @@ fn import_book(path: String, state: State<AppState>) -> Result<Book, String> {
     };
 
     let mut lib = lock_mutex(&state.library)?;
-    lib.books.push(book.clone());
+    // 内存中的 Book 不保留 content（content 仅在返回给前端时携带）
+    let mut book_for_memory = book.clone();
+    book_for_memory.content = String::new();
+    lib.books.push(book_for_memory);
     save_library(&state.data_dir, &lib).ok();
 
-    Ok(book)
+    Ok(book) // 返回带 content 的原始 book，让前端能读到章节内容
 }
 
 /// 不依赖 state 的纯函数：从文件路径导入书籍（复用已有逻辑）
@@ -736,7 +739,32 @@ fn save_online_book(title: String, author: String, content: String, save_path: O
         return Err("内容为空，无法保存".to_string());
     }
 
-    let book = save_online_book_inner(&title, &author, &content, state)?;
+    // 创建 Book 对象
+    let chapters = parse_chapters(&content);
+    let id = generate_id();
+    let total_chapters = chapters.len();
+    let book = Book {
+        id,
+        title: title.clone(),
+        file_path: String::new(),
+        file_type: "txt".to_string(),
+        total_chapters,
+        current_chapter: 0,
+        progress: 0.0,
+        chapters,
+        content,
+        favorite: false,
+        book_icon: String::new(),
+    };
+
+    // 内存中的 Book 不保留 content
+    let mut book_for_memory = book.clone();
+    book_for_memory.content = String::new();
+    {
+        let mut lib = lock_mutex(&state.library)?;
+        lib.books.push(book_for_memory);
+        save_library(&state.data_dir, &lib).ok();
+    }
 
     // 如果提供了 save_path，额外另存一份 .txt 文件
     if let Some(dir) = save_path {
@@ -889,7 +917,9 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
         for path in &novels_list {
             if check_cancel() { break; }
             match import_book_from_path(path) {
-                Ok(book) => {
+                Ok(mut book) => {
+                    // 扫描不需要 content 在内存中，清掉减少内存尖峰
+                    book.content = String::new();
                     let mut l = load_library(&data_dir);
                     l.books.push(book);
                     save_library(&data_dir, &l).ok();
@@ -1110,9 +1140,10 @@ fn get_comic_thumbnail(comic_id: String, state: State<AppState>) -> Result<Strin
     if comic.pages.is_empty() {
         return Err("漫画没有页面".to_string());
     }
-    // 所有类型都尝试读取第一页作为缩略图（PDF 首次已渲染为图片）
+    // 返回第一页的文件路径，前端用 convertFileSrc 生成 asset:// URL，跳过 base64 IPC
     let page = &comic.pages[0];
-    comic::get_page_base64(&comic.image_dir, &page.filename)
+    let full_path = std::path::Path::new(&comic.image_dir).join(&page.filename);
+    Ok(full_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -1175,11 +1206,13 @@ fn set_comic_icon(comic_id: String, icon: String, state: State<AppState>) -> Res
 /// 获取系统资源信息（内存、存储）
 #[tauri::command]
 fn get_system_resources() -> SystemResource {
-    use sysinfo::ProcessesToUpdate;
     static LAST_SYS: OnceLock<std::sync::Mutex<sysinfo::System>> = OnceLock::new();
-    let mut sys = LAST_SYS.get_or_init(|| std::sync::Mutex::new(sysinfo::System::new_all())).lock().unwrap();
+    let mut sys = LAST_SYS.get_or_init(|| std::sync::Mutex::new(sysinfo::System::new())).lock().unwrap();
     sys.refresh_memory();
-    sys.refresh_processes(ProcessesToUpdate::All, false);
+    // 只刷新当前进程，不刷新所有进程（Windows 上几千个进程会吃几百 MB）
+    if let Ok(pid) = sysinfo::get_current_pid() {
+        sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), false);
+    }
 
     let total_mem_mb = sys.total_memory() as f64 / (1024.0 * 1024.0);
     let used_mem_mb = sys.used_memory() as f64 / (1024.0 * 1024.0);
@@ -1187,25 +1220,12 @@ fn get_system_resources() -> SystemResource {
 
     let process_mem_mb = {
         let current_pid = sysinfo::get_current_pid().ok();
-        let mut total_bytes: u64 = 0;
-
-        // 当前进程
+        // 只查当前进程，不查子进程（WebView2 是共享内存，不能直接累加）
         if let Some(pid) = current_pid {
             if let Some(proc) = sys.process(pid) {
-                total_bytes += proc.memory();
-            }
-        }
-
-        // 只累加直系子进程（WebView2 子进程）
-        if let Some(parent_pid) = current_pid {
-            for (_pid, proc) in sys.processes() {
-                if proc.parent() == Some(parent_pid) {
-                    total_bytes += proc.memory();
-                }
-            }
-        }
-
-        total_bytes as f64 / (1024.0 * 1024.0)
+                proc.memory() as f64 / (1024.0 * 1024.0)
+            } else { 0.0 }
+        } else { 0.0 }
     };
 
     // 计算存储目录大小（应用本身 vs 内容）
