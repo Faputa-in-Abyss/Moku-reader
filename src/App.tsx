@@ -16,11 +16,8 @@ export default function App() {
   const reading = useStore((s) => s.reading);
   const viewMode = useStore((s) => s.viewMode);
   const mangaReading = useStore((s) => s.mangaReading);
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
-  }, [viewMode]);
+  const libraryScrollRef = React.useRef<HTMLDivElement>(null);
+  const mangaScrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const saved = localStorage.getItem("nr-theme") || "dark";
@@ -63,27 +60,34 @@ export default function App() {
         }}
       />
       <Header />
-      <div ref={scrollRef} style={{
+      <div style={{
+        position: "fixed",
+        top: 50,
+        left: 0,
+        right: 0,
+        bottom: 0,
         display: "grid",
         gridTemplateColumns: "1fr",
         gridTemplateRows: "1fr",
         overflow: "hidden",
       }}>
-        <div style={{
+        <div ref={libraryScrollRef} style={{
           gridArea: "1 / 1",
           opacity: viewMode === "library" && !reading ? 1 : 0,
           pointerEvents: viewMode === "library" && !reading ? "auto" : "none",
           transition: "opacity 0.4s ease",
           overflowY: "auto",
+          height: "100%",
         }}>
           <Library />
         </div>
-        <div style={{
+        <div ref={mangaScrollRef} style={{
           gridArea: "1 / 1",
           opacity: viewMode === "manga" && !mangaReading ? 1 : 0,
           pointerEvents: viewMode === "manga" && !mangaReading ? "auto" : "none",
           transition: "opacity 0.4s ease",
           overflowY: "auto",
+          height: "100%",
         }}>
           <MangaLibrary />
         </div>
