@@ -526,30 +526,30 @@ function RenameMorphDialog({ book, cardRect, onClose, onRefresh }: { book: BookD
       {/* 遮罩层 */}
       <div style={{
         position: "fixed", inset: 0, zIndex: 9997,
-        background: phase === "open" ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0)",
-        backdropFilter: phase === "open" ? "blur(4px)" : "blur(0)",
+        background: phase === "open" ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0)",
+        backdropFilter: phase === "open" ? "blur(3px)" : "blur(0)",
         transition: "background 0.3s ease, backdrop-filter 0.3s ease",
         pointerEvents: phase === "open" ? "auto" : "none",
       }} onClick={handleClose} />
 
       {/* 弹窗内容层 */}
       <div style={{
-        position: "fixed", zIndex: 9998, overflow: "hidden",
-        background: "var(--bg)",
-        borderRadius: "var(--radius-lg)",
-        border: "1px solid var(--border-glass)",
-        boxShadow: phase === "open" ? "0 16px 80px rgba(0,0,0,0.35)" : "none",
+        position: "fixed", zIndex: 9999,
         left: phase === "start" || phase === "closing" ? cardRect.left : cx - targetW / 2,
         top: phase === "start" || phase === "closing" ? cardRect.top : cy - targetH / 2,
         width: phase === "start" || phase === "closing" ? cardRect.width : targetW,
         height: phase === "start" || phase === "closing" ? cardRect.height : targetH,
-        transition: phase === "start"
-          ? "none"
-          : "all 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.38s ease, opacity 0.3s ease, filter 0.3s ease",
+        borderRadius: "var(--radius-lg)",
+        background: "var(--bg)",
+        backdropFilter: "blur(var(--glass-blur, 24px)) saturate(var(--glass-saturate, 1.4))",
+        WebkitBackdropFilter: "blur(var(--glass-blur, 24px)) saturate(var(--glass-saturate, 1.4))",
+        border: "1px solid var(--border-glass)",
         opacity: phase === "closing" ? 0 : 1,
-        filter: phase === "closing" ? "blur(6px)" : "blur(0)",
-        padding: phase === "start" || phase === "closing" ? 0 : 24,
+        filter: phase === "closing" ? "blur(8px)" : "blur(0)",
+        padding: 24,
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        overflow: "hidden",
+        transition: "left 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease, filter 0.3s ease",
       }} onClick={(e) => e.stopPropagation()}>
         {/* 弹窗内容 */}
         <div style={{

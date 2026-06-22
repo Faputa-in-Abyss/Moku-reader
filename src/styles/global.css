@@ -155,8 +155,6 @@ header:hover .light-follow { opacity: 1; }
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   color: var(--text);
   font-family: inherit;
   font-size: 0.9rem;
