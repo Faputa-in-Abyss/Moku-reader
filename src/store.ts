@@ -148,38 +148,35 @@ export const useStore = create<AppStore>((set, get) => ({
     localStorage.setItem("nr-reading-mode", m);
     set({ readingMode: m });
   },
-  books: JSON.parse(localStorage.getItem("nr-books-meta") || "[]") as BookData[],
+  books: [],
   setBooks: (books) => {
-    // 书架展示用轻量缓存（保留 chapters 用于目录，清除 content 大字段）
-    const meta = books.map((b: any) => {
-      const { content: _, ...rest } = b;
-      return rest;
-    });
-    try { localStorage.setItem("nr-books-meta", JSON.stringify(meta)); } catch {}
     set({ books });
   },
   // 清除 localStorage 缓存的书籍数据（修复：旧缓存 chapters 为空的问题）
   clearBooksCache: () => {
-    try { localStorage.removeItem("nr-books-meta"); } catch {}
     set({ books: [] });
   },
   reading: false,
   currentBook: null,
   currentChapter: 0,
-  openReader: (book) =>
+  openReader: (book) => {
+    const state = get();
+    // 从 store.books 中找到含完整 chapters 的书籍数据（sortedBooks 不携带 chapters）
+    const fullBook = state.books.find(b => b.id === book.id) || book;
     set({
       reading: true,
-      currentBook: book,
-      currentChapter: book.current_chapter || 0,
+      currentBook: fullBook,
+      currentChapter: fullBook.current_chapter || 0,
       sidebarOpen: false,
       settingsOpen: false,
-    }),
+    });
+  },
   closeReader: () => {
-    set({ reading: false, currentBook: null, currentChapter: 0, sidebarOpen: false, settingsOpen: false });
-    setTimeout(() => {
-      const { triggerRefresh } = useStore.getState();
-      triggerRefresh();
-    }, 100);
+    set({ reading: false, sidebarOpen: false, settingsOpen: false });
+    // 不置空 currentBook/currentChapter，确保最后一个 update_progress 能读到 book.id
+    // triggerRefresh 同步触发，让书架立即刷新进度
+    const { triggerRefresh } = get();
+    triggerRefresh();
   },
   setChapter: (idx) => set({ currentChapter: idx }),
   fontSize: 1.2,
@@ -285,7 +282,10 @@ export const useStore = create<AppStore>((set, get) => ({
       mangaCurrentPage: manga.current_page || 0,
     }),
   closeMangaReader: () => {
-    set({ mangaReading: false, currentManga: null, mangaCurrentPage: 0 });
+    set({ mangaReading: false });
+    // 不置空 currentManga/mangaCurrentPage，确保最后一个进度保存能读到 id
+    const { triggerRefresh } = get();
+    triggerRefresh();
   },
   setMangaPage: (idx) => set({ mangaCurrentPage: idx }),
   mangaViewMode: (localStorage.getItem("nr-manga-view") as MangaViewMode) || "single",
