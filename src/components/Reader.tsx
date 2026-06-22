@@ -35,6 +35,10 @@ export default function Reader() {
   const [recordingKey, setRecordingKey] = useState<string | null>(null);
   const book = currentBook;
 
+  // 用 ref 缓存 book.id，即使组件卸载或 store 清空仍能拿到书 ID
+  const bookIdRef = useRef(book?.id);
+  useEffect(() => { bookIdRef.current = book?.id; }, [book?.id]);
+
   // 从后端加载最新书籍数据（含完整 chapters），取代对 store 缓存的依赖
   const [freshBook, setFreshBook] = useState<typeof book | null>(null);
   const chapters = freshBook?.chapters || book?.chapters || [];
@@ -133,11 +137,12 @@ export default function Reader() {
 
   useEffect(() => {
     async function saveProgress() {
-      if (!book) return;
+      const id = bookIdRef.current;
+      if (!id) return;
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("update_progress", {
-          bookId: book.id,
+          bookId: id,
           chapterIndex: currentChapter,
         });
       } catch {}
