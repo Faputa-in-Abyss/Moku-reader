@@ -1,25 +1,26 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useStore, BookData } from "../store";
 import { handleCardGlow } from "../utils/glow";
 
 export default function Library() {
   const books = useStore((s) => s.books);
   const setBooks = useStore((s) => s.setBooks);
-  const clearBooksCache = useStore((s) => s.clearBooksCache);
   const openReader = useStore((s) => s.openReader);
   const refreshKey = useStore((s) => s.refreshKey);
   const triggerRefresh = useStore((s) => s.triggerRefresh);
 
   const [ctxMenu, setCtxMenu] = useState<{ book: BookData; x: number; y: number } | null>(null);
   const [iconPicker, setIconPicker] = useState<BookData | null>(null);
+  const [renameTarget, setRenameTarget] = useState<BookData | null>(null);
+  const [renameCardRect, setRenameCardRect] = useState<DOMRect | null>(null);
   const [batchIconPicker, setBatchIconPicker] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  type SortField = "name" | "progress" | "chapters";
+  type SortField = "name" | "progress" | "favorite";
   // D1: Add runtime validation for sortField from localStorage
   const [sortField, setSortField] = useState<SortField>(() => {
     const saved = localStorage.getItem("nr-novel-sort-field");
-    if (saved === "name" || saved === "progress" || saved === "chapters") return saved;
+    if (saved === "name" || saved === "progress" || saved === "favorite") return saved;
     return "name";
   });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-novel-sort-asc") !== "false");
@@ -53,7 +54,11 @@ export default function Library() {
             let cmp = 0;
             if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
             else if (sortField === "progress") cmp = a.progress - b.progress;
-            else if (sortField === "chapters") cmp = a.total_chapters - b.total_chapters;
+            else if (sortField === "favorite") {
+              const aFav = (a.favorite ? 0 : 1);
+              const bFav = (b.favorite ? 0 : 1);
+              cmp = aFav - bFav || a.title.localeCompare(b.title, "zh-CN");
+            }
             return sortAsc ? cmp : -cmp;
           });
           setSortedBooks(list);
@@ -66,11 +71,6 @@ export default function Library() {
   const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
   useEffect(() => {
-    // 启动时清除旧的 localStorage 缓存（修复：旧缓存 chapters 为空的问题）
-    clearBooksCache();
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
@@ -78,7 +78,9 @@ export default function Library() {
         const lib: BookData[] = await invoke("get_library");
         if (!cancelled) setBooks(lib);
       } catch {
-        if (!cancelled) setBooks(sampleBooks);
+        if (!cancelled) {
+          console.warn("get_library 失败，保留现有数据");
+        }
       }
     }
     load();
@@ -97,18 +99,22 @@ export default function Library() {
     e.stopPropagation();
     // 保存最新 book 引用
     const latest = useStore.getState().books.find(b => b.id === book.id) || book;
-    setCtxMenu({ book: latest, x: e.clientX, y: e.clientY });
+    // 估算菜单高度 ~460px，防止底部超出窗口
+    const menuH = 460;
+    const viewH = window.innerHeight;
+    const x = Math.min(e.clientX, window.innerWidth - 220);
+    const y = e.clientY + menuH > viewH ? Math.max(8, viewH - menuH - 8) : e.clientY;
+    setCtxMenu({ book: latest, x, y });
   };
 
-  const handleRename = async (book: BookData) => {
+  const handleRename = (book: BookData) => {
     setCtxMenu(null);
-    const newName = prompt("请输入新书名：", book.title);
-    if (!newName || newName === book.title) return;
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("rename_book", { bookId: book.id, newTitle: newName });
-      triggerRefresh();
-    } catch {}
+    // 从 DOM 获取书卡的实时位置和尺寸
+    const cardEl = document.getElementById(`lib-card-${book.id}`);
+    const titleEl = cardEl?.querySelector('.book-title') as HTMLElement | null;
+    const rect = cardEl?.getBoundingClientRect();
+    if (rect) setRenameCardRect(rect);
+    setRenameTarget(book);
   };
 
   // 乐观更新的收藏状态：覆盖 server 状态，立即生效
@@ -272,7 +278,7 @@ export default function Library() {
         <span className="library-count">{sortedBooks.length} 本书</span>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-        {(["name", "progress", "chapters"] as const).map((field) => (
+        {(["name", "progress", "favorite"] as const).map((field) => (
           <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
             fontSize: ".78rem", padding: "4px 12px",
             background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
@@ -285,7 +291,7 @@ export default function Library() {
               el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
             }}
           >
-            {field === "name" ? "📄 名称" : field === "progress" ? "📊 进度" : "📑 章节"}
+            {field === "name" ? "📄 名称" : field === "progress" ? "📊 进度" : "⭐ 收藏"}
             {sortField === field && (sortAsc ? " ↑" : " ↓")}
           </button>
         ))}
@@ -293,18 +299,19 @@ export default function Library() {
       <div className="book-grid">
         {sortedBooks.map((book) => (
             <div
-              key={book.id}
-              className="book-card"
-              onClick={() => {
-                if (selectMode) {
-                  toggleSelect(book.id);
-                } else {
-                  openReader(book);
-                }
-              }}
-              onContextMenu={(e) => handleCtxMenu(e, book)}
-              onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
-            >
+            key={book.id}
+            id={`lib-card-${book.id}`}
+            className="book-card"
+            onClick={() => {
+              if (selectMode) {
+                toggleSelect(book.id);
+              } else {
+                openReader(book);
+              }
+            }}
+            onContextMenu={(e) => handleCtxMenu(e, book)}
+            onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
+          >
               {selectMode && (
                 <div style={{
                   position: "absolute", top: 8, left: 8, zIndex: 10,
@@ -328,7 +335,7 @@ export default function Library() {
               </div>
               <div className="book-info">
                 <div className="book-chapter">
-                  {book.current_chapter > 0 ? `第${book.current_chapter}章` : "尚未阅读"}
+                  {book.total_chapters > 0 ? `第${book.current_chapter + 1}章` : "尚未阅读"}
                 </div>
               </div>
             </div>
@@ -445,7 +452,127 @@ export default function Library() {
           </div>
         </div>
       )}
+
+      {/* 重命名弹窗 — 书卡变形动画 */}
+      {renameTarget && renameCardRect && (
+        <RenameMorphDialog
+          book={renameTarget}
+          cardRect={renameCardRect}
+          onClose={() => { setRenameTarget(null); setRenameCardRect(null); }}
+          onRefresh={triggerRefresh}
+        />
+      )}
     </section>
+  );
+}
+
+/** 书卡→弹窗 变形动画（基于 GPU transform，书名从书卡飞向中央） */
+function RenameMorphDialog({ book, cardRect, onClose, onRefresh }: { book: BookData; cardRect: DOMRect; onClose: () => void; onRefresh: () => void }) {
+  const [phase, setPhase] = useState<"start" | "open" | "closing">("start");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const alreadyRef = useRef(false);
+  const [titleStyle, setTitleStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    // 读取书名计算样式
+    const cardEl = document.getElementById(`lib-card-${book.id}`);
+    const titleEl = cardEl?.querySelector('.book-title') as HTMLElement | null;
+    if (titleEl) {
+      const cs = getComputedStyle(titleEl);
+      setTitleStyle({
+        fontFamily: cs.fontFamily,
+        fontSize: cs.fontSize,
+        fontWeight: cs.fontWeight,
+        color: cs.color,
+        lineHeight: cs.lineHeight,
+        letterSpacing: cs.letterSpacing,
+      });
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { setPhase("open"); });
+    });
+  }, []);
+
+  // 目标弹窗尺寸
+  const targetW = 360;
+  const targetH = 260;
+
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+
+  const handleClose = () => {
+    setPhase("closing");
+    setTimeout(onClose, 320);
+  };
+
+  const handleSubmit = () => {
+    if (alreadyRef.current) return;
+    alreadyRef.current = true;
+    const newName = inputRef.current?.value?.trim();
+    if (!newName || newName === book.title) { handleClose(); return; }
+    setPhase("closing");
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("rename_book", { bookId: book.id, newTitle: newName });
+        setTimeout(onClose, 200);
+        onRefresh();
+      } catch { alreadyRef.current = false; setPhase("open"); }
+    })();
+  };
+
+  return (
+    <>
+      {/* 遮罩层 */}
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 9997,
+        background: phase === "open" ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0)",
+        backdropFilter: phase === "open" ? "blur(4px)" : "blur(0)",
+        transition: "background 0.3s ease, backdrop-filter 0.3s ease",
+        pointerEvents: phase === "open" ? "auto" : "none",
+      }} onClick={handleClose} />
+
+      {/* 弹窗内容层 */}
+      <div style={{
+        position: "fixed", zIndex: 9998, overflow: "hidden",
+        background: "var(--bg)",
+        borderRadius: "var(--radius-lg)",
+        border: "1px solid var(--border-glass)",
+        boxShadow: phase === "open" ? "0 16px 80px rgba(0,0,0,0.35)" : "none",
+        left: phase === "start" || phase === "closing" ? cardRect.left : cx - targetW / 2,
+        top: phase === "start" || phase === "closing" ? cardRect.top : cy - targetH / 2,
+        width: phase === "start" || phase === "closing" ? cardRect.width : targetW,
+        height: phase === "start" || phase === "closing" ? cardRect.height : targetH,
+        transition: phase === "start"
+          ? "none"
+          : "all 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.38s ease, opacity 0.3s ease, filter 0.3s ease",
+        opacity: phase === "closing" ? 0 : 1,
+        filter: phase === "closing" ? "blur(6px)" : "blur(0)",
+        padding: phase === "start" || phase === "closing" ? 0 : 24,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      }} onClick={(e) => e.stopPropagation()}>
+        {/* 弹窗内容 */}
+        <div style={{
+          opacity: phase === "open" ? 1 : 0,
+          transition: "opacity 0.2s ease",
+          transitionDelay: phase === "open" ? "0.18s" : "0s",
+          width: "100%",
+        }}>
+          <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 8, textAlign: "center" }}>重命名</div>
+          <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 16, textAlign: "center" }}>
+            将「<span style={{ ...titleStyle }}>{book.title}</span>」重命名为
+          </div>
+          <input ref={inputRef} defaultValue={book.title} autoFocus
+            style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: ".9rem", outline: "none", marginBottom: 16 }}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={handleClose}>取消</button>
+            <button className="btn btn-primary" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={handleSubmit}>确定</button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
