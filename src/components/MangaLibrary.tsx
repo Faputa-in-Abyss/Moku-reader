@@ -20,6 +20,7 @@ export default function MangaLibrary() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [seriesDialogOpen, setSeriesDialogOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ComicData | null>(null);
+  const [renameCardRect, setRenameCardRect] = useState<DOMRect | null>(null);
   type SortField = "name" | "pages" | "favorite";
   const [sortField, setSortField] = useState<SortField>(() => {
     const saved = localStorage.getItem("nr-manga-sort-field");
@@ -217,9 +218,12 @@ export default function MangaLibrary() {
     } catch {}
   };
 
-  const handleRename = async (comic: ComicData) => {
+  const handleRename = (comic: ComicData) => {
     setCtxMenu(null);
     setRenameTarget(comic);
+    const cardEl = document.getElementById(`manga-card-${comic.id}`);
+    const rect = cardEl?.getBoundingClientRect();
+    if (rect) setRenameCardRect(rect);
   };
 
   const [optimisticFav, setOptimisticFav] = useState<Record<string, boolean>>({});
@@ -488,6 +492,7 @@ export default function MangaLibrary() {
               return (
               <div
                 key={comic.id}
+                id={`manga-card-${comic.id}`}
                 className="book-card"
                 onClick={() => {
                   if (selectMode) {
@@ -805,48 +810,164 @@ export default function MangaLibrary() {
         </div>
       )}
 
-      {/* 重命名弹窗 */}
-      {renameTarget && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setRenameTarget(null)}>
-          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 360, width: "90%" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 8, textAlign: "center" }}>重命名</div>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 16, textAlign: "center" }}>将「{renameTarget.title}」重命名为</div>
-            <input id="rename-input" defaultValue={renameTarget.title} autoFocus style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: ".9rem", outline: "none", marginBottom: 16 }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const inp = document.getElementById("rename-input") as HTMLInputElement;
-                  const newName = inp?.value?.trim();
-                  if (!newName || newName === renameTarget.title) { setRenameTarget(null); return; }
-                  (async () => {
-                    try {
-                      const { invoke } = await import("@tauri-apps/api/core");
-                      await invoke("rename_comic", { comicId: renameTarget.id, newTitle: newName });
-                      setRenameTarget(null);
-                      triggerRefresh();
-                    } catch {}
-                  })();
-                }
-              }} />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => setRenameTarget(null)}>取消</button>
-              <button className="btn btn-primary" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={() => {
-                const inp = document.getElementById("rename-input") as HTMLInputElement;
-                const newName = inp?.value?.trim();
-                if (!newName || newName === renameTarget.title) { setRenameTarget(null); return; }
-                (async () => {
-                  try {
-                    const { invoke } = await import("@tauri-apps/api/core");
-                    await invoke("rename_comic", { comicId: renameTarget.id, newTitle: newName });
-                    setRenameTarget(null);
-                    triggerRefresh();
-                  } catch {}
-                })();
-              }}>确定</button>
-            </div>
-          </div>
-        </div>
+      {/* 重命名弹窗 — 变形动画 */}
+      {renameTarget && renameCardRect && (
+        <MangaRenameMorphDialog
+          comic={renameTarget}
+          cardRect={renameCardRect}
+          onClose={() => { setRenameTarget(null); setRenameCardRect(null); }}
+          onRefresh={triggerRefresh}
+        />
       )}
     </section>
+  );
+}
+
+/** 漫画重命名弹窗 — 书卡→弹窗变形动画 + 封面毛玻璃背景 */
+function MangaRenameMorphDialog({ comic, cardRect, onClose, onRefresh }: { comic: ComicData; cardRect: DOMRect; onClose: () => void; onRefresh: () => void }) {
+  const [phase, setPhase] = useState<"start" | "open" | "closing">("start");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const alreadyRef = useRef(false);
+  const [titleStyle, setTitleStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    // 读取书名计算样式
+    const cardEl = document.getElementById(`manga-card-${comic.id}`);
+    const titleEl = cardEl?.querySelector('.book-title') as HTMLElement | null;
+    if (titleEl) {
+      const cs = getComputedStyle(titleEl);
+      setTitleStyle({
+        fontFamily: cs.fontFamily,
+        fontSize: cs.fontSize,
+        fontWeight: cs.fontWeight,
+        color: cs.color,
+        lineHeight: cs.lineHeight,
+        letterSpacing: cs.letterSpacing,
+      });
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { setPhase("open"); });
+    });
+  }, []);
+
+  const targetW = 360;
+  const targetH = 260;
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+
+  const handleClose = () => {
+    setPhase("closing");
+    setTimeout(onClose, 320);
+  };
+
+  const handleSubmit = () => {
+    if (alreadyRef.current) return;
+    alreadyRef.current = true;
+    const newName = inputRef.current?.value?.trim();
+    if (!newName || newName === comic.title) { handleClose(); return; }
+    setPhase("closing");
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("rename_comic", { comicId: comic.id, newTitle: newName });
+        setTimeout(onClose, 200);
+        onRefresh();
+      } catch { alreadyRef.current = false; setPhase("open"); }
+    })();
+  };
+
+  return (
+    <>
+      {/* 遮罩层 */}
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 9997,
+        background: phase === "open" ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0)",
+        backdropFilter: phase === "open" ? "blur(3px)" : "blur(0)",
+        transition: "background 0.3s ease, backdrop-filter 0.3s ease",
+        pointerEvents: phase === "open" ? "auto" : "none",
+      }} onClick={handleClose} />
+
+      {/* 主弹窗容器 — backdrop-filter 直接挂在容器上，用 left/top/width/height 做变形动画 */}
+      <div style={{
+        position: "fixed", zIndex: 9999,
+        left: phase === "start" || phase === "closing" ? cardRect.left : cx - targetW / 2,
+        top: phase === "start" || phase === "closing" ? cardRect.top : cy - targetH / 2,
+        width: phase === "start" || phase === "closing" ? cardRect.width : targetW,
+        height: phase === "start" || phase === "closing" ? cardRect.height : targetH,
+        borderRadius: "var(--radius-lg)",
+        opacity: phase === "closing" ? 0 : 1,
+        filter: phase === "closing" ? "blur(8px)" : "blur(0)",
+        transition: "left 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease, filter 0.3s ease",
+        background: "rgba(22, 18, 16, 0.45)",
+        backdropFilter: "blur(var(--glass-blur, 32px)) saturate(var(--glass-saturate, 1.5))",
+        WebkitBackdropFilter: "blur(var(--glass-blur, 32px)) saturate(var(--glass-saturate, 1.5))",
+        border: "1px solid var(--border-glass)",
+        padding: 24,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+      }} onClick={(e) => e.stopPropagation()}>
+        {/* 封面层 */}
+        <MangaRenameCover comicId={comic.id} cardRect={cardRect} phase={phase} />
+        {/* 弹窗内容 */}
+        <div style={{
+          position: "relative", zIndex: 1,
+          opacity: phase === "open" ? 1 : 0,
+          transition: "opacity 0.2s ease",
+          transitionDelay: phase === "open" ? "0.18s" : "0s",
+          width: "100%",
+        }}>
+          <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 8, textAlign: "center" }}>重命名</div>
+          <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 16, textAlign: "center" }}>
+            将「<span style={titleStyle}>{comic.title}</span>」重命名为
+          </div>
+          <input ref={inputRef} defaultValue={comic.title} autoFocus
+            style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: ".9rem", outline: "none", marginBottom: 16 }}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={handleClose}>取消</button>
+            <button className="btn btn-primary" style={{ flex: 1, fontSize: ".85rem", justifyContent: "center" }} onClick={handleSubmit}>确定</button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MangaRenameCover({ comicId, cardRect, phase }: { comicId: string; cardRect: DOMRect; phase: string }) {
+  const [cover, setCover] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (phase !== "start") return;
+    (async () => {
+      try {
+        const { invoke, convertFileSrc } = await import("@tauri-apps/api/core");
+        const path: string = await invoke("get_comic_thumbnail", { comicId });
+        if (path) setCover(convertFileSrc(path));
+      } catch {}
+    })();
+  }, [comicId, phase]);
+
+  if (!cover) return null;
+
+  return (
+    <>
+      <img src={cover} alt="" style={{
+        position: "absolute", inset: 0, width: "100%", height: "100%",
+        objectFit: "cover", zIndex: 0, opacity: 0.35,
+        borderRadius: "var(--radius-lg)",
+      }} />
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 1,
+        background: "rgba(22, 18, 16, 0.6)",
+        backdropFilter: "blur(8px) saturate(1)",
+        WebkitBackdropFilter: "blur(8px) saturate(1)",
+        borderRadius: "var(--radius-lg)",
+      }} />
+    </>
   );
 }
 
