@@ -20,10 +20,10 @@ export default function MangaLibrary() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [seriesDialogOpen, setSeriesDialogOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ComicData | null>(null);
-  type SortField = "name" | "pages";
+  type SortField = "name" | "pages" | "favorite";
   const [sortField, setSortField] = useState<SortField>(() => {
     const saved = localStorage.getItem("nr-manga-sort-field");
-    if (saved === "pages") return "pages";
+    if (saved === "pages" || saved === "favorite") return saved;
     return "name";
   });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-manga-sort-asc") !== "false");
@@ -69,6 +69,11 @@ export default function MangaLibrary() {
             let cmp = 0;
             if (sortField === "name") cmp = a.title.localeCompare(b.title, "zh-CN");
             else if (sortField === "pages") cmp = a.total_pages - b.total_pages;
+            else if (sortField === "favorite") {
+              const aFav = (a.favorite ? 0 : 1);
+              const bFav = (b.favorite ? 0 : 1);
+              cmp = aFav - bFav || a.title.localeCompare(b.title, "zh-CN");
+            }
             return sortAsc ? cmp : -cmp;
           });
           setDisplayList(list);
@@ -427,7 +432,7 @@ export default function MangaLibrary() {
           <span style={{ fontSize: ".78rem", padding: "5px 14px", flexShrink: 0, color: "var(--accent)", cursor: "pointer", fontWeight: 500, position: "relative", zIndex: 1 }}
             onClick={() => setSeriesDialogOpen(true)}>+ 新建</span>
         </div>
-        {(["name", "pages"] as const).map((field) => (
+        {(["name", "pages", "favorite"] as const).map((field) => (
           <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
             fontSize: ".78rem", padding: "4px 12px",
             background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
@@ -440,7 +445,7 @@ export default function MangaLibrary() {
               el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
             }}
           >
-            {field === "name" ? "📄 名称" : "📄 页数"}
+            {field === "name" ? "📄 名称" : field === "pages" ? "📄 页数" : "⭐ 收藏"}
             {sortField === field && (sortAsc ? " ↑" : " ↓")}
           </button>
         ))}

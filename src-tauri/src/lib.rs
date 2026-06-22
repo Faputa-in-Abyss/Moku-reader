@@ -7,9 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{Emitter, Manager, State};
 
 mod parser;
-mod fanqie;
 mod comic;
-use fanqie::{FanqieApi, FanqieSearchResult, FanqieBookInfo, FanqieChapter};
 use parser::{parse_chapters, read_txt_file, read_epub_file, read_html_file, extract_title, generate_id, Chapter};
 
 /// 全局 AppHandle，用于发送日志事件到前端（pub(crate) 以便 comic.rs 使用）
@@ -100,7 +98,6 @@ pub struct AppState {
     pub library: Mutex<LibraryData>,
     pub data_dir: PathBuf,
     pub library_path: Mutex<String>,
-    pub fanqie: FanqieApi,
     pub comic_library: Mutex<comic::ComicLibraryData>,
     pub render_dpi: Mutex<u32>,
     pub render_threads: Mutex<usize>,
@@ -469,7 +466,6 @@ fn toggle_favorite(book_id: String, state: State<AppState>) -> Result<(), String
 // ===== 排序命令 =====
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SortBookData {
     pub id: String,
     pub title: String,
@@ -488,7 +484,6 @@ pub struct SortBookData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SortComicMeta {
     pub id: String,
     pub title: String,
@@ -511,6 +506,14 @@ fn sort_books(field: String, asc: bool, state: State<AppState>) -> Result<Vec<So
             "name" => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
             "progress" => a.progress.partial_cmp(&b.progress).unwrap_or(std::cmp::Ordering::Equal),
             "chapters" => a.total_chapters.cmp(&b.total_chapters),
+            "favorite" => {
+                // 收藏的排前面，收藏的之间按名称排序
+                let a_fav = if a.favorite { 0 } else { 1 };
+                let b_fav = if b.favorite { 0 } else { 1 };
+                a_fav.cmp(&b_fav).then(
+                    a.title.to_lowercase().cmp(&b.title.to_lowercase())
+                )
+            }
             _ => std::cmp::Ordering::Equal,
         };
         if asc { cmp } else { cmp.reverse() }
@@ -538,6 +541,13 @@ fn sort_comics(field: String, asc: bool, meta: Vec<SortComicMeta>) -> Result<Vec
         let cmp = match field.as_str() {
             "name" => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
             "pages" => a.total_pages.cmp(&b.total_pages),
+            "favorite" => {
+                let a_fav = if a.favorite { 0 } else { 1 };
+                let b_fav = if b.favorite { 0 } else { 1 };
+                a_fav.cmp(&b_fav).then(
+                    a.title.to_lowercase().cmp(&b.title.to_lowercase())
+                )
+            }
             _ => std::cmp::Ordering::Equal,
         };
         if asc { cmp } else { cmp.reverse() }
@@ -726,65 +736,6 @@ async fn fetch_url(url: String, method: Option<String>, body: Option<String>, re
 
     debug_log!("   响应大小: {} 字节, 状态码: {}", bytes.len(), status);
     Ok(text)
-}
-
-/// 保存从网上下载的书籍到书库（直接传完整内容）
-/// 可选 save_path：额外另存一份 .txt 文件到该路径
-#[tauri::command]
-fn save_online_book(title: String, author: String, content: String, save_path: Option<String>, state: State<AppState>) -> Result<Book, String> {
-    debug_log!("💾 保存在线书籍: {} - {}", &title, &author);
-
-    if content.trim().is_empty() {
-        return Err("内容为空，无法保存".to_string());
-    }
-
-    // 创建 Book 对象
-    let chapters = parse_chapters(&content);
-    let id = generate_id();
-    let total_chapters = chapters.len();
-    let book = Book {
-        id,
-        title: title.clone(),
-        file_path: String::new(),
-        file_type: "txt".to_string(),
-        total_chapters,
-        current_chapter: 0,
-        progress: 0.0,
-        chapters,
-        content,
-        favorite: false,
-        book_icon: String::new(),
-    };
-
-    // 在线书籍无本地文件（file_path = ""），必须保留 content 在内存中
-    // 只有本地导入书才能清空 content 通过文件重读
-    let mut lib = lock_mutex(&state.library)?;
-    if !book.file_path.is_empty() {
-        let mut slim = book.clone();
-        slim.content = String::new();
-        lib.books.push(slim);
-    } else {
-        lib.books.push(book.clone());
-    }
-    save_library(&state.data_dir, &lib).ok();
-
-    // 如果提供了 save_path，额外另存一份 .txt 文件
-    if let Some(dir) = save_path {
-        let dir_path = std::path::PathBuf::from(&dir);
-        if dir_path.exists() || std::fs::create_dir_all(&dir_path).is_ok() {
-            let file_name = format!("{}.txt", book.title.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "").trim());
-            let file_path = dir_path.join(&file_name);
-            let txt_content = format!("{}\n\n{}", book.title, book.content);
-            match std::fs::write(&file_path, &txt_content) {
-                Ok(_) => debug_log!("   📄 已另存为: {:?}", file_path),
-                Err(e) => debug_log!("   ⚠️ 另存失败: {}", e),
-            }
-        } else {
-            debug_log!("   ⚠️ 路径不存在且无法创建: {}", &dir);
-        }
-    }
-
-    Ok(book)
 }
 
 /// 返回用户本地小说工作区路径（用于下载保存 .txt）
@@ -1278,134 +1229,6 @@ fn rescan_comic_folder(comic_id: String, state: State<AppState>) -> Result<usize
     Ok(count)
 }
 
-// ===== 番茄小说 API 命令 =====
-
-/// 搜索番茄小说
-#[tauri::command]
-async fn fanqie_search(keyword: String, offset: Option<i32>, state: State<'_, AppState>) -> Result<FanqieSearchResult, String> {
-    debug_log!("🍅 番茄搜索: {} (offset={:?})", &keyword, offset);
-    let result = state.fanqie.search_books(&keyword, offset.unwrap_or(0)).await;
-    match &result {
-        Ok(r) => debug_log!("   结果: {} 本书", r.books.len()),
-        Err(e) => debug_log!("   ❌ {}", e),
-    }
-    result
-}
-
-/// 获取番茄小说详情
-#[tauri::command]
-async fn fanqie_detail(book_id: String, state: State<'_, AppState>) -> Result<FanqieBookInfo, String> {
-    debug_log!("🍅 番茄详情: book_id={}", &book_id);
-    state.fanqie.get_book_detail(&book_id).await
-}
-
-/// 获取番茄小说目录
-#[tauri::command]
-async fn fanqie_catalog(book_id: String, state: State<'_, AppState>) -> Result<Vec<FanqieChapter>, String> {
-    debug_log!("🍅 番茄目录: book_id={}", &book_id);
-    state.fanqie.get_chapters(&book_id).await
-}
-
-/// 获取番茄小说章节内容
-#[tauri::command]
-async fn fanqie_content(item_id: String, state: State<'_, AppState>) -> Result<String, String> {
-    debug_log!("🍅 番茄章节内容: item_id={}", &item_id);
-    state.fanqie.get_chapter_content(&item_id).await
-}
-
-/// 下载整本番茄小说（逐章下载，发送进度事件）
-#[tauri::command]
-async fn fanqie_download(book_id: String, title: String, author: String, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<String, String> {
-    debug_log!("🍅 番茄下载: {} ({}) - {}", &title, &book_id, &author);
-
-    let chapters = state.fanqie.get_chapters(&book_id).await?;
-    let total = chapters.len();
-    if total == 0 {
-        return Err("没有可下载的章节".to_string());
-    }
-
-    debug_log!("   共 {} 章", total);
-
-    let mut full_text = format!("{}\n作者：{}\n来源：番茄小说\n\n", &title, &author);
-    let batch_size = 3;
-    let mut failed = 0usize;
-
-    for start in (0..total).step_by(batch_size) {
-        let end = (start + batch_size).min(total);
-        let batch = &chapters[start..end];
-
-        let mut batch_results: Vec<(usize, String)> = Vec::new();
-        for (i, ch) in batch.iter().enumerate() {
-            let idx = start + i;
-            match state.fanqie.get_chapter_content(&ch.id).await {
-                Ok(content) => {
-                    let header = format!("\n{}\n\n", ch.title);
-                    batch_results.push((idx, header + &content + "\n"));
-                }
-                Err(_) => {
-                    debug_log!("   ⚠️ 第{}章下载失败: {}", idx + 1, ch.title);
-                    batch_results.push((idx, format!("\n{}\n(下载失败)\n\n", ch.title)));
-                    failed += 1;
-                }
-            }
-        }
-
-        // 按原始顺序拼接
-        batch_results.sort_by_key(|r| r.0);
-        for (_, text) in batch_results {
-            full_text += &text;
-        }
-
-        // 发送进度事件
-        let _ = app.emit("fanqie-download-progress", &fanqie::FanqieDownloadProgress {
-            current: end,
-            total,
-            message: format!("{}/{} 章", end, total),
-        });
-    }
-
-    // 保存到书库
-    let save_result = save_online_book_inner(
-        &title, &author, &full_text, state
-    ).map_err(|e| format!("保存失败: {}", e))?;
-
-    let book_id_saved = save_result.id;
-
-    if failed > 0 {
-        debug_log!("   ⚠️ {} 章下载失败", failed);
-    }
-    debug_log!("   ✅ 下载完成，共 {} 章", total);
-
-    Ok(book_id_saved)
-}
-
-/// 内部：保存在线书籍（避免重复代码）
-fn save_online_book_inner(title: &str, author: &str, content: &str, state: State<'_, AppState>) -> Result<Book, String> {
-    let content = content.replace("\r\n", "\n").replace('\r', "\n");
-    let chapters = parse_chapters(&content);
-    let id = generate_id();
-    let total_chapters = chapters.len();
-
-    let book = Book {
-        id,
-        title: if author.is_empty() { title.to_string() } else { format!("{} - {}", title, author) },
-        file_path: String::new(),
-        file_type: "online".to_string(),
-        total_chapters,
-        current_chapter: 0,
-        progress: 0.0,
-        chapters,
-        content,
-        favorite: false,
-        book_icon: String::new(),
-    };
-
-    let mut lib = lock_mutex(&state.library)?;
-    lib.books.push(book.clone());
-    save_library(&state.data_dir, &lib).ok();
-    Ok(book)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let data_dir = dirs_next::data_dir()
@@ -1433,7 +1256,6 @@ pub fn run() {
             library: Mutex::new(library),
             data_dir,
             library_path: Mutex::new(library_path),
-            fanqie: fanqie::FanqieApi::new(),
             comic_library: Mutex::new(comic_library),
             render_dpi: Mutex::new(render_dpi),
             render_threads: Mutex::new(render_threads),
@@ -1442,6 +1264,18 @@ pub fn run() {
         .setup(|app| {
             APP_HANDLE.set(app.handle().clone()).map_err(|_| "APP_HANDLE already set")?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                let state = window.state::<AppState>();
+                if let Ok(lib) = state.library.lock() {
+                    save_library(&state.data_dir, &lib).ok();
+                }
+                if let Ok(comic_lib) = state.comic_library.lock() {
+                    comic::save_comic_library(&state.data_dir, &comic_lib).ok();
+                }
+                debug_log!("窗口关闭，进度已持久化");
+            }
         })
         .invoke_handler(tauri::generate_handler![
             import_book,
@@ -1458,7 +1292,6 @@ pub fn run() {
             set_book_icon,
             open_file_location,
             fetch_url,
-            save_online_book,
             get_workspace_dir,
             import_comic,
             get_comic_library,
@@ -1468,6 +1301,7 @@ pub fn run() {
             update_comic_direction,
             remove_comic,
             rename_comic,
+            toggle_comic_favorite,            rename_comic,
             toggle_comic_favorite,
             set_comic_icon,
             rescan_comic_folder,
