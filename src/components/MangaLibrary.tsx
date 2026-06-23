@@ -7,7 +7,7 @@ export default function MangaLibrary() {
   const setComics = useStore((s) => s.setComics);
   const comicsMeta = useStore((s) => s.comicsMeta);
   const openMangaReader = useStore((s) => s.openMangaReader);
-  const refreshKey = useStore((s) => s.refreshKey);
+  const comicRefreshKey = useStore((s) => s.comicRefreshKey);
   const setSeriesMap = useStore((s) => s.setSeriesMap);
   const seriesMap = useStore((s) => s.seriesMap);
   const [seriesTarget, setSeriesTarget] = useState<ComicData | null>(null);
@@ -144,7 +144,7 @@ export default function MangaLibrary() {
     }
     load();
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, [comicRefreshKey]);
 
   useEffect(() => {
     const el = document.getElementById("series-tabs");
@@ -163,8 +163,8 @@ export default function MangaLibrary() {
       try {
         const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen("comics-refreshed", async () => {
-          const { triggerRefresh } = useStore.getState();
-          triggerRefresh();
+          const { triggerComicRefresh } = useStore.getState();
+          triggerComicRefresh();
         });
       } catch {}
     })();
@@ -205,8 +205,9 @@ export default function MangaLibrary() {
   }, []);
 
   const triggerRefresh = () => {
-    const { triggerRefresh } = useStore.getState();
-    triggerRefresh();
+    const { triggerComicRefresh, triggerRefresh } = useStore.getState();
+    triggerComicRefresh();
+    if (triggerRefresh) triggerRefresh();
   };
 
   const handleOpenPath = async (comic: ComicData) => {

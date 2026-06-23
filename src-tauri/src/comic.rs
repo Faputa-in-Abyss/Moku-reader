@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tauri::Manager;
 
 /// 支持的图片格式扩展名
 const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
@@ -306,6 +307,15 @@ fn render_single_page(mutool: &Path, pdf_path: &Path, page_index: usize, dpi: u3
 }
 
 fn find_mutool() -> Option<PathBuf> {
+    // 0. 从 Tauri resource 目录查找（打包后的路径：resource/mutool/mutool.exe）
+    if let Some(handle) = crate::APP_HANDLE.get() {
+        if let Ok(res_dir) = handle.path().resource_dir() {
+            for name in &["mutool.exe", "mutool"] {
+                let candidate = res_dir.join("mutool").join(name);
+                if candidate.is_file() { return Some(candidate); }
+            }
+        }
+    }
     // 1. 从 exe 位置向上翻找 mutool/ 目录
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {

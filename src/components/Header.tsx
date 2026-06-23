@@ -10,7 +10,8 @@ const THEME_ICONS: Record<string, string> = {
 export default function Header() {
   const theme = useStore((s) => s.theme);
   const setTheme = useStore((s) => s.setTheme);
-  const triggerRefresh = useStore((s) => s.triggerRefresh);
+  const triggerNovelRefresh = useStore((s) => s.triggerNovelRefresh);
+  const triggerComicRefresh = useStore((s) => s.triggerComicRefresh);
   const setDebugPanelOpen = useStore((s) => s.setDebugPanelOpen);
   const viewMode = useStore((s) => s.viewMode);
   const setViewMode = useStore((s) => s.setViewMode);
@@ -85,7 +86,7 @@ export default function Header() {
           console.error(`导入失败: ${path}`, e);
         }
       }
-      triggerRefresh();
+      triggerNovelRefresh();
     } catch (e) {
       console.error("导入失败:", e);
     }
@@ -125,7 +126,7 @@ export default function Header() {
           hasError = true;
         }
       }
-      triggerRefresh();
+      triggerComicRefresh();
       if (hasError) console.warn("[墨读前端] 部分导入失败");
     } catch (e) {
       console.error("导入漫画失败:", e);
@@ -147,7 +148,7 @@ export default function Header() {
       const { invoke } = await import("@tauri-apps/api/core");
       try {
         await invoke("import_comic", { path });
-        triggerRefresh();
+        triggerComicRefresh();
       } catch (e) {
         console.error(`导入文件夹失败:`, e);
         alert("导入失败，请确认文件夹中包含图片文件");
