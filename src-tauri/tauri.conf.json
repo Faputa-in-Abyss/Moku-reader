@@ -1,6 +1,6 @@
 {
   "productName": "墨读",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "identifier": "com.mokureader.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -17,7 +17,7 @@
         "resizable": true,
         "fullscreen": false,
         "transparent": false,
-        "decorations": true,
+        "decorations": false,
         "center": true
       }
     ],
