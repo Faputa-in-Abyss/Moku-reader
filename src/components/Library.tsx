@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useStore, BookData } from "../store";
 import { handleCardGlow } from "../utils/glow";
+import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
 
 export default function Library() {
   const books = useStore((s) => s.books);
@@ -286,23 +287,9 @@ export default function Library() {
           <span className="library-count">{books.length} 本书</span>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-          {(["name", "progress", "favorite"] as const).map((field) => (
-            <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
-              fontSize: ".78rem", padding: "4px 12px",
-              background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
-              borderColor: sortField === field ? "var(--accent)" : undefined,
-            }}
-              onMouseMove={(e) => {
-                const el = e.currentTarget;
-                const rect = el.getBoundingClientRect();
-                el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
-                el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
-              }}
-            >
-              {field === "name" ? "📄 名称" : field === "progress" ? "📊 进度" : "⭐ 收藏"}
-              {sortField === field && (sortAsc ? " ↑" : " ↓")}
-            </button>
-          ))}
+          <SortButton field="name" label="📄 名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
+          <SortButton field="progress" label="📊 进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
+          <SortButton field="favorite" label="⭐ 收藏" currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
           <SearchInput value={bookSearch} onChange={setBookSearch} />
         </div>
         <div className="empty-state">
@@ -322,23 +309,9 @@ export default function Library() {
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
         <SearchInput value={bookSearch} onChange={setBookSearch} />
-        {(["name", "progress", "favorite"] as const).map((field) => (
-          <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
-            fontSize: ".78rem", padding: "4px 12px",
-            background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
-            borderColor: sortField === field ? "var(--accent)" : undefined,
-          }}
-            onMouseMove={(e) => {
-              const el = e.currentTarget;
-              const rect = el.getBoundingClientRect();
-              el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
-              el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
-            }}
-          >
-            {field === "name" ? "📄 名称" : field === "progress" ? "📊 进度" : "⭐ 收藏"}
-            {sortField === field && (sortAsc ? " ↑" : " ↓")}
-          </button>
-        ))}
+        <SortButton field="name" label="📄 名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
+        <SortButton field="progress" label="📊 进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
+        <SortButton field="favorite" label="⭐ 收藏" currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
       </div>
       <div className="book-grid">
         {sortedBooks.map((book) => (
@@ -356,26 +329,12 @@ export default function Library() {
             onContextMenu={(e) => handleCtxMenu(e, book)}
             onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
           >
-              {selectMode && (
-                <div style={{
-                  position: "absolute", top: 8, left: 8, zIndex: 10,
-                  width: 24, height: 24, borderRadius: "var(--radius-sm)",
-                  border: selectedIds.has(book.id) ? "2px solid var(--accent)" : "2px solid rgba(var(--accent-rgb),0.25)",
-                  background: selectedIds.has(book.id) ? "var(--accent)" : "rgba(0,0,0,0.25)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: ".75rem", color: "#fff", fontWeight: 700,
-                  pointerEvents: "none", backdropFilter: "blur(var(--glass-mask-blur))",
-                }}>
-                  {selectedIds.has(book.id) ? "✓" : ""}
-                </div>
-              )}
+              {selectMode && <SelectCheckbox selected={selectedIds.has(book.id)} />}
               <div className={`book-cover${selectedIds.has(book.id) ? " cover-selected" : ""}`}>
-                {((optimisticFav[book.id] ?? book.favorite)) && <span style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 2, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: bursting.has(book.id) ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
+                <FavStar show={!!(optimisticFav[book.id] ?? book.favorite)} bursting={bursting.has(book.id)} />
                 <div className="book-cover-icon">{book.book_icon || getBookIcon(book.title)}</div>
                 <div className="book-title">{book.title}</div>
-                <div className="book-progress">
-                  <div className="book-progress-bar" style={{ width: `${book.progress * 100}%` }} />
-                </div>
+                <ProgressBar pct={book.progress * 100} />
               </div>
               <div className="book-info">
                 <div className="book-chapter">
@@ -386,115 +345,64 @@ export default function Library() {
           ))}
       </div>
 
-      {/* 批量操作栏 */}
       {selectMode && (
-        <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500,
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
-          padding: "12px 24px",
-          background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-          borderTop: "1px solid var(--border-glass)",
-        }}>
-          <span style={{ color: "var(--text-dim)", fontSize: ".8rem" }}>已选 {selectedIds.size} 项</span>
-          <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => {
+        <BatchActionBar
+          total={sortedBooks.length}
+          selectedCount={selectedIds.size}
+          onToggleSelectAll={() => {
             if (selectedIds.size === sortedBooks.length) {
               setSelectedIds(new Set());
             } else {
               setSelectedIds(new Set(sortedBooks.map(b => b.id)));
             }
-          }}>{selectedIds.size === sortedBooks.length ? "取消全选" : "全选"}</button>
-          <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>取消</button>
-          <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedIds.size === 0} onClick={handleBatchFavorite}>⭐ 收藏所选</button>
-          <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedIds.size === 0} onClick={() => setBatchIconPicker(true)}>🎨 图标</button>
-          <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedIds.size === 0 ? undefined : "rgba(200,60,50,0.8)" }} disabled={selectedIds.size === 0} onClick={handleBatchDelete}>
-            🗑️ 删除所选
-          </button>
-        </div>
+          }}
+          onCancel={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+          onFavorite={handleBatchFavorite}
+          onIcon={() => setBatchIconPicker(true)}
+          onDelete={handleBatchDelete}
+        />
       )}
 
       {/* 右键菜单 */}
       {ctxMenu && (
-        <div
-          style={{
-            position: "fixed",
-            left: ctxMenu.x,
-            top: ctxMenu.y,
-            zIndex: 300,
-            background: "var(--surface-glass, var(--glass-bg))",
-            backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            border: "1px solid var(--border-glass)",
-            borderRadius: "var(--radius-md)",
-            padding: "6px 0",
-            minWidth: 180,
-            boxShadow: "0 8px 40px var(--shadow)",
-            overflow: "hidden",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
           <MenuItem icon="✏️" label="重命名" onClick={() => handleRename(ctxMenu.book)} />
           <MenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.book); }} />
           <MenuItem icon="⭐" label={(optimisticFav[ctxMenu.book.id] ?? ctxMenu.book.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.book)} />
           <MenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.book)} />
-          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
+          <MenuDivider />
           <MenuItem icon="📂" label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.book)} />
-          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
+          <MenuDivider />
           <MenuItem icon="☑️" label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
-        </div>
+        </ContextMenu>
       )}
 
-      {/* 批量图标选择器 */}
       {batchIconPicker && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setBatchIconPicker(false)}>
-          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>批量设置封面图标（{selectedIds.size} 项）</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 }}>
-              {ICON_LIST.map((ic) => (
-                <span key={ic} onClick={() => handleBatchIcon(ic)}
-                  style={{ fontSize: "1.6rem", cursor: "pointer", padding: 6, borderRadius: "var(--radius-sm)", border: "1px solid transparent", transition: "all 0.15s ease" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                >{ic}</span>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }}
-                id="lib-batch-icon-input"
-                onKeyDown={(e) => { if (e.key === "Enter") handleBatchIcon((document.getElementById("lib-batch-icon-input") as HTMLInputElement)?.value || ""); }}
-              />
-              <button className="btn btn-primary" style={{ padding: "8px 20px", fontSize: ".82rem" }} onClick={() => handleBatchIcon((document.getElementById("lib-batch-icon-input") as HTMLInputElement)?.value || "")}>确定</button>
-            </div>
-          </div>
-        </div>
+        <BatchIconPicker
+          count={selectedIds.size}
+          iconList={ICON_LIST}
+          onSelectIcon={handleBatchIcon}
+          onClose={() => setBatchIconPicker(false)}
+          inputId="lib-batch-icon-input"
+        />
       )}
 
       {/* 图标选择器 */}
       {iconPicker && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setIconPicker(null)}>
-          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>选择封面图标</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 16, justifyContent: "center" }}>
-              <span style={{ fontSize: "2.5rem" }}>{iconPicker.book_icon || getBookIcon(iconPicker.title)}</span>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 }}>
-              {ICON_LIST.map((ic) => (
-                <span key={ic} onClick={() => setIconPicker({ ...iconPicker, book_icon: ic })}
-                  style={{ fontSize: "1.6rem", cursor: "pointer", padding: 6, borderRadius: "var(--radius-sm)", background: iconPicker.book_icon === ic ? "rgba(var(--accent-rgb),0.12)" : "transparent", border: iconPicker.book_icon === ic ? "1px solid var(--accent)" : "1px solid transparent", transition: "all 0.15s ease" }}>{ic}</span>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={iconPicker.book_icon || ""} onChange={(e) => setIconPicker({ ...iconPicker, book_icon: e.target.value })} placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }} />
-              <button className="btn btn-primary" style={{ padding: "8px 20px", fontSize: ".82rem" }} onClick={async () => {
-                try {
-                  const { invoke } = await import("@tauri-apps/api/core");
-                  await invoke("set_book_icon", { bookId: iconPicker.id, icon: iconPicker.book_icon || "" });
-                  setIconPicker(null);
-                  triggerRefresh();
-                } catch {}
-              }}>确定</button>
-            </div>
-          </div>
-        </div>
+        <IconPicker
+          currentIcon={iconPicker.book_icon || ""}
+          iconList={ICON_LIST}
+          onChange={(ic) => setIconPicker({ ...iconPicker, book_icon: ic })}
+          onClose={() => setIconPicker(null)}
+          onSave={async () => {
+            try {
+              const { invoke } = await import("@tauri-apps/api/core");
+              await invoke("set_book_icon", { bookId: iconPicker.id, icon: iconPicker.book_icon || "" });
+              setIconPicker(null);
+              triggerRefresh();
+            } catch {}
+          }}
+        />
       )}
 
       {/* 重命名弹窗 — 书卡变形动画 */}
@@ -617,33 +525,6 @@ function RenameMorphDialog({ book, cardRect, onClose, onRefresh }: { book: BookD
         </div>
       </div>
     </>
-  );
-}
-
-function MenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        padding: "10px 16px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        cursor: "pointer",
-        fontSize: ".9rem",
-        color: hover ? "var(--accent)" : "var(--text)",
-        background: hover ? "rgba(var(--accent-rgb),0.06)" : "transparent",
-        transition: "all 0.15s ease",
-        position: "relative",
-        zIndex: 1,
-      }}
-    >
-      <span style={{ fontSize: "1rem" }}>{icon}</span>
-      <span>{label}</span>
-    </div>
   );
 }
 

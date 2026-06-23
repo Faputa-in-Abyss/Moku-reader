@@ -12,17 +12,14 @@ import { useStore } from "./store";
 initDebugCapture();
 
 export default function App() {
-  const theme = useStore((s) => s.theme);
   const reading = useStore((s) => s.reading);
   const viewMode = useStore((s) => s.viewMode);
   const mangaReading = useStore((s) => s.mangaReading);
-  const libraryScrollRef = React.useRef<HTMLDivElement>(null);
-  const mangaScrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    const saved = localStorage.getItem("nr-theme") || "dark";
-    document.documentElement.setAttribute("data-theme", saved);
-    useStore.getState().setTheme(saved as any);
+    useStore.getState().setTheme(
+      (localStorage.getItem("nr-theme") || "dark") as "light" | "dark"
+    );
     // 恢复毛玻璃强度
     const glass = localStorage.getItem("nr-glass-intensity");
     if (glass) {
@@ -69,7 +66,7 @@ export default function App() {
         overflow: "hidden",
       }}>
         {viewMode === "library" && !reading && (
-          <div ref={libraryScrollRef} style={{
+          <div style={{
             position: "absolute", inset: 0,
             overflowY: "auto",
             height: "100%",
@@ -78,7 +75,7 @@ export default function App() {
           </div>
         )}
         {viewMode === "manga" && !mangaReading && (
-          <div ref={mangaScrollRef} style={{
+          <div style={{
             position: "absolute", inset: 0,
             overflowY: "auto",
             height: "100%",
