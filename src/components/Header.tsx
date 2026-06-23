@@ -241,7 +241,7 @@ export default function Header() {
         <button className="btn btn-primary" onClick={viewMode === "library" ? handleImportNovel : handleImportManga} title={viewMode === "library" ? "导入小说" : "导入漫画"} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
           <span style={{ fontSize: "1.3rem", fontWeight: 300, lineHeight: 1 }}>+</span>
         </button>
-        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="高级设置" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".85rem", letterSpacing: 2 }}>
+        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="设置 (字体/颜色/毛玻璃/日志)" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".85rem", letterSpacing: 2 }}>
           ⋯
         </button>
       </div>
@@ -344,5 +344,4 @@ const logoIconStyle: React.CSSProperties = {
   fontSize: "1.1rem",
   fontWeight: 700,
   boxShadow: "0 2px 16px rgba(var(--accent-rgb),0.2)",
-  transition: "box-shadow 0.3s ease, transform 0.3s ease",
-};
+  transition: "box-shadow 0.3s ease, 

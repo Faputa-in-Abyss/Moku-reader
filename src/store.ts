@@ -134,6 +134,9 @@ interface AppStore {
   // 导入进度
   importProgress: { title: string; status: string; message: string } | null;
   setImportProgress: (p: { title: string; status: string; message: string } | null) => void;
+  // 翻页模式下的双页开关
+  readerDoublePage: boolean;
+  setReaderDoublePage: (v: boolean) => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -298,4 +301,6 @@ export const useStore = create<AppStore>((set, get) => ({
   // 导入进度
   importProgress: null,
   setImportProgress: (p) => set({ importProgress: p }),
+  readerDoublePage: localStorage.getItem("nr-reader-double") === "true",
+  setReaderDoublePage: (v) => { localStorage.setItem("nr-reader-double", String(v)); set({ readerDoublePage: v }); },
 }));

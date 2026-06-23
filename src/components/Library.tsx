@@ -24,6 +24,7 @@ export default function Library() {
     return "name";
   });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-novel-sort-asc") !== "false");
+  const [bookSearch, setBookSearch] = useState("");
 
   const setSort = (field: SortField) => {
     if (sortField === field) {
@@ -45,7 +46,11 @@ export default function Library() {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         const result = await invoke("sort_books", { field: sortField, asc: sortAsc });
-        if (!cancelled) setSortedBooks(result as BookData[]);
+        if (!cancelled) {
+          const list = result as BookData[];
+          const filtered = list.filter(b => !bookSearch || b.title.includes(bookSearch));
+          setSortedBooks(filtered);
+        }
       } catch {
         // fallback to frontend sort
         if (!cancelled) {
@@ -61,12 +66,13 @@ export default function Library() {
             }
             return sortAsc ? cmp : -cmp;
           });
-          setSortedBooks(list);
+          const filtered = list.filter(b => !bookSearch || b.title.includes(bookSearch));
+          setSortedBooks(filtered);
         }
       }
     })();
     return () => { cancelled = true; };
-  }, [books, sortField, sortAsc]);
+  }, [books, sortField, sortAsc, bookSearch]);
 
   const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
@@ -295,6 +301,19 @@ export default function Library() {
             {sortField === field && (sortAsc ? " ↑" : " ↓")}
           </button>
         ))}
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <input
+          placeholder="搜索书名..."
+          value={bookSearch}
+          onChange={(e) => setBookSearch(e.target.value)}
+          style={{
+            width: "100%", maxWidth: 320, padding: "8px 12px", fontSize: ".85rem",
+            background: "var(--glass-bg)", color: "var(--text)",
+            border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)",
+            outline: "none", boxSizing: "border-box",
+          }}
+        />
       </div>
       <div className="book-grid">
         {sortedBooks.map((book) => (
@@ -610,7 +629,4 @@ function getBookIcon(title: string): string {
 
 const sampleBooks: BookData[] = [
   { id: "1", title: "仙逆", file_path: "", file_type: "txt", total_chapters: 10, current_chapter: 3, progress: 0.35, chapters: [{ index: 0, title: "第一章 修仙之始", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 灵根觉醒", start_pos: 101, end_pos: 200 }, { index: 2, title: "第三章 初入仙门", start_pos: 201, end_pos: 300 }], book_icon: "" },
-  { id: "2", title: "诡秘之主", file_path: "", file_type: "txt", total_chapters: 6, current_chapter: 3, progress: 0.62, chapters: [{ index: 0, title: "第一章 克莱恩", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 值夜者", start_pos: 101, end_pos: 200 }, { index: 2, title: "第三章 占卜家", start_pos: 201, end_pos: 300 }], book_icon: "" },
-  { id: "3", title: "三体", file_path: "", file_type: "txt", total_chapters: 6, current_chapter: 5, progress: 0.88, chapters: [{ index: 0, title: "第一章 科学边界", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 三体游戏", start_pos: 101, end_pos: 200 }], book_icon: "" },
-  { id: "4", title: "全职高手", file_path: "", file_type: "txt", total_chapters: 5, current_chapter: 0, progress: 0.12, chapters: [{ index: 0, title: "第一章 退役", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 重返", start_pos: 101, end_pos: 200 }], book_icon: "" },
-];
+  { id: "2", title: "诡秘之主", file_path: "", file_type: "txt", total_chapters: 6, current_chapter: 3, progress: 0.62

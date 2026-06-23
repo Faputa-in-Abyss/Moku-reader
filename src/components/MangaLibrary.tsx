@@ -525,6 +525,9 @@ export default function MangaLibrary() {
                   <div className="book-progress">
                     <div className="book-progress-bar" style={{ width: `${comic.total_pages > 0 ? (comic.current_page / comic.total_pages) * 100 : 0}%` }} />
                   </div>
+                  <div style={{ fontSize: ".68rem", color: "var(--text-dim)", marginTop: 2, textAlign: "center" }}>
+                    {comic.current_page + 1}/{comic.total_pages} 页
+                  </div>
                 </div>
                 <div className="book-info">
                   <div className="book-chapter">
@@ -1112,6 +1115,4 @@ function CtxMenuItem({ icon, label, onClick, danger }: { icon: string; label: st
 function getMangaIcon(comic: ComicMeta): string {
   if (comic.book_icon) return comic.book_icon;
   if (comic.source_type === "pdf") return "📕";
-  const icons: Record<string, string> = { "海贼王": "🏴‍☠️", "火影忍者": "🍥", "鬼灭之刃": "⚔️", "进击的巨人": "🧱", "咒术回战": "🌀", "龙珠": "🐉", "名侦探柯南": "🔍", "灌篮高手": "🏀", "死神": "⚔️" };
-  return icons[comic.title] || "🎴";
-}
+  const icons: Record<string, string> = { "海贼王": "🏴‍☠️", "火影忍者": "🍥",
