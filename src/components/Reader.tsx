@@ -46,6 +46,7 @@ export default function Reader() {
   const [chapterText, setChapterText] = useState("");
   const [chapterSearch, setChapterSearch] = useState("");
   const [fadeState, setFadeState] = useState<"in" | "out" | "visible">("visible");
+  const contentWidth = [408, 544, 680, 816, 952][windowSize] || 680;
   const fadeTimer = useRef<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const topbarTimer = useRef<number>(0);
@@ -71,7 +72,28 @@ export default function Reader() {
   settingsOpenRef.current = settingsOpen;
 
   const [pageIndex, setPageIndex] = useState(0);
+  const readerDoublePage = useStore((s) => s.readerDoublePage);
+  const setReaderDoublePage = useStore((s) => s.setReaderDoublePage);
   const [flowKey, setFlowKey] = useState(0);
+  const pageStep = readingMode === "page" && readerDoublePage ? 2 : 1;
+
+  // 窗口 resize：宽度 < 768 时自动降级单页
+  useEffect(() => {
+    const check = () => {
+      if (window.innerWidth < 768 && readerDoublePage) {
+        setReaderDoublePage(false);
+      }
+    };
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [readerDoublePage, setReaderDoublePage]);
+
+  // 切换到双页时 pageIndex 自动调整为偶数
+  useEffect(() => {
+    if (readerDoublePage && pageIndex % 2 !== 0) {
+      setPageIndex(pageIndex - 1);
+    }
+  }, [readerDoublePage]);
 
   useEffect(() => {
     // 打开阅读器时从后端拉取最新的书数据（含完整 chapters），再加载章节内容
@@ -111,7 +133,13 @@ export default function Reader() {
           bookId: book.id,
           chapterIndex: idx,
         });
-        if (!cancelled) setChapterText(text);
+        if (!cancelled) {
+          setChapterText(text);
+          const savedPos = localStorage.getItem(`nr-page-pos-${book.id}-${idx}`);
+          if (savedPos && !isNaN(Number(savedPos))) {
+            setPageIndex(Number(savedPos));
+          }
+        }
       } catch (e) {
         console.error("读取章节失败:", e);
         if (!cancelled) {
@@ -134,9 +162,8 @@ export default function Reader() {
     }, 600);
     return () => clearTimeout(scrollTimer);
   }, [currentChapter]);
-
   useEffect(() => {
-    async function saveProgress() {
+    const timer = setTimeout(async () => {
       const id = bookIdRef.current;
       if (!id) return;
       try {
@@ -146,20 +173,26 @@ export default function Reader() {
           chapterIndex: currentChapter,
         });
       } catch {}
-    }
-    saveProgress();
+    }, 800);
+    return () => clearTimeout(timer);
   }, [currentChapter]);
 
+  useEffect(() => {
+    if (book?.id) {
+      localStorage.setItem(`nr-page-pos-${book.id}-${currentChapter}`, String(pageIndex));
+    }
+  }, [pageIndex, currentChapter, book?.id]);
   const pageInfo = useMemo(() => {
     void flowKey;
     if (readingMode !== "page" || !chapterText) return [{ text: "", startPos: 0 }];
+    // 双页模式下每页内容宽度减半
     // 使用实际窗口高度计算分页，不再依赖预设值
     const winH = window.innerHeight;
     const availH = winH - 80 - 32;
     const lineH = fontSize * 32;
     const maxLines = Math.max(1, Math.floor(availH / lineH) - 1);
-    const contentWidth = 648;
-    const charWidth = fontSize * 16 * 1.02;
+    const contentWidth = readerDoublePage ? Math.floor(window.innerWidth / 2) - 18 : 648;
+    const charWidth = fontSize * 14 * 1.02;
     const cpl = Math.max(1, Math.floor(contentWidth / charWidth));
     const firstLineCpl = cpl - 2;
     const paragraphs = chapterText.split("\n").filter(l => l.trim());
@@ -247,8 +280,9 @@ export default function Reader() {
 
   const nextPage = () => {
     if (readingMode === "page") {
-      if (pageIndex < pages.length - 1) {
-        setPageIndex(pageIndex + 1);
+      const step = pageStep;
+      if (pageIndex < pages.length - step) {
+        setPageIndex(pageIndex + step);
       } else {
         nextChapter();
       }
@@ -259,8 +293,9 @@ export default function Reader() {
 
   const prevPage = () => {
     if (readingMode === "page") {
+      const step = pageStep;
       if (pageIndex > 0) {
-        setPageIndex(pageIndex - 1);
+        setPageIndex(Math.max(0, pageIndex - step));
       } else {
         prevChapter();
       }
@@ -326,7 +361,7 @@ export default function Reader() {
     // 侧栏提示 >：扩大检测范围，实际侧栏触发缩窄并避开顶部区域（Y > 120）
     setSidebarHint(e.clientX >= 28 && e.clientX < 100 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpen && !settingsOpen);
 
-    if (e.clientX < 30 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpenRef.current && !settingsOpenRef.current) {
+    if (e.clientX < 15 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpenRef.current && !settingsOpenRef.current) {
       setSidebarOpen(true);
     } else if (!settingsOpenRef.current && e.clientX >= 60) {
       if (sidebarOpenRef.current) {
@@ -531,7 +566,7 @@ export default function Reader() {
             if (currentChapter <= 0) { prevWheelAccumRef.current = 0; return; }
             if (el.scrollTop <= 20) {
               prevWheelAccumRef.current += Math.abs(e.deltaY);
-              if (prevWheelAccumRef.current >= 200) {
+              if (prevWheelAccumRef.current >= 120) {
                 prevWheelAccumRef.current = 0;
                 scrollLockRef.current = true;
                 el.style.transition = "transform 0.25s cubic-bezier(.25,.46,.45,.94)";
@@ -550,7 +585,7 @@ export default function Reader() {
             if (!ch || currentChapter >= ch.length - 1) { nextWheelAccumRef.current = 0; return; }
             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) {
               nextWheelAccumRef.current += Math.abs(e.deltaY);
-              if (nextWheelAccumRef.current >= 200) {
+              if (nextWheelAccumRef.current >= 120) {
                 nextWheelAccumRef.current = 0;
                 scrollLockRef.current = true;
                 el.style.transition = "transform 0.25s cubic-bezier(.25,.46,.45,.94)";
@@ -590,18 +625,67 @@ export default function Reader() {
           <span style={{ fontFamily: "var(--font-title)", fontWeight: 500 }}>{book?.title}</span>
         </div>
         <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1 }}>
+          {readingMode === "page" && (
+            <button className="btn" onClick={() => {
+              if (window.innerWidth < 768) { showTip("窗口过窄无法开启双页模式"); return; }
+              setReaderDoublePage(!readerDoublePage);
+            }}
+              disabled={window.innerWidth < 768}
+              style={{ fontSize: ".78rem", opacity: window.innerWidth < 768 ? 0.4 : 1, background: readerDoublePage ? "rgba(var(--accent-rgb),0.12)" : undefined, borderColor: readerDoublePage ? "var(--accent)" : undefined }}>
+              {readerDoublePage ? "📄 双页" : "📄 单页"}
+            </button>
+          )}
           <button className="btn" onClick={() => setSidebarOpen(!sidebarOpen)}>📖 目录</button>
           <button className="btn" onClick={() => setSettingsOpen(!settingsOpen)}>⚙️</button>
         </div>
       </div>
 
-      {/* 正文区域 */}
+      {/* 正文区域 — 双页模式 */}
+      {readingMode === "page" && readerDoublePage && chapterText && pages.length > 0 ? (
+        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+          {/* 左页 */}
+          <div ref={contentRef} style={{
+            flex: 1, overflow: "hidden", padding: "36px 10px 72px 16px",
+            fontSize: `${fontSize}rem`, lineHeight: 2, letterSpacing: "0.02em",
+            fontFamily: readerFont || "'Georgia','Noto Serif SC',serif",
+            fontWeight: fontBold ? 700 : 400, width: "50%",
+            color: readerTextColor || "var(--text)", transition: "color 0.3s ease, background 0.3s ease",
+          }}>
+            {fadeState === "out" ? null : (
+              <div style={{ opacity: fadeState === "in" ? 0 : 1, transition: "opacity 0.3s ease" }}>
+                {chapters?.[currentChapter]?.title && pageIndex === 0 && (
+                  <div style={{ textAlign: "center", marginBottom: 16, fontSize: ".95rem", fontWeight: 600, color: "var(--text)" }}>
+                    {chapters[currentChapter].title}
+                  </div>
+                )}
+                {pages[pageIndex] ? <div>{pages[pageIndex].split("\n").filter(l => l.trim()).map((p, i) => <p key={i} style={{ textIndent: "2em", margin: 0 }}>{p}</p>)}</div> : null}
+              </div>
+            )}
+          </div>
+          {/* 中缝 */}
+          <div style={{ width: 1, background: "var(--border-glass)", flexShrink: 0 }} />
+          {/* 右页 */}
+          <div style={{
+            flex: 1, overflow: "hidden", padding: "36px 16px 72px 10px",
+            fontSize: `${fontSize}rem`, lineHeight: 2, letterSpacing: "0.02em",
+            fontFamily: readerFont || "'Georgia','Noto Serif SC',serif",
+            fontWeight: fontBold ? 700 : 400, width: "50%",
+            color: readerTextColor || "var(--text)", transition: "color 0.3s ease, background 0.3s ease",
+          }}>
+            <div style={{ opacity: fadeState === "in" ? 0 : 1, transition: "opacity 0.3s ease" }}>
+              {pageIndex + 1 < pages.length
+                ? <div>{pages[pageIndex + 1].split("\n").filter(l => l.trim()).map((p, i) => <p key={i} style={{ textIndent: "2em", margin: 0 }}>{p}</p>)}</div>
+                : null}
+            </div>
+          </div>
+        </div>
+      ) : (
       <div ref={contentRef} style={{
         flex: 1, overflowY: "auto", padding: "40px 16px 80px",
         fontSize: `${fontSize}rem`, lineHeight: 2, letterSpacing: "0.02em",
         fontFamily: readerFont || "'Georgia','Noto Serif SC',serif",
         fontWeight: fontBold ? 700 : 400,
-        maxWidth: 680, margin: "0 auto", width: "100%",
+        maxWidth: contentWidth, margin: "0 auto", width: "100%",
         color: readerTextColor || "var(--text)", transition: "color 0.3s ease, background 0.3s ease",
       }}>
         {fadeState === "out" ? null : (
@@ -615,6 +699,7 @@ export default function Reader() {
           </div>
         )}
       </div>
+      )}
 
       {/* 侧栏把手 */}
       <SidebarHandle open={sidebarOpen} hint={sidebarHint} sidebarWidth={280} zIndex={399} />
