@@ -1,6 +1,8 @@
 import React from "react";
 import { useStore } from "../store";
 import { flashThemeFade } from "../App";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import WindowControls from "./WindowControls";
 
 const THEME_ICONS: Record<string, string> = {
   light: "☀️",
@@ -19,6 +21,31 @@ export default function Header() {
   const [aboutFlying, setAboutFlying] = React.useState(false);
   const [aboutFlyStyle, setAboutFlyStyle] = React.useState<React.CSSProperties>({});
   const logoRef = React.useRef<HTMLAnchorElement>(null);
+  const win = getCurrentWindow();
+  const [maximized, setMaximized] = React.useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      try { setMaximized(await win.isMaximized()); } catch {}
+    })();
+    const onResize = () => {
+      (async () => {
+        try { setMaximized(await win.isMaximized()); } catch {}
+      })();
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [win]);
+
+  const handleMinimize = async () => { try { await win.minimize(); } catch {} };
+  const handleMaximizeToggle = async () => {
+    try {
+      const m = await win.isMaximized();
+      if (m) { await win.unmaximize(); setMaximized(false); }
+      else { await win.maximize(); setMaximized(true); }
+    } catch {}
+  };
+  const handleClose = async () => { try { await win.close(); } catch {} };
 
   const switchViewMode = (m: "library" | "manga") => {
     if (viewMode === m) return;
@@ -170,6 +197,7 @@ export default function Header() {
       ...glassPanelStyle,
       ...headerStyle,
     }}
+        data-tauri-drag-region
         onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 32px rgba(var(--accent-rgb),0.08)"; el.style.borderColor = "rgba(var(--accent-rgb),0.12)"; }}
         onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "none"; el.style.borderColor = "var(--border-glass)"; }}
         onMouseMove={(e) => {
@@ -223,7 +251,7 @@ export default function Header() {
           <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "manga" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease" }}>🎴 漫画</span>
         </div>
       </div>
-      <div className="header-actions glow-border glow-inner" style={{
+      <div className="header-actions glow-border glow-inner" data-tauri-no-drag style={{
         display: "flex", gap: 8, position: "relative", zIndex: 1, padding: 4,
         background: "rgba(var(--accent-rgb),0.04)", borderRadius: "var(--radius-md)",
         border: "1px solid var(--border-glass)",
@@ -242,9 +270,14 @@ export default function Header() {
         <button className="btn btn-primary" onClick={viewMode === "library" ? handleImportNovel : handleImportManga} title={viewMode === "library" ? "导入小说" : "导入漫画"} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
           <span style={{ fontSize: "1.3rem", fontWeight: 300, lineHeight: 1 }}>+</span>
         </button>
-        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="设置 (字体/颜色/毛玻璃/日志)" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".85rem", letterSpacing: 2 }}>
-          ⋯
+        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="设置 (字体/颜色/毛玻璃/日志)" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
         </button>
+        {/* 红黄绿小点 → hover 展开窗口控制按钮 */}
+        <WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleClose} maximized={maximized} />
       </div>
     </header>
 
@@ -290,7 +323,7 @@ export default function Header() {
             一个基于 Tauri v2 的本地小说与漫画阅读器，支持毛玻璃 UI、点光源光效、翻页/滚动双模式。
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: ".82rem", color: "var(--text-dim)" }}>
-            <span>版本 1.0.0</span>
+            <span>版本 1.0.1</span>
             <span>技术栈：Tauri v2 / React 18 / TypeScript / Rust</span>
             <span>漫画 PDF 采用 MuPDF / mutool 渲染</span>
           </div>
