@@ -607,4 +607,59 @@ export default function MangaReader() {
       ) : null}
 
       {tip && (
-        <div style={{ position:
+        <div style={{ position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)", background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-full)", padding: "10px 24px", fontSize: ".85rem", color: "var(--text)", zIndex: 500, animation: "tipIn 0.3s ease" }}>{tip}</div>
+      )}
+    </div>
+  );
+}
+
+function SidebarCover({ comicId }: { comicId: string }) {
+  const [cover, setCover] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    const cached = localStorage.getItem(`nr-manga-cover-${comicId}`);
+    if (cached) {
+      if (cached.startsWith("data:")) {
+        try { localStorage.removeItem(`nr-manga-cover-${comicId}`); } catch {}
+      } else {
+        setCover(cached);
+        return;
+      }
+    }
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    (async () => {
+      try {
+        const { invoke, convertFileSrc } = await import("@tauri-apps/api/core");
+        const path: string = await invoke("get_comic_thumbnail", { comicId });
+        if (path) {
+          const url = convertFileSrc(path);
+          setCover(url);
+          try { localStorage.setItem(`nr-manga-cover-${comicId}`, url); } catch {}
+        }
+      } catch {}
+    })();
+  }, [comicId]);
+
+  if (!cover) return null;
+  return <img src={cover} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 1 }} />;
+}
+
+function getPageUrl(manga: { image_dir: string; pages: { index: number; filename: string }[] }, pageIdx: number): string {
+  const page = manga.pages.find(p => p.index === pageIdx);
+  return page ? convertFileSrc(manga.image_dir + "\\" + page.filename) : "";
+}
+
+function PageImg({ src, style }: { src?: string; style: React.CSSProperties }) {
+  if (!src) {
+    return <div style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(var(--accent-rgb),0.03)", borderRadius: 2, color: "var(--text-dim)", fontSize: ".75rem" }}>…</div>;
+  }
+  return <img src={src} alt="page" style={{ ...style, display: "block", borderRadius: 2 }} draggable={false} />;
+}
+
+function getMangaIcon(c: { book_icon?: string; source_type?: string }): string {
+  if (c.book_icon) return c.book_icon;
+  if (c.source_type === "pdf") return "📕";
+  return "🎴";
+}

@@ -93,10 +93,10 @@ export default function ParticleCanvas() {
           p.co += (p.to - p.co) * 0.06;
         p.x += p.sx + wb * 0.02;
         p.y += p.sy + Math.cos(_time * p.wf + p.wo) * 0.1;
-        if (p.x < -20) p.x = W + 20;
-        if (p.x > W + 20) p.x = -20;
-        if (p.y < -20) p.y = H + 20;
-        if (p.y > H + 20) p.y = -20;
+        if (p.x < -20) { p.x = W + 20; p.sx = (Math.random() - 0.5) * 0.4; p.sy = (Math.random() - 0.5) * 0.4; }
+        if (p.x > W + 20) { p.x = -20; p.sx = (Math.random() - 0.5) * 0.4; p.sy = (Math.random() - 0.5) * 0.4; }
+        if (p.y < -20) { p.y = H + 20; p.sx = (Math.random() - 0.5) * 0.4; p.sy = (Math.random() - 0.5) * 0.4; }
+        if (p.y > H + 20) { p.y = -20; p.sx = (Math.random() - 0.5) * 0.4; p.sy = (Math.random() - 0.5) * 0.4; }
         const r = _clr[0] + (_clr2[0] - _clr[0]) * p.cm;
         const g = _clr[1] + (_clr2[1] - _clr[1]) * p.cm;
         const b = _clr[2] + (_clr2[2] - _clr[2]) * p.cm;
@@ -111,20 +111,12 @@ export default function ParticleCanvas() {
         ctx.fillStyle = `rgba(255,255,255,${a * 0.2})`; ctx.fill();
       }
       if (fc % 2 === 0) {
-        for (let i = 0; i < _particles.length; i++) {
-          for (let j = i + 1; j < _particles.length; j++) {
-            const dx = _particles[i].x - _particles[j].x;
-            const dy = _particles[i].y - _particles[j].y;
-            const d = Math.sqrt(dx * dx + dy * dy);
-            if (d < 100) {
-              const a = (1 - d / 100) * 0.04;
-              ctx.beginPath();
-              ctx.moveTo(_particles[i].x, _particles[i].y);
-              ctx.lineTo(_particles[j].x, _particles[j].y);
-              ctx.strokeStyle = `rgba(${_clr[0]},${_clr[1]},${_clr[2]},${a})`;
-              ctx.lineWidth = 0.4; ctx.stroke();
-            }
-          }
+        // 随机移除和补充粒子，保持数量在 160-240 之间
+        if (_particles.length > 200 && Math.random() < 0.03) {
+          _particles.splice(Math.floor(Math.random() * _particles.length), 1);
+        }
+        if (_particles.length < 200 && Math.random() < 0.03) {
+          _particles.push(createParticle(W, H));
         }
       }
       _animId = requestAnimationFrame(animate);
