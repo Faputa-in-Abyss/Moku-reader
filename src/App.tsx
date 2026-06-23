@@ -66,31 +66,26 @@ export default function App() {
         left: 0,
         right: 0,
         bottom: 0,
-        display: "grid",
-        gridTemplateColumns: "1fr",
-        gridTemplateRows: "1fr",
         overflow: "hidden",
       }}>
-        <div ref={libraryScrollRef} style={{
-          gridArea: "1 / 1",
-          opacity: viewMode === "library" && !reading ? 1 : 0,
-          pointerEvents: viewMode === "library" && !reading ? "auto" : "none",
-          transition: "opacity 0.4s ease",
-          overflowY: "auto",
-          height: "100%",
-        }}>
-          <Library />
-        </div>
-        <div ref={mangaScrollRef} style={{
-          gridArea: "1 / 1",
-          opacity: viewMode === "manga" && !mangaReading ? 1 : 0,
-          pointerEvents: viewMode === "manga" && !mangaReading ? "auto" : "none",
-          transition: "opacity 0.4s ease",
-          overflowY: "auto",
-          height: "100%",
-        }}>
-          <MangaLibrary />
-        </div>
+        {viewMode === "library" && !reading && (
+          <div ref={libraryScrollRef} style={{
+            position: "absolute", inset: 0,
+            overflowY: "auto",
+            height: "100%",
+          }}>
+            <Library />
+          </div>
+        )}
+        {viewMode === "manga" && !mangaReading && (
+          <div ref={mangaScrollRef} style={{
+            position: "absolute", inset: 0,
+            overflowY: "auto",
+            height: "100%",
+          }}>
+            <MangaLibrary />
+          </div>
+        )}
       </div>
       {reading && <Reader />}
       {mangaReading && <MangaReader />}

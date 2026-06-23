@@ -130,7 +130,7 @@ fn save_setting(data_dir: &Path, key: &str, value: &str) {
 // ===== 书库文件存储 =====
 
 /// 原子写入：先写临时文件，再重命名，防止写入过程中崩溃导致 library.json 损坏
-fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
+pub(crate) fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, content).map_err(|e| format!("写入临时文件失败: {}", e))?;
     fs::rename(&tmp_path, path).map_err(|e| format!("重命名临时文件失败: {}", e))?;
