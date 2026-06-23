@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { useStore } from "../store";
 import SidebarHandle from "./SidebarHandle";
+import WindowControls from "./WindowControls";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function Reader() {
   const currentBook = useStore((s) => s.currentBook);
@@ -34,6 +36,32 @@ export default function Reader() {
 
   const [recordingKey, setRecordingKey] = useState<string | null>(null);
   const book = currentBook;
+
+  const win = getCurrentWindow();
+  const [maximized, setMaximized] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try { setMaximized(await win.isMaximized()); } catch {}
+    })();
+    const onResize = () => {
+      (async () => {
+        try { setMaximized(await win.isMaximized()); } catch {}
+      })();
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [win]);
+
+  const handleMinimize = async () => { try { await win.minimize(); } catch {} };
+  const handleMaximizeToggle = async () => {
+    try {
+      const m = await win.isMaximized();
+      if (m) { await win.unmaximize(); setMaximized(false); }
+      else { await win.maximize(); setMaximized(true); }
+    } catch {}
+  };
+  const handleClose = async () => { try { await win.close(); } catch {} };
 
   // 用 ref 缓存 book.id，即使组件卸载或 store 清空仍能拿到书 ID
   const bookIdRef = useRef(book?.id);
@@ -611,7 +639,7 @@ export default function Reader() {
         background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
         backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))", borderBottom: "1px solid var(--border-glass)",
         opacity: 0, transform: "translateY(-100%)", transition: "all 0.45s ease", zIndex: 300,
-      }}>
+      }} data-tauri-drag-region>
         <div className="light-follow" />
         <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
           <button
@@ -624,7 +652,7 @@ export default function Reader() {
           </button>
           <span style={{ fontFamily: "var(--font-title)", fontWeight: 500 }}>{book?.title}</span>
         </div>
-        <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, alignItems: "center" }}>
           {readingMode === "page" && (
             <button className="btn" onClick={() => {
               if (window.innerWidth < 768) { showTip("窗口过窄无法开启双页模式"); return; }
@@ -636,7 +664,15 @@ export default function Reader() {
             </button>
           )}
           <button className="btn" onClick={() => setSidebarOpen(!sidebarOpen)}>📖 目录</button>
-          <button className="btn" onClick={() => setSettingsOpen(!settingsOpen)}>⚙️</button>
+          <button className="btn" onClick={() => setSettingsOpen(!settingsOpen)} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+          <div data-tauri-no-drag>
+            <WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleClose} maximized={maximized} />
+          </div>
         </div>
       </div>
 
@@ -841,18 +877,6 @@ export default function Reader() {
               current={readerFont}
               onSelect={setReaderFont}
             />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ color: "var(--text-dim)", fontSize: ".78rem", marginBottom: 8 }}>界面缩放</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {["0.8×", "0.9×", "1.0×", "1.1×", "1.2×"].map((label, i) => (
-                <button key={i} className="btn" style={{
-                  flex: 1, padding: "6px 0", fontSize: ".72rem",
-                  background: windowSize === i ? "rgba(var(--accent-rgb),0.12)" : undefined,
-                  borderColor: windowSize === i ? "var(--accent)" : undefined, minWidth: 44,
-                }} onClick={() => setWindowSize(i)}>{label}</button>
-              ))}
-            </div>
           </div>
         </div>
       </div>

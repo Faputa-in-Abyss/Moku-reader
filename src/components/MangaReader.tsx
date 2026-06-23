@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import SidebarHandle from "./SidebarHandle";
+import WindowControls from "./WindowControls";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function MangaReader() {
   const currentManga = useStore((s) => s.currentManga);
@@ -32,6 +34,32 @@ export default function MangaReader() {
   const sideTimer = useRef<number>(0);
   const [scrollVisibleRange, setScrollVisibleRange] = useState({ start: 0, end: 20 });
   const [showAllSidebar, setShowAllSidebar] = useState(false);
+
+  const win = getCurrentWindow();
+  const [maximized, setMaximized] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try { setMaximized(await win.isMaximized()); } catch {}
+    })();
+    const onResize = () => {
+      (async () => {
+        try { setMaximized(await win.isMaximized()); } catch {}
+      })();
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [win]);
+
+  const handleMinimize = async () => { try { await win.minimize(); } catch {} };
+  const handleMaximizeToggle = async () => {
+    try {
+      const m = await win.isMaximized();
+      if (m) { await win.unmaximize(); setMaximized(false); }
+      else { await win.maximize(); setMaximized(true); }
+    } catch {}
+  };
+  const handleClose = async () => { try { await win.close(); } catch {} };
 
   // D6: Lazy init — call useStore.getState() once at mount, not on every render
   const [sidebarComics, setSidebarComics] = useState(() => useStore.getState().comics);
@@ -397,32 +425,32 @@ export default function MangaReader() {
 
   return (
     <div ref={mainRef} style={mainStyle} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onClick={handleClick}>
-      {/* Toolbar — PDF 加载时也始终可见返回按钮 */}
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, zIndex: 310,
-        padding: "10px 20px", display: "flex", alignItems: "center",
-        justifyContent: "space-between",
-        background: toolbarVisible || !pdfReady ? "linear-gradient(180deg, var(--glass-bg) 60%, transparent)" : "transparent",
-        backdropFilter: toolbarVisible || !pdfReady ? "blur(var(--glass-blur)) saturate(var(--glass-saturate))" : "none",
-        borderBottom: toolbarVisible || !pdfReady ? "1px solid var(--border-glass)" : "1px solid transparent",
-        transition: "opacity 0.35s ease",
+      {/* Toolbar — 与小说阅读器一致的顶部栏风格 */}
+      <div className="reader-topbar" style={{
+        position: "fixed", top: 0, left: 0, right: 0, width: "100%",
+        padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
+        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))", borderBottom: "1px solid var(--border-glass)",
         opacity: toolbarVisible || !pdfReady ? 1 : 0,
+        transform: toolbarVisible || !pdfReady ? "translateY(0)" : "translateY(-100%)",
+        transition: "all 0.45s ease", zIndex: 310,
         pointerEvents: "auto",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      }} data-tauri-drag-region>
+        <div className="light-follow" />
+        <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
           <button className="btn" style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: "var(--radius-md)", padding: "6px 14px", transition: "all 0.25s ease" }}
             onMouseEnter={(e) => { const t = e.currentTarget; t.style.background = "rgba(var(--accent-rgb), 0.12)"; t.style.boxShadow = "0 0 20px rgba(var(--accent-rgb), 0.25)"; }}
             onMouseLeave={(e) => { const t = e.currentTarget; t.style.background = "none"; t.style.boxShadow = "none"; }}
             onClick={(e) => { e.stopPropagation(); closeMangaReader(); }}>← 返回</button>
-          <span style={{ fontFamily: "var(--font-title)", fontWeight: 500, fontSize: ".9rem" }}>{manga.title}</span>
+          <span style={{ fontFamily: "var(--font-title)", fontWeight: 500 }}>{manga.title}</span>
           {currentSeriesIdx >= 0 && (
             <span style={{ fontSize: ".75rem", color: "var(--text-dim)", marginLeft: 4 }}>— {currentSeriesIdx + 1}/{seriesChapters.length}章</span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, alignItems: "center" }}>
           {currentSeriesIdx >= 0 && (
             <>
-              <button className="btn" style={{ fontSize: ".7rem", padding: "3px 8px" }} onClick={(e) => {
+              <button className="btn" style={{ fontSize: ".78rem", padding: "6px 12px" }} onClick={(e) => {
                 e.stopPropagation();
                 if (currentSeriesIdx > 0) {
                   const prev = seriesChapters[currentSeriesIdx - 1];
@@ -431,7 +459,7 @@ export default function MangaReader() {
                   setMangaZoom(1);
                 }
               }} disabled={currentSeriesIdx <= 0}>← 上一章</button>
-              <button className="btn" style={{ fontSize: ".7rem", padding: "3px 8px" }} onClick={(e) => {
+              <button className="btn" style={{ fontSize: ".78rem", padding: "6px 12px" }} onClick={(e) => {
                 e.stopPropagation();
                 if (currentSeriesIdx < seriesChapters.length - 1) {
                   const next = seriesChapters[currentSeriesIdx + 1];
@@ -447,19 +475,21 @@ export default function MangaReader() {
               ? `页 ${Math.min(doublePages.left ?? 99, doublePages.right ?? 99) + 1}-${Math.max(doublePages.left ?? 0, doublePages.right ?? 0) + 1} / ${totalPages}`
               : `页 ${mangaCurrentPage + 1} / ${totalPages}`}
           </span>
-          {["single", "double", "scroll"].map((mode) => (
-            <button key={mode} className="btn" style={{
-              fontSize: ".72rem", padding: "4px 10px",
-              background: mangaViewMode === mode ? "rgba(var(--accent-rgb),0.12)" : undefined,
-              borderColor: mangaViewMode === mode ? "var(--accent)" : "transparent",
-            }} onClick={(e) => { e.stopPropagation(); setMangaViewMode(mode as any); }}>
-              {mode === "single" ? "单页" : mode === "double" ? "双页" : "滚动"}
-            </button>
-          ))}
-          <button className="btn" style={{ fontSize: ".7rem", padding: "4px 8px" }} onClick={(e) => { e.stopPropagation(); setMangaZoom(Math.max(0.25, mangaZoom - 0.2)); }}>🔍-</button>
-          <span style={{ fontSize: ".72rem", color: "var(--text-dim)", minWidth: 32, textAlign: "center" }}>{Math.round(mangaZoom * 100)}%</span>
-          <button className="btn" style={{ fontSize: ".7rem", padding: "4px 8px" }} onClick={(e) => { e.stopPropagation(); setMangaZoom(Math.min(4, mangaZoom + 0.2)); }}>🔍+</button>
-          <button className="btn" style={{ fontSize: ".72rem", padding: "4px 10px" }} onClick={async (e) => {
+          <button className="btn" onClick={(e) => {
+            e.stopPropagation();
+            setMangaViewMode(mangaViewMode === "double" ? "single" : "double");
+          }}
+            style={{ fontSize: ".78rem", padding: "6px 12px", background: mangaViewMode === "double" ? "rgba(var(--accent-rgb),0.12)" : undefined, borderColor: mangaViewMode === "double" ? "var(--accent)" : undefined }}>
+            {mangaViewMode === "double" ? "📄 双页" : "📄 单页"}
+          </button>
+          <button className="btn" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setMangaZoom(Math.max(0.25, mangaZoom - 0.2)); }} title="缩小">
+            <span style={{ fontSize: "1.1rem", lineHeight: 1, fontWeight: 600 }}>−</span>
+          </button>
+          <span style={{ fontSize: ".78rem", color: "var(--text-dim)", minWidth: 36, textAlign: "center" }}>{Math.round(mangaZoom * 100)}%</span>
+          <button className="btn" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setMangaZoom(Math.min(4, mangaZoom + 0.2)); }} title="放大">
+            <span style={{ fontSize: "1.1rem", lineHeight: 1, fontWeight: 600 }}>+</span>
+          </button>
+          <button className="btn" style={{ fontSize: ".78rem", padding: "6px 12px" }} onClick={async (e) => {
             e.stopPropagation();
             const newDir = isRtl ? "ltr" : "rtl";
             try {
@@ -469,6 +499,9 @@ export default function MangaReader() {
               useStore.setState({ currentManga: { ...manga, direction: newDir } });
             } catch {}
           }}>{isRtl ? "RTL" : "LTR"}</button>
+          <div data-tauri-no-drag>
+            <WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleClose} maximized={maximized} />
+          </div>
         </div>
       </div>
 

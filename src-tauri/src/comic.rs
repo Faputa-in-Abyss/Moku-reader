@@ -48,8 +48,7 @@ pub struct ComicLibraryData {
 pub fn save_comic_library(data_dir: &Path, lib: &ComicLibraryData) -> Result<(), String> {
     let path = data_dir.join("comic_library.json");
     let json = serde_json::to_string_pretty(lib).map_err(|e| format!("序列化失败: {}", e))?;
-    fs::write(&path, &json).map_err(|e| format!("写入失败: {}", e))?;
-    Ok(())
+    crate::atomic_write(&path, &json)
 }
 
 pub fn load_comic_library(data_dir: &Path) -> ComicLibraryData {

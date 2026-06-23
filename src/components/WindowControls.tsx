@@ -16,7 +16,7 @@ export default function WindowControls({ onMinimize, onMaximize, onClose, maximi
     setHover(true);
   };
   const handleMouseLeave = () => {
-    timerRef.current = setTimeout(() => setHover(false), 200);
+    timerRef.current = setTimeout(() => setHover(false), 300);
   };
 
   return (
@@ -27,10 +27,10 @@ export default function WindowControls({ onMinimize, onMaximize, onClose, maximi
         position: "relative",
         display: "flex",
         alignItems: "center",
-        width: hover ? 88 : 24,
+        width: hover ? 100 : 40,
         height: 36,
         flexShrink: 0,
-        transition: "width 0.15s ease",
+        transition: "width 0.2s ease",
       }}
     >
       {/* > 箭头（平时状态） */}
@@ -58,7 +58,7 @@ export default function WindowControls({ onMinimize, onMaximize, onClose, maximi
           inset: 0,
           display: "flex",
           alignItems: "center",
-          gap: 2,
+          gap: 8,
           justifyContent: "center",
           opacity: hover ? 1 : 0,
           transition: "opacity 0.12s ease",
