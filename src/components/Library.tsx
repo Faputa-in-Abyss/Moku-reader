@@ -260,8 +260,8 @@ export default function Library() {
     });
   };
 
-  // D2: Use sortedBooks.length instead of books.length for empty state and count
-  if (sortedBooks.length === 0) {
+  // 区分书库为空和搜索无结果
+  if (books.length === 0) {
     return (
       <section className="library">
         <div className="library-header">
@@ -277,13 +277,50 @@ export default function Library() {
     );
   }
 
+  // 搜索无结果：保留搜索栏和排序按钮，显示"未找到"
+  if (sortedBooks.length === 0 && bookSearch.trim()) {
+    return (
+      <section className="library">
+        <div className="library-header">
+          <h1 className="library-title">我的书库</h1>
+          <span className="library-count">{books.length} 本书</span>
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+          {(["name", "progress", "favorite"] as const).map((field) => (
+            <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
+              fontSize: ".78rem", padding: "4px 12px",
+              background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
+              borderColor: sortField === field ? "var(--accent)" : undefined,
+            }}
+              onMouseMove={(e) => {
+                const el = e.currentTarget;
+                const rect = el.getBoundingClientRect();
+                el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
+                el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
+              }}
+            >
+              {field === "name" ? "📄 名称" : field === "progress" ? "📊 进度" : "⭐ 收藏"}
+              {sortField === field && (sortAsc ? " ↑" : " ↓")}
+            </button>
+          ))}
+          <SearchInput value={bookSearch} onChange={setBookSearch} />
+        </div>
+        <div className="empty-state">
+          <div className="empty-icon">🔍</div>
+          <div className="empty-title">未找到匹配书籍</div>
+          <div className="empty-desc">没有书名包含「{bookSearch}」的书籍，试试其他关键词</div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="library">
       <div className="library-header">
         <h1 className="library-title">我的书库</h1>
         <span className="library-count">{sortedBooks.length} 本书</span>
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
         {(["name", "progress", "favorite"] as const).map((field) => (
           <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
             fontSize: ".78rem", padding: "4px 12px",
@@ -301,19 +338,7 @@ export default function Library() {
             {sortField === field && (sortAsc ? " ↑" : " ↓")}
           </button>
         ))}
-      </div>
-      <div style={{ marginBottom: 12 }}>
-        <input
-          placeholder="搜索书名..."
-          value={bookSearch}
-          onChange={(e) => setBookSearch(e.target.value)}
-          style={{
-            width: "100%", maxWidth: 320, padding: "8px 12px", fontSize: ".85rem",
-            background: "var(--glass-bg)", color: "var(--text)",
-            border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)",
-            outline: "none", boxSizing: "border-box",
-          }}
-        />
+        <SearchInput value={bookSearch} onChange={setBookSearch} />
       </div>
       <div className="book-grid">
         {sortedBooks.map((book) => (
@@ -627,6 +652,41 @@ function getBookIcon(title: string): string {
   return icons[title] || "📖";
 }
 
+
+/** 搜索输入框组件，与排序按钮在同一排 */
+function SearchInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div style={{ position: "relative", flex: 1, minWidth: 140, maxWidth: 260 }}>
+      <input
+        ref={ref}
+        placeholder="搜索书名..."
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") { onChange(""); ref.current?.blur(); }
+        }}
+        style={{
+          width: "100%", padding: "6px 10px 6px 28px", fontSize: ".82rem",
+          background: "var(--glass-bg)", color: "var(--text)",
+          border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)",
+          outline: "none", boxSizing: "border-box",
+        }}
+      />
+      <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: ".78rem", opacity: 0.4, pointerEvents: "none" }}>🔍</span>
+      {value && (
+        <span onClick={() => onChange("")}
+          style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: ".7rem", cursor: "pointer", opacity: 0.4, color: "var(--text)", padding: "2px 4px" }}>
+          ✕
+        </span>
+      )}
+    </div>
+  );
+}
+
 const sampleBooks: BookData[] = [
   { id: "1", title: "仙逆", file_path: "", file_type: "txt", total_chapters: 10, current_chapter: 3, progress: 0.35, chapters: [{ index: 0, title: "第一章 修仙之始", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 灵根觉醒", start_pos: 101, end_pos: 200 }, { index: 2, title: "第三章 初入仙门", start_pos: 201, end_pos: 300 }], book_icon: "" },
-  { id: "2", title: "诡秘之主", file_path: "", file_type: "txt", total_chapters: 6, current_chapter: 3, progress: 0.62
+  { id: "2", title: "诡秘之主", file_path: "", file_type: "txt", total_chapters: 6, current_chapter: 3, progress: 0.62, chapters: [{ index: 0, title: "第一章 克莱恩", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 值夜者", start_pos: 101, end_pos: 200 }, { index: 2, title: "第三章 占卜家", start_pos: 201, end_pos: 300 }], book_icon: "" },
+  { id: "3", title: "三体", file_path: "", file_type: "txt", total_chapters: 6, current_chapter: 5, progress: 0.88, chapters: [{ index: 0, title: "第一章 科学边界", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 三体游戏", start_pos: 101, end_pos: 200 }], book_icon: "" },
+  { id: "4", title: "全职高手", file_path: "", file_type: "txt", total_chapters: 5, current_chapter: 0, progress: 0.12, chapters: [{ index: 0, title: "第一章 退役", start_pos: 0, end_pos: 100 }, { index: 1, title: "第二章 重返", start_pos: 101, end_pos: 200 }], book_icon: "" },
+];

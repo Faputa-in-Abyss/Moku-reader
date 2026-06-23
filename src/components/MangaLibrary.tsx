@@ -1115,4 +1115,5 @@ function CtxMenuItem({ icon, label, onClick, danger }: { icon: string; label: st
 function getMangaIcon(comic: ComicMeta): string {
   if (comic.book_icon) return comic.book_icon;
   if (comic.source_type === "pdf") return "📕";
-  const icons: Record<string, string> = { "海贼王": "🏴‍☠️", "火影忍者": "🍥",
+  return "🎴";
+}

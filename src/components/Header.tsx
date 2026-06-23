@@ -344,4 +344,4 @@ const logoIconStyle: React.CSSProperties = {
   fontSize: "1.1rem",
   fontWeight: 700,
   boxShadow: "0 2px 16px rgba(var(--accent-rgb),0.2)",
-  transition: "box-shadow 0.3s ease, 
+  transition: "box-shadow 0.3s ease, transform 0.3s ease", };
