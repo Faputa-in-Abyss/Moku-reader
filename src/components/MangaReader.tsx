@@ -30,6 +30,9 @@ export default function MangaReader() {
   const [mangaSidebar, setMangaSidebar] = useState(false);
   const [sidebarHint, setSidebarHint] = useState(false);
   const sideTimer = useRef<number>(0);
+  const [scrollVisibleRange, setScrollVisibleRange] = useState({ start: 0, end: 20 });
+  const [showAllSidebar, setShowAllSidebar] = useState(false);
+
   // D6: Lazy init — call useStore.getState() once at mount, not on every render
   const [sidebarComics, setSidebarComics] = useState(() => useStore.getState().comics);
   const [comicSearch, setComicSearch] = useState("");
@@ -110,6 +113,15 @@ export default function MangaReader() {
           newPages[idx] = getPageUrl(manga, idx);
         }
         setLoadedPages((prev) => ({ ...prev, ...newPages }));
+        // 滚动虚拟列表——只在可见区域渲染
+        if (mangaViewMode === "scroll") {
+          const estPageH = 600;
+          const scrollTop = el.scrollTop;
+          const clientH = el.clientHeight;
+          const vStart = Math.max(0, Math.floor(scrollTop / estPageH) - 5);
+          const vEnd = Math.min(totalPages, vStart + Math.ceil(clientH / estPageH) + 15);
+          setScrollVisibleRange({ start: vStart, end: vEnd });
+        }
       }, 200);
     };
     el.addEventListener("scroll", handle, { passive: true });
@@ -148,11 +160,30 @@ export default function MangaReader() {
         case "+": case "=": e.preventDefault(); setMangaZoom(Math.min(4, mangaZoom + 0.2)); break;
         case "-": e.preventDefault(); setMangaZoom(Math.max(0.25, mangaZoom - 0.2)); break;
         case "Escape": closeMangaReader(); break;
+        case "m": e.preventDefault();
+          {
+            const modes = ["single", "double", "scroll"];
+            const curIdx = modes.indexOf(mangaViewMode);
+            setMangaViewMode(modes[(curIdx + 1) % 3] as any);
+            showTip(`已切换为 ${["单页", "双页", "滚动"][(curIdx + 1) % 3]} 模式`);
+          }
+          break;
+        case "r": e.preventDefault();
+          {
+            const newDir = isRtl ? "ltr" : "rtl";
+            import("@tauri-apps/api/core").then(({ invoke }) => {
+              invoke("update_comic_direction", { comicId: manga.id, direction: newDir }).then(() => {
+                showTip(isRtl ? "已切换为从左到右" : "已切换为从右到左");
+                useStore.setState({ currentManga: { ...manga, direction: newDir } });
+              }).catch(() => {});
+            });
+          }
+          break;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [manga, mangaCurrentPage, mangaZoom, isRtl]);
+  }, [manga, mangaCurrentPage, mangaZoom, isRtl, mangaViewMode]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -164,7 +195,7 @@ export default function MangaReader() {
     clearTimeout(navTimer.current);
 
     // 鼠标靠近顶部（~80px）才显示栏，否则隐藏
-    if (e.clientY < 80) {
+    if (e.clientY < 100) {
       setToolbarVisible(true);
     } else {
       setToolbarVisible(false);
@@ -294,6 +325,15 @@ export default function MangaReader() {
       }
       e.preventDefault();
       const forward = e.deltaY > 0;
+      // 如果图片被拖动或缩放，第一次滚轮先复位，不翻页
+      const p = panOffsetRef.current;
+      const z = mangaZoomRef.current;
+      if (p.x !== 0 || p.y !== 0 || z !== 1) {
+        setPanOffset({ x: 0, y: 0 });
+        setMangaZoom(1);
+        showTip("已复位缩放，再滚动翻页");
+        return;
+      }
       if (isRtlRef.current) {
         if (forward) prevPageRef.current(); else nextPageRef.current();
       } else {
@@ -439,24 +479,26 @@ export default function MangaReader() {
       }}>
         {!pdfReady ? <div style={{ color: "var(--text-dim)", fontSize: ".9rem" }} />
         : mangaViewMode === "scroll" ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "60px 0 40px" }}>
-            {Array.from({ length: totalPages }, (_, idx) => (
-              <PageImg key={idx} src={loadedPages[idx]} style={{ maxWidth: "min(100%, " + (800 * mangaZoom) + "px)", width: "100%" }} />
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "60px 0 40px", minHeight: totalPages * 600 }}>
+            <div style={{ height: scrollVisibleRange.start * 600 }} />
+            {Array.from({ length: scrollVisibleRange.end - scrollVisibleRange.start }, (_, idx) => {
+              const pageIdx = scrollVisibleRange.start + idx;
+              return <PageImg key={pageIdx} src={loadedPages[pageIdx]} style={{ maxWidth: "min(100%, " + (800 * mangaZoom) + "px)", width: "100%" }} />;
+            })}
           </div>
         ) : mangaViewMode === "double" && doublePages ? (
-          <div style={{ display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 4, padding: "0 4px", flexDirection: isRtl ? "row-reverse" : "row" }}>
+          <div style={{ display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 0, padding: "0", flexDirection: isRtl ? "row-reverse" : "row", transform: `scale(${mangaZoom}) translate(${panOffset.x / mangaZoom}px, ${panOffset.y / mangaZoom}px)`, transformOrigin: "center", transition: isDragging ? "none" : "transform 0.2s ease", cursor: isDragging ? "grabbing" : "pointer" }}>
             {doublePages.left !== null && (
-              <div style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                <PageImg src={loadedPages[doublePages.left]} style={{ ...imgStyle, maxHeight: "calc(100vh - 80px)" }} />
+              <div style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: isRtl ? "flex-start" : "flex-end", overflow: "hidden" }}>
+                <PageImg src={loadedPages[doublePages.left]} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
               </div>
             )}
             {doublePages.left !== null && doublePages.right !== null && (
-              <div style={{ width: 2, height: "60%", background: "var(--border-glass)", borderRadius: 1, flexShrink: 0 }} />
+              <div style={{ width: 1, height: "40%", background: "var(--border-glass)", borderRadius: 0, flexShrink: 0 }} />
             )}
             {doublePages.right !== null && (
-              <div style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                <PageImg src={loadedPages[doublePages.right]} style={{ ...imgStyle, maxHeight: "calc(100vh - 80px)" }} />
+              <div style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: isRtl ? "flex-end" : "flex-start", overflow: "hidden" }}>
+                <PageImg src={loadedPages[doublePages.right]} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
               </div>
             )}
           </div>
@@ -495,7 +537,9 @@ export default function MangaReader() {
             onClick={(e) => e.stopPropagation()}
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {sidebarComics.filter(c => !comicSearch || c.title.includes(comicSearch)).map((c) => (
+            {sidebarComics.filter(c => !comicSearch || c.title.includes(comicSearch)).map((c, _, arr) => {
+              if (!showAllSidebar && arr.indexOf(c) >= 30) return null;
+              return (
               <div key={c.id} onClick={async () => {
                 const targetPage = c.current_page || 0;
                 setMangaSidebar(false);
@@ -541,7 +585,15 @@ export default function MangaReader() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
+            {!showAllSidebar && (() => {
+              const cnt = sidebarComics.filter(c => !comicSearch || c.title.includes(comicSearch)).length;
+              if (cnt <= 30) return null;
+              return <div onClick={() => setShowAllSidebar(true)} style={{ padding: "8px 8px", textAlign: "center", fontSize: ".78rem", color: "var(--accent)", cursor: "pointer", borderRadius: "var(--radius-sm)", transition: "all 0.2s ease" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.08)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>显示全部 {cnt} 本</div>;
+            })()}
           </div>
         </div>
       </div>
@@ -555,63 +607,4 @@ export default function MangaReader() {
       ) : null}
 
       {tip && (
-        <div style={{ position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)", background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-full)", padding: "10px 24px", fontSize: ".85rem", color: "var(--text)", zIndex: 500, animation: "tipIn 0.3s ease" }}>{tip}</div>
-      )}
-    </div>
-  );
-}
-
-function SidebarCover({ comicId }: { comicId: string }) {
-  const [cover, setCover] = useState<string | null>(null);
-  const fetchedRef = useRef(false);
-
-  useEffect(() => {
-    // 先用 MangaLibrary 一样的缓存
-    const cached = localStorage.getItem(`nr-manga-cover-${comicId}`);
-    if (cached) {
-      // 迁移：旧缓存是 data: 开头的 base64，删掉让新代码重新读取
-      if (cached.startsWith("data:")) {
-        try { localStorage.removeItem(`nr-manga-cover-${comicId}`); } catch {}
-      } else {
-        setCover(cached);
-        return;
-      }
-    }
-
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-    (async () => {
-      try {
-        const { invoke, convertFileSrc } = await import("@tauri-apps/api/core");
-        const path: string = await invoke("get_comic_thumbnail", { comicId });
-        if (path) {
-          const url = convertFileSrc(path);
-          setCover(url);
-          try { localStorage.setItem(`nr-manga-cover-${comicId}`, url); } catch {}
-        }
-      } catch {}
-    })();
-  }, [comicId]);
-
-  if (!cover) return null;
-  return <img src={cover} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 1 }} />;
-}
-
-/** 构造图片的 asset:// URL，完全跳过 IPC + base64 */
-function getPageUrl(manga: { image_dir: string; pages: { index: number; filename: string }[] }, pageIdx: number): string {
-  const page = manga.pages.find(p => p.index === pageIdx);
-  return page ? convertFileSrc(manga.image_dir + "\\" + page.filename) : "";
-}
-
-function PageImg({ src, style }: { src?: string; style: React.CSSProperties }) {
-  if (!src) {
-    return <div style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(var(--accent-rgb),0.03)", borderRadius: 2, color: "var(--text-dim)", fontSize: ".75rem" }}>…</div>;
-  }
-  return <img src={src} alt="page" style={{ ...style, display: "block", borderRadius: 2 }} draggable={false} />;
-}
-
-function getMangaIcon(c: { book_icon?: string; source_type?: string }): string {
-  if (c.book_icon) return c.book_icon;
-  if (c.source_type === "pdf") return "📕";
-  return "🎴";
-}
+        <div style={{ position:
