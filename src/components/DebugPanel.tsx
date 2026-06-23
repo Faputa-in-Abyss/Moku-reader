@@ -104,6 +104,7 @@ export default function DebugPanel() {
     return saved ? Number(saved) : 12;
   });
   const [rightTab, setRightTab] = useState<"settings" | "logs" | "fonts">("logs");
+  const [narrow, setNarrow] = useState(window.innerWidth < 420);
 
   // 系统资源
   const [procMem, setProcMem] = useState(0);
@@ -116,6 +117,13 @@ export default function DebugPanel() {
   }
 
   useEffect(() => { if (debugPanelOpen) setLogs(getLogsSnapshot()); }, [debugPanelOpen]);
+
+  // 窄窗口检测
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 420);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   useEffect(() => {
     if (!debugPanelOpen) return;
     const id = setInterval(() => setLogs(getLogsSnapshot()), 500);
@@ -286,7 +294,7 @@ export default function DebugPanel() {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.35)", backdropFilter: `blur(${glassIntensity}px) saturate(1.4)`, WebkitBackdropFilter: `blur(${glassIntensity}px) saturate(1.4)`, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDebugPanelOpen(false)}>
-      <div style={{ width: "88vw", height: "82vh", maxWidth: 960, background: "var(--glass-bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ width: "88vw", height: narrow ? "96vh" : "82vh", maxWidth: narrow ? "none" : 960, background: "var(--glass-bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: "1.15rem", fontWeight: 600, color: "var(--text)" }}>高级设置</span>
@@ -295,6 +303,7 @@ export default function DebugPanel() {
           <button className="btn" style={{ padding: "5px 10px", fontSize: ".85rem" }} onClick={() => setDebugPanelOpen(false)}>✕</button>
         </div>
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+          {narrow ? null : (
           <div style={{ width: 220, flexShrink: 0, padding: "14px 18px", borderRight: "1px solid var(--border-glass)", overflowY: "auto", fontSize: ".8rem" }}>
             <div style={{ fontWeight: 600, marginBottom: 10, color: "var(--text)", fontSize: ".88rem" }}>应用信息</div>
             {Object.entries(appInfo).map(([k, v]) => (
@@ -346,6 +355,7 @@ export default function DebugPanel() {
               </button>
             ))}
           </div>
+          )}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {rightTab === "settings" && (
               <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
@@ -474,6 +484,10 @@ export default function DebugPanel() {
                 <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 12 }} onClick={async () => {
                   try { const { invoke } = await import("@tauri-apps/api/core"); const dir: string = await invoke("get_comics_dir"); await invoke("open_file_location", { path: dir }); } catch {}
                 }}>打开渲染目录</button>
+                <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 8 }} onClick={async () => {
+                  const theme = useStore.getState().theme;
+                  useStore.getState().setTheme(theme === "light" ? "dark" : "light");
+                }}>切换昼夜主题</button>
                 <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 16 }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>重置所有设置</button>
               </div>
             )}

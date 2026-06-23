@@ -17,6 +17,13 @@ export default function Header() {
   const [aboutFlying, setAboutFlying] = React.useState(false);
   const [aboutFlyStyle, setAboutFlyStyle] = React.useState<React.CSSProperties>({});
   const logoRef = React.useRef<HTMLAnchorElement>(null);
+  const [narrow, setNarrow] = React.useState(window.innerWidth < 420);
+  const [veryNarrow, setVeryNarrow] = React.useState(window.innerWidth < 360);
+  React.useEffect(() => {
+    const onResize = () => { setNarrow(window.innerWidth < 420); setVeryNarrow(window.innerWidth < 360); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const win = getCurrentWindow();
   const [maximized, setMaximized] = React.useState(false);
 
@@ -192,6 +199,7 @@ export default function Header() {
     <header style={{
       ...glassPanelStyle,
       ...headerStyle,
+      padding: narrow ? "10px 16px" : "14px 32px",
     }}
         data-tauri-drag-region
         onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 32px rgba(var(--accent-rgb),0.08)"; el.style.borderColor = "rgba(var(--accent-rgb),0.12)"; }}
@@ -204,22 +212,42 @@ export default function Header() {
         }}
     >
       <div className="light-follow" />
-      <div style={{ display: "flex", alignItems: "center", gap: 24, position: "relative", zIndex: 1 }}>
-        <a className="logo" href="#" style={logoStyle}
+      <div style={{ display: "flex", alignItems: "center", gap: narrow ? 12 : 24, position: "relative", zIndex: 1 }}>
+        <a className="logo" href="#" style={{
+          ...logoStyle,
+          opacity: veryNarrow ? 0 : 1,
+          maxWidth: veryNarrow ? 0 : 160,
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          transition: "opacity 0.3s ease, max-width 0.3s ease, padding 0.3s ease, margin 0.3s ease",
+        }}
             onMouseEnter={(e) => { const el = e.currentTarget; el.style.color = "var(--accent)"; el.style.transform = "translateY(-1px)"; el.style.textShadow = "0 0 20px rgba(var(--accent-rgb),0.4)"; }}
             onMouseLeave={(e) => { const el = e.currentTarget; el.style.color = "var(--text)"; el.style.transform = "none"; el.style.textShadow = "none"; }}
             onClick={(e) => { e.preventDefault(); openAbout(); }}>
-          <span className="logo-icon" style={logoIconStyle}
+          <span className="logo-icon" style={{
+            ...logoIconStyle,
+            opacity: veryNarrow ? 0 : 1,
+            maxWidth: veryNarrow ? 0 : 40,
+            overflow: "hidden",
+            padding: veryNarrow ? 0 : undefined,
+            transition: "opacity 0.3s ease, max-width 0.3s ease, padding 0.3s ease",
+          }}
             onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 24px rgba(var(--accent-rgb),0.5)"; el.style.transform = "scale(1.08)"; }}
             onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 2px 16px rgba(var(--accent-rgb),0.2)"; el.style.transform = "none"; }}>
             墨
           </span>
-          墨读
+          <span style={{
+            opacity: narrow ? 0 : 1,
+            maxWidth: narrow ? 0 : 120,
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            transition: "opacity 0.3s ease, max-width 0.3s ease",
+          }}>墨读</span>
         </a>
         <div className="header-tabs glow-border glow-inner" style={{
           display: "flex", gap: 0, cursor: "pointer", userSelect: "none",
           background: "rgba(var(--accent-rgb),0.06)",
-          borderRadius: "var(--radius-sm)", padding: 3,
+          borderRadius: "var(--radius-sm)", padding: narrow ? 2 : 3,
           position: "relative",
           border: "1px solid rgba(var(--accent-rgb),0.08)",
         }}
@@ -243,16 +271,28 @@ export default function Header() {
             transition: "left 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)",
             zIndex: 0,
           }} />
-          <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "library" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <BookIcon size={15} /> 小说
+          <span style={{ fontSize: ".82rem", padding: narrow ? "4px 12px" : "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "library" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <BookIcon size={15} /> <span style={{
+              opacity: narrow ? 0 : 1,
+              maxWidth: narrow ? 0 : 40,
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              transition: "opacity 0.3s ease, max-width 0.3s ease",
+            }}>小说</span>
           </span>
-          <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "manga" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <ArtIcon size={15} /> 漫画
+          <span style={{ fontSize: ".82rem", padding: narrow ? "4px 12px" : "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "manga" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <ArtIcon size={15} /> <span style={{
+              opacity: narrow ? 0 : 1,
+              maxWidth: narrow ? 0 : 40,
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              transition: "opacity 0.3s ease, max-width 0.3s ease",
+            }}>漫画</span>
           </span>
         </div>
       </div>
       <div className="header-actions glow-border glow-inner" data-tauri-no-drag style={{
-        display: "flex", gap: 8, position: "relative", zIndex: 1, padding: 4,
+        display: "flex", alignItems: "center", gap: 8, position: "relative", zIndex: 1, padding: 4,
         background: "rgba(var(--accent-rgb),0.04)", borderRadius: "var(--radius-md)",
         border: "1px solid var(--border-glass)",
       }}
@@ -264,14 +304,22 @@ export default function Header() {
         }}
       >
         <div style={{ position: "absolute", top: -1, left: "10%", right: "10%", height: 1, background: "linear-gradient(90deg, transparent, rgba(var(--accent-rgb),0.4), transparent)", opacity: 0, transition: "opacity 0.3s ease", pointerEvents: "none" }} />
-        <button className="btn" onClick={cycleTheme} title="切换主题" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {theme === "light" ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+        <button className="btn" onClick={cycleTheme} title="切换主题" style={{
+          width: veryNarrow ? 0 : (veryNarrow ? 30 : 36),
+          height: veryNarrow ? 0 : (veryNarrow ? 30 : 36),
+          borderRadius: "var(--radius-md)", padding: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          opacity: veryNarrow ? 0 : 1,
+          overflow: "hidden",
+          transition: "opacity 0.3s ease, width 0.3s ease, height 0.3s ease",
+        }}>
+          {theme === "light" ? <SunIcon size={14} /> : <MoonIcon size={14} />}
         </button>
-        <button className="btn btn-primary" onClick={viewMode === "library" ? handleImportNovel : handleImportManga} title={viewMode === "library" ? "导入小说" : "导入漫画"} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
-          <span style={{ fontSize: "1.3rem", fontWeight: 300, lineHeight: 1 }}>+</span>
+        <button className="btn btn-primary" onClick={viewMode === "library" ? handleImportNovel : handleImportManga} title={viewMode === "library" ? "导入小说" : "导入漫画"} style={{ width: veryNarrow ? 30 : 36, height: veryNarrow ? 30 : 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
+          <span style={{ fontSize: veryNarrow ? "1.1rem" : "1.3rem", fontWeight: 300, lineHeight: 1 }}>+</span>
         </button>
-        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="设置 (字体/颜色/毛玻璃/日志)" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <SettingsIcon size={18} />
+        <button className="btn" onClick={() => setDebugPanelOpen(true)} title="设置 (字体/颜色/毛玻璃/日志)" style={{ width: veryNarrow ? 30 : 36, height: veryNarrow ? 30 : 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <SettingsIcon size={veryNarrow ? 14 : 18} />
         </button>
         {/* 红黄绿小点 → hover 展开窗口控制按钮 */}
         <WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleClose} maximized={maximized} />

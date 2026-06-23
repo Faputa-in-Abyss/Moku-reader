@@ -74,6 +74,12 @@ export function BatchActionBar({
   total, selectedCount, selectAllText,
   onToggleSelectAll, onCancel, onFavorite, onIcon, onDelete, onAddToSeries,
 }: BatchActionBarProps) {
+  const [narrow, setNarrow] = React.useState(window.innerWidth < 420);
+  React.useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 420);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   return (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500,
@@ -87,11 +93,13 @@ export function BatchActionBar({
         {selectedCount === total ? (selectAllText || "取消全选") : "全选"}
       </button>
       <button className="btn" style={{ fontSize: ".8rem" }} onClick={onCancel}>取消</button>
+      {!narrow && (<>
       <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedCount === 0} onClick={onFavorite}>⭐ 收藏所选</button>
       <button className="btn" style={{ fontSize: ".8rem", display: "inline-flex", alignItems: "center", gap: 4 }} disabled={selectedCount === 0} onClick={onIcon}><ArtIcon size={14} /> 图标</button>
       {onAddToSeries && (
         <button className="btn" style={{ fontSize: ".8rem", display: "inline-flex", alignItems: "center", gap: 4 }} disabled={selectedCount === 0} onClick={onAddToSeries}><FolderIcon size={14} /> 添加到系列</button>
       )}
+      </>)}
       <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedCount === 0 ? undefined : "rgba(200,60,50,0.8)", display: "inline-flex", alignItems: "center", gap: 4 }} disabled={selectedCount === 0} onClick={onDelete}>
         <TrashIcon size={14} /> 删除所选
       </button>
