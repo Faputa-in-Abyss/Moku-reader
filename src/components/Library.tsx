@@ -6,7 +6,7 @@ export default function Library() {
   const books = useStore((s) => s.books);
   const setBooks = useStore((s) => s.setBooks);
   const openReader = useStore((s) => s.openReader);
-  const refreshKey = useStore((s) => s.refreshKey);
+  const novelRefreshKey = useStore((s) => s.novelRefreshKey);
   const triggerRefresh = useStore((s) => s.triggerRefresh);
 
   const [ctxMenu, setCtxMenu] = useState<{ book: BookData; x: number; y: number } | null>(null);
@@ -91,7 +91,7 @@ export default function Library() {
     }
     load();
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, [novelRefreshKey]);
 
   // 点击其他地方关闭菜单
   useEffect(() => {
@@ -321,6 +321,7 @@ export default function Library() {
         <span className="library-count">{sortedBooks.length} 本书</span>
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+        <SearchInput value={bookSearch} onChange={setBookSearch} />
         {(["name", "progress", "favorite"] as const).map((field) => (
           <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
             fontSize: ".78rem", padding: "4px 12px",
@@ -338,7 +339,6 @@ export default function Library() {
             {sortField === field && (sortAsc ? " ↑" : " ↓")}
           </button>
         ))}
-        <SearchInput value={bookSearch} onChange={setBookSearch} />
       </div>
       <div className="book-grid">
         {sortedBooks.map((book) => (
@@ -667,9 +667,9 @@ function SearchInput({ value, onChange }: { value: string; onChange: (v: string)
           if (e.key === "Escape") { onChange(""); ref.current?.blur(); }
         }}
         style={{
-          width: "100%", padding: "6px 10px 6px 28px", fontSize: ".82rem",
+          width: "100%", padding: "5px 10px 5px 28px", fontSize: ".78rem",
           background: "var(--glass-bg)", color: "var(--text)",
-          border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)",
+          border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)",
           outline: "none", boxSizing: "border-box",
         }}
       />

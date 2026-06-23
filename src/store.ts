@@ -104,6 +104,10 @@ interface AppStore {
   setSettingsOpen: (o: boolean) => void;
   refreshKey: number;
   triggerRefresh: () => void;
+  novelRefreshKey: number;
+  triggerNovelRefresh: () => void;
+  comicRefreshKey: number;
+  triggerComicRefresh: () => void;
   windowSize: number;
   setWindowSize: (s: number) => void;
   debugPanelOpen: boolean;
@@ -177,9 +181,9 @@ export const useStore = create<AppStore>((set, get) => ({
   closeReader: () => {
     set({ reading: false, sidebarOpen: false, settingsOpen: false });
     // 不置空 currentBook/currentChapter，确保最后一个 update_progress 能读到 book.id
-    // triggerRefresh 同步触发，让书架立即刷新进度
-    const { triggerRefresh } = get();
-    triggerRefresh();
+    // 只触发小说库刷新，不刷新漫画库
+    const { triggerNovelRefresh } = get();
+    triggerNovelRefresh();
   },
   setChapter: (idx) => set({ currentChapter: idx }),
   fontSize: 1.2,
@@ -209,7 +213,11 @@ export const useStore = create<AppStore>((set, get) => ({
   settingsOpen: false,
   setSettingsOpen: (o) => set({ settingsOpen: o }),
   refreshKey: 0,
-  triggerRefresh: () => set((s) => ({ refreshKey: s.refreshKey + 1 })),
+  novelRefreshKey: 0,
+  comicRefreshKey: 0,
+  triggerRefresh: () => set((s) => ({ refreshKey: s.refreshKey + 1, novelRefreshKey: s.novelRefreshKey + 1, comicRefreshKey: s.comicRefreshKey + 1 })),
+  triggerNovelRefresh: () => set((s) => ({ novelRefreshKey: s.novelRefreshKey + 1, refreshKey: s.refreshKey + 1 })),
+  triggerComicRefresh: () => set((s) => ({ comicRefreshKey: s.comicRefreshKey + 1, refreshKey: s.refreshKey + 1 })),
   windowSize: 2,
   setWindowSize: (s) => set({ windowSize: Math.max(0, Math.min(4, s)) }),
   debugPanelOpen: false,
@@ -287,8 +295,9 @@ export const useStore = create<AppStore>((set, get) => ({
   closeMangaReader: () => {
     set({ mangaReading: false });
     // 不置空 currentManga/mangaCurrentPage，确保最后一个进度保存能读到 id
-    const { triggerRefresh } = get();
-    triggerRefresh();
+    // 只触发漫画库刷新，不刷新小说库
+    const { triggerComicRefresh } = get();
+    triggerComicRefresh();
   },
   setMangaPage: (idx) => set({ mangaCurrentPage: idx }),
   mangaViewMode: (localStorage.getItem("nr-manga-view") as MangaViewMode) || "single",

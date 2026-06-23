@@ -33,6 +33,18 @@ export function initDebugCapture() {
   console.log = (...args) => { pushLog("LOG", args.map(a => formatArg(a)).join(" "), "frontend"); origLog(...args); };
   console.warn = (...args) => { pushLog("WARN", args.map(a => formatArg(a)).join(" "), "frontend"); origWarn(...args); };
   console.error = (...args) => { pushLog("ERR", args.map(a => formatArg(a)).join(" "), "frontend"); origError(...args); };
+
+  // 后端 debug-log 事件监听（放在这里避免 StrictMode 重复注册）
+  (async () => {
+    try {
+      const { listen } = await import("@tauri-apps/api/event");
+      await listen<{ level: string; message: string; timestamp: string }>("debug-log", (event) => {
+        const { level, message, timestamp } = event.payload;
+        LOG_BUFFER.push({ id: ++logIdCounter, level: level || "BACKEND", message, timestamp: timestamp || nowStamp(), source: "backend" });
+        if (LOG_BUFFER.length > MAX_LOGS) LOG_BUFFER.splice(0, LOG_BUFFER.length - MAX_LOGS);
+      });
+    } catch {}
+  })();
 }
 
 function formatArg(a: unknown): string {
@@ -101,21 +113,6 @@ export default function DebugPanel() {
   function fmtMB(mb: number): string {
     return fmtBytes(mb * 1024 * 1024);
   }
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    (async () => {
-      try {
-        const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<{ level: string; message: string; timestamp: string }>("debug-log", (event) => {
-          const { level, message, timestamp } = event.payload;
-          LOG_BUFFER.push({ id: ++logIdCounter, level: level || "BACKEND", message, timestamp: timestamp || nowStamp(), source: "backend" });
-          if (LOG_BUFFER.length > MAX_LOGS) LOG_BUFFER.splice(0, LOG_BUFFER.length - MAX_LOGS);
-        });
-      } catch {}
-    })();
-    return () => { unlisten?.(); };
-  }, []);
 
   useEffect(() => { if (debugPanelOpen) setLogs(getLogsSnapshot()); }, [debugPanelOpen]);
   useEffect(() => {
@@ -194,13 +191,13 @@ export default function DebugPanel() {
     if (autoScroll && logEndRef.current) logEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [logs, autoScroll]);
 
-  // 监听扫描完成事件
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
+  // 监听扫描完成事件（放在 initDebugCapture 中避免 StrictMode 重复注册）
+  if (!(window as any).__scanCompleteInit) {
+    (window as any).__scanCompleteInit = true;
     (async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<any>("scan-complete", (event) => {
+        await listen<any>("scan-complete", (event) => {
           const r = event.payload;
           console.log("[墨读] 扫描完成:", `${r.novels_imported}本小说/${r.comics_imported}本漫画`);
           if (r.errors?.length > 0) {
@@ -211,8 +208,7 @@ export default function DebugPanel() {
         });
       } catch {}
     })();
-    return () => { unlisten?.(); };
-  }, []);
+  }
 
   // 输入框聚焦时全选
   useEffect(() => {
