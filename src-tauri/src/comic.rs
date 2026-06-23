@@ -292,7 +292,7 @@ fn render_single_page(mutool: &Path, pdf_path: &Path, page_index: usize, dpi: u3
                     let _ = child.kill();
                     let _ = child.wait(); // 回收僵尸进程
                     // 超时后清理可能的部分输出
-                    let _ = std::fs::remove_file(&output_path);
+                    let _ = std::fs::remove_file(&out_path);
                     return Err(format!("mutool 渲染超时（>60s），已终止进程 {}", pid));
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
