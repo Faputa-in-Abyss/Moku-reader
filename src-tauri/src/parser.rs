@@ -8,6 +8,7 @@
 /// - 不依赖字节偏移切片读取，后端直接返回完整文本，前端负责显示
 
 use regex::Regex;
+use std::io::Read;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Chapter {
@@ -198,10 +199,43 @@ pub fn read_txt_file(path: &str) -> Result<String, String> {
 }
 
 pub fn read_epub_file(path: &str) -> Result<String, String> {
-    let content = std::fs::read(path).map_err(|e| format!("读取EPUB失败: {}", e))?;
-    let text = String::from_utf8_lossy(&content);
-    let text = strip_html_tags(&text);
-    let cleaned: Vec<&str> = text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+    let file = std::fs::File::open(path).map_err(|e| format!("读取EPUB失败: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("解压EPUB失败: {}", e))?;
+    
+    // 先尝试读取 content.opf 确定 spine 顺序（简化版：直接收集所有 xhtml 按文件名排序）
+    let mut contents: Vec<(String, String)> = Vec::new();
+    
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| format!("读取EPUB条目失败: {}", e))?;
+        let name = entry.name().to_lowercase();
+        if name.ends_with(".xhtml") || name.ends_with(".html") || name.ends_with(".htm") {
+            let mut content = String::new();
+            entry.read_to_string(&mut content).map_err(|e| format!("读取EPUB条目内容失败: {}", e))?;
+            let cleaned = strip_html_tags(&content);
+            contents.push((entry.name().to_string(), cleaned));
+        }
+    }
+    
+    if contents.is_empty() {
+        return Err("EPUB 文件中未找到可读内容".to_string());
+    }
+    
+    // 按文件名排序，保持章节顺序
+    contents.sort_by(|a, b| a.0.cmp(&b.0));
+    
+    let mut full_text = String::new();
+    for (_, text) in contents {
+        if !text.trim().is_empty() {
+            full_text.push_str(&text);
+            full_text.push('\n');
+        }
+    }
+    
+    if full_text.trim().is_empty() {
+        return Err("EPUB 解析后内容为空".to_string());
+    }
+    
+    let cleaned: Vec<&str> = full_text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
     Ok(cleaned.join("\n"))
 }
 

@@ -432,7 +432,19 @@ fn reparse_book_chapters(book_id: String, state: State<AppState>) -> Result<(), 
     debug_log!("🔄 重新解析章节: book={}", &book_id);
     let mut lib = lock_mutex(&state.library)?;
     let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
-    let new_chapters = parse_chapters(&book.content);
+    
+    let new_chapters = if !book.file_path.is_empty() {
+        debug_log!("   从文件重新读取: {}", &book.file_path);
+        let content = crate::read_txt_file(&book.file_path)?;
+        crate::parse_chapters(&content)
+    } else if !book.content.is_empty() {
+        debug_log!("   从内存 content 解析");
+        crate::parse_chapters(&book.content)
+    } else {
+        debug_log!("   既无文件路径也无内容，尝试查找在线书数据");
+        return Err("无法重新解析：没有文件路径且内容为空".to_string());
+    };
+    
     debug_log!("   旧章节数: {}, 新章节数: {}", book.chapters.len(), new_chapters.len());
     if !new_chapters.is_empty() {
         debug_log!("   第一章标题: {:?}", new_chapters[0].title);
@@ -474,7 +486,6 @@ pub struct SortBookData {
     pub total_chapters: usize,
     pub current_chapter: usize,
     pub progress: f64,
-    #[serde(skip)]
     pub chapters: Vec<crate::parser::Chapter>,
     #[serde(skip)]
     pub content: String,
@@ -526,7 +537,7 @@ fn sort_books(field: String, asc: bool, state: State<AppState>) -> Result<Vec<So
         total_chapters: b.total_chapters,
         current_chapter: b.current_chapter,
         progress: b.progress,
-        chapters: Vec::new(),
+        chapters: b.chapters.clone(),
         content: String::new(),
         favorite: b.favorite,
         book_icon: b.book_icon.clone(),
