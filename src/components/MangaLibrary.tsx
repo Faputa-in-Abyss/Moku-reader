@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useStore, ComicData, ComicMeta } from "../store";
 import { handleCardGlow } from "../utils/glow";
+import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
 
 export default function MangaLibrary() {
   const comics = useStore((s) => s.comics);
@@ -334,6 +335,20 @@ export default function MangaLibrary() {
   };
 
   const [batchIconPicker, setBatchIconPicker] = useState(false);
+  const [batchSeriesOpen, setBatchSeriesOpen] = useState(false);
+
+  const handleBatchAddToSeries = (seriesName: string) => {
+    if (!seriesName) return;
+    const existing = seriesMap[seriesName] || [];
+    const newIds = [...selectedIds].filter(id => !existing.includes(id));
+    if (newIds.length > 0) {
+      setSeriesMap({ ...seriesMap, [seriesName]: [...existing, ...newIds] });
+    }
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setBatchSeriesOpen(false);
+    triggerRefresh();
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -438,21 +453,13 @@ export default function MangaLibrary() {
             onClick={() => setSeriesDialogOpen(true)}>+ 新建</span>
         </div>
         {(["name", "pages", "favorite"] as const).map((field) => (
-          <button key={field} className="btn sort-btn glow-border glow-inner" onClick={() => setSort(field)} style={{
-            fontSize: ".78rem", padding: "4px 12px",
-            background: sortField === field ? "rgba(var(--accent-rgb),0.1)" : undefined,
-            borderColor: sortField === field ? "var(--accent)" : undefined,
-          }}
-            onMouseMove={(e) => {
-              const el = e.currentTarget;
-              const rect = el.getBoundingClientRect();
-              el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
-              el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
-            }}
-          >
-            {field === "name" ? "📄 名称" : field === "pages" ? "📄 页数" : "⭐ 收藏"}
-            {sortField === field && (sortAsc ? " ↑" : " ↓")}
-          </button>
+          <SortButton key={field}
+            field={field}
+            label={field === "name" ? "📄 名称" : field === "pages" ? "📄 页数" : "⭐ 收藏"}
+            currentField={sortField}
+            asc={sortAsc}
+            onClick={() => setSort(field)}
+          />
         ))}
       </div>
       <div style={{
@@ -505,27 +512,13 @@ export default function MangaLibrary() {
                 onContextMenu={(e) => handleCtxMenu(e, comic)}
                 onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
               >
-                {selectMode && (
-                  <div style={{
-                    position: "absolute", top: 8, left: 8, zIndex: 10,
-                    width: 24, height: 24, borderRadius: "var(--radius-sm)",
-                    border: selectedIds.has(comic.id) ? "2px solid var(--accent)" : "2px solid rgba(var(--accent-rgb),0.25)",
-                    background: selectedIds.has(comic.id) ? "var(--accent)" : "rgba(0,0,0,0.25)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: ".75rem", color: "#fff", fontWeight: 700,
-                    pointerEvents: "none", backdropFilter: "blur(var(--glass-mask-blur))",
-                  }}>
-                    {selectedIds.has(comic.id) ? "✓" : ""}
-                  </div>
-                )}
+                {selectMode && <SelectCheckbox selected={selectedIds.has(comic.id)} />}
                 <div className={`book-cover${selectedIds.has(comic.id) ? " cover-selected" : ""}`}>
-                  {((optimisticFav[comic.id] ?? comic.favorite)) && <span style={{ position: "absolute", top: 6, right: 8, fontSize: "1.1rem", zIndex: 4, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))", pointerEvents: "none", animation: bursting.has(comic.id) ? "starBurst 0.5s ease forwards" : "starPop 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both" }}>⭐</span>}
+                  <FavStar show={!!(optimisticFav[comic.id] ?? comic.favorite)} bursting={bursting.has(comic.id)} />
                   <MangaCardCover comicId={comic.id} hasIcon={!!comic.book_icon} />
                   <div className="book-cover-icon">{comic.book_icon || getMangaIcon(comic)}</div>
                   <div className="book-title">{comic.title}</div>
-                  <div className="book-progress">
-                    <div className="book-progress-bar" style={{ width: `${comic.total_pages > 0 ? (comic.current_page / comic.total_pages) * 100 : 0}%` }} />
-                  </div>
+                  <ProgressBar pct={comic.total_pages > 0 ? (comic.current_page / comic.total_pages) * 100 : 0} />
                   <div style={{ fontSize: ".68rem", color: "var(--text-dim)", marginTop: 2, textAlign: "center" }}>
                     {comic.current_page + 1}/{comic.total_pages} 页
                   </div>
@@ -546,39 +539,22 @@ export default function MangaLibrary() {
       </div>
 
       {ctxMenu && (
-        <div
-          style={{
-            position: "fixed",
-            left: ctxMenu.x,
-            top: ctxMenu.y,
-            zIndex: 300,
-            background: "var(--surface-glass, var(--glass-bg))",
-            backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            border: "1px solid var(--border-glass)",
-            borderRadius: "var(--radius-md)",
-            padding: "6px 0",
-            minWidth: 200,
-            boxShadow: "0 8px 40px var(--shadow)",
-            overflow: "hidden",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <CtxMenuItem icon="✏️" label="重命名" onClick={() => handleRename(ctxMenu.comic)} />
-          <CtxMenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.comic); }} />
-          <CtxMenuItem icon="⭐" label={(optimisticFav[ctxMenu.comic.id] ?? ctxMenu.comic.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
-          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
-          <CtxMenuItem icon="📂" label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.comic)} />
-          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
-          <CtxMenuItem icon="➡️" label={`阅读方向: ${ctxMenu.comic.direction === "rtl" ? "从右到左" : "从左到右"}`} onClick={() => handleSetDirection(ctxMenu.comic, ctxMenu.comic.direction === "rtl" ? "ltr" : "rtl")} />
+        <ContextMenu x={ctxMenu.x} y={ctxMenu.y} minWidth={200}>
+          <MenuItem icon="✏️" label="重命名" onClick={() => handleRename(ctxMenu.comic)} />
+          <MenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.comic); }} />
+          <MenuItem icon="⭐" label={(optimisticFav[ctxMenu.comic.id] ?? ctxMenu.comic.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
+          <MenuDivider />
+          <MenuItem icon="📂" label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.comic)} />
+          <MenuDivider />
+          <MenuItem icon="➡️" label={`阅读方向: ${ctxMenu.comic.direction === "rtl" ? "从右到左" : "从左到右"}`} onClick={() => handleSetDirection(ctxMenu.comic, ctxMenu.comic.direction === "rtl" ? "ltr" : "rtl")} />
           {ctxMenu.comic.source_type === "folder" && (
-            <CtxMenuItem icon="🔄" label="重新扫描文件夹" onClick={() => handleRescan(ctxMenu.comic)} />
+            <MenuItem icon="🔄" label="重新扫描文件夹" onClick={() => handleRescan(ctxMenu.comic)} />
           )}
-          <CtxMenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.comic)} />
-          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
-          <CtxMenuItem icon="📑" label="添加到系列" onClick={() => { setCtxMenu(null); setSeriesTarget(ctxMenu.comic); }} />
+          <MenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.comic)} />
+          <MenuDivider />
+          <MenuItem icon="📑" label="添加到系列" onClick={() => { setCtxMenu(null); setSeriesTarget(ctxMenu.comic); }} />
           {activeSeries !== "全部" ? (
-            <CtxMenuItem icon="🚫" label={`从「${activeSeries}」移出`} onClick={() => {
+            <MenuItem icon="🚫" label={`从「${activeSeries}」移出`} onClick={() => {
               setCtxMenu(null);
               const cur = seriesMap[activeSeries] || [];
               const filtered = cur.filter((id: string) => id !== ctxMenu.comic.id);
@@ -591,7 +567,7 @@ export default function MangaLibrary() {
               triggerRefresh();
             }} />
           ) : ctxMenu.comic.series_id && (
-            <CtxMenuItem icon="🚫" label={`从系列移出`} onClick={() => {
+            <MenuItem icon="🚫" label={`从系列移出`} onClick={() => {
               setCtxMenu(null);
               const sid = ctxMenu.comic.series_id!;
               const cur = seriesMap[sid] || [];
@@ -605,97 +581,63 @@ export default function MangaLibrary() {
               triggerRefresh();
             }} />
           )}
-          <CtxMenuItem icon="☑️" label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
-        </div>
+          <MenuItem icon="☑️" label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
+        </ContextMenu>
       )}
 
       {seriesCtx && (
-        <div
-          style={{
-            position: "fixed",
-            left: seriesCtx.x,
-            top: seriesCtx.y,
-            zIndex: 300,
-            background: "var(--surface-glass, var(--glass-bg))",
-            backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-            border: "1px solid var(--border-glass)",
-            borderRadius: "var(--radius-md)",
-            padding: "6px 0",
-            minWidth: 220,
-            boxShadow: "0 8px 40px var(--shadow)",
-            overflow: "hidden",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <ContextMenu x={seriesCtx.x} y={seriesCtx.y} minWidth={220}>
           <div style={{ padding: "8px 16px", fontSize: ".78rem", color: "var(--text-dim)", borderBottom: "1px solid var(--border-glass)", marginBottom: 4 }}>
             系列：{seriesCtx.name}
           </div>
-          <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
-          <CtxMenuItem icon="🗑️" label="仅删除文件夹（保留漫画）" onClick={() => handleDeleteSeries(seriesCtx.name, false)} />
-          <CtxMenuItem icon="🗑️" label="删除文件夹及里面所有漫画" onClick={() => {
+          <MenuDivider />
+          <MenuItem icon="🗑️" label="仅删除文件夹（保留漫画）" onClick={() => handleDeleteSeries(seriesCtx.name, false)} />
+          <MenuItem icon="🗑️" label="删除文件夹及里面所有漫画" onClick={() => {
             setSeriesCtx(null);
             if (confirm(`确定要删除系列「${seriesCtx.name}」及其包含的所有漫画吗？此操作不可恢复。`)) {
               handleDeleteSeries(seriesCtx.name, true);
             }
           }} danger />
-        </div>
+        </ContextMenu>
       )}
 
       {/* 批量操作栏 */}
       {selectMode && (
-        <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500,
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
-          padding: "12px 24px",
-          background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))",
-          borderTop: "1px solid var(--border-glass)",
-        }}>
-          <span style={{ color: "var(--text-dim)", fontSize: ".8rem" }}>已选 {selectedIds.size} 项</span>
-          <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => {
+        <BatchActionBar
+          total={(seriesLists[activeSeries] || []).length}
+          selectedCount={selectedIds.size}
+          onToggleSelectAll={() => {
             const list = seriesLists[activeSeries] || [];
             if (selectedIds.size === list.length) {
               setSelectedIds(new Set());
             } else {
               setSelectedIds(new Set(list.map(b => b.id)));
             }
-          }}>{selectedIds.size === (seriesLists[activeSeries]?.length || 0) ? "取消全选" : "全选"}</button>
-          <button className="btn" style={{ fontSize: ".8rem" }} onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>取消</button>
-          <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedIds.size === 0} onClick={handleBatchFavorite}>⭐ 收藏所选</button>
-          <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedIds.size === 0} onClick={() => setBatchIconPicker(true)}>🎨 图标</button>
-          <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedIds.size === 0 ? undefined : "rgba(200,60,50,0.8)" }} disabled={selectedIds.size === 0} onClick={handleBatchDelete}>
-            🗑️ 删除所选
-          </button>
-        </div>
+          }}
+          onCancel={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+          onFavorite={handleBatchFavorite}
+          onIcon={() => setBatchIconPicker(true)}
+          onAddToSeries={() => setBatchSeriesOpen(true)}
+          onDelete={handleBatchDelete}
+        />
       )}
 
-      {/* 批量图标选择器 */}
       {batchIconPicker && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setBatchIconPicker(false)}>
-          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 16, textAlign: "center" }}>批量设置封面图标（{selectedIds.size} 项）</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 }}>
-              {ICON_LIST.map((ic) => (
-                <span key={ic} onClick={() => handleBatchIcon(ic)}
-                  style={{ fontSize: "1.6rem", cursor: "pointer", padding: 6, borderRadius: "var(--radius-sm)", border: "1px solid transparent", transition: "all 0.15s ease" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                >{ic}</span>
-              ))}
-            </div>
+        <BatchIconPicker
+          count={selectedIds.size}
+          iconList={ICON_LIST}
+          onSelectIcon={handleBatchIcon}
+          onClose={() => setBatchIconPicker(false)}
+          inputId="batch-icon-input"
+          extra={
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button className="btn" style={{ flex: 1, fontSize: ".78rem", justifyContent: "center", padding: "6px 0" }} onClick={() => { handleBatchIcon(""); handleClearCoverCache(selectedIds); }}>
+              <button className="btn" style={{ flex: 1, fontSize: ".78rem", justifyContent: "center", padding: "6px 0" }}
+                onClick={() => { handleBatchIcon(""); handleClearCoverCache(selectedIds); }}>
                 🖼️ 原封面
               </button>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input id="batch-icon-input" placeholder="或输入自定义 emoji..." style={{ flex: 1, background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", textAlign: "center" }}
-                onKeyDown={(e) => { if (e.key === "Enter") handleBatchIcon((document.getElementById("batch-icon-input") as HTMLInputElement)?.value || ""); }}
-              />
-              <button className="btn btn-primary" style={{ padding: "8px 20px", fontSize: ".82rem" }} onClick={() => handleBatchIcon((document.getElementById("batch-icon-input") as HTMLInputElement)?.value || "")}>确定</button>
-            </div>
-          </div>
-        </div>
+          }
+        />
       )}
 
       {iconPicker && (
@@ -738,6 +680,34 @@ export default function MangaLibrary() {
                 } catch {}
               }}>确定</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 批量添加到系列弹窗 */}
+      {batchSeriesOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(var(--glass-mask-blur))", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setBatchSeriesOpen(false)}>
+          <div style={{ background: "var(--bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", padding: 24, maxWidth: 400, width: "90%" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 8, textAlign: "center" }}>批量添加到系列（{selectedIds.size} 项）</div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 16, textAlign: "center" }}>输入系列名称或选择已有系列</div>
+            <input id="batch-series-input" placeholder="输入系列名称..." style={{ width: "100%", boxSizing: "border-box", background: "var(--glass-bg)", color: "var(--text)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: ".85rem", outline: "none", marginBottom: 12 }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleBatchAddToSeries((document.getElementById("batch-series-input") as HTMLInputElement)?.value?.trim() || ""); }} />
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button className="btn" style={{ flex: 1, fontSize: ".8rem", justifyContent: "center" }} onClick={() => setBatchSeriesOpen(false)}>取消</button>
+              <button className="btn btn-primary" style={{ flex: 1, fontSize: ".8rem", justifyContent: "center" }} onClick={() => handleBatchAddToSeries((document.getElementById("batch-series-input") as HTMLInputElement)?.value?.trim() || "")}>确定</button>
+            </div>
+            {Object.keys(seriesMap).length > 0 && (
+              <><div style={{ height: 1, background: "var(--border-glass)", margin: "8px 0" }} />
+              <div style={{ fontSize: ".85rem", fontWeight: 500, color: "var(--text)", marginBottom: 8 }}>已有系列</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {Object.entries(seriesMap).map(([name, ids]) => (
+                  <span key={name} onClick={() => handleBatchAddToSeries(name)}
+                    style={{ fontSize: ".78rem", cursor: "pointer", padding: "4px 10px", borderRadius: "var(--radius-sm)", background: "rgba(var(--accent-rgb),0.08)", border: "1px solid rgba(var(--accent-rgb),0.15)", color: "var(--text)" }}>
+                    {name} ({ids.length})
+                  </span>
+                ))}
+              </div></>
+            )}
           </div>
         </div>
       )}
@@ -1086,31 +1056,6 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
 
   // 不渲染占位 div，等进入视口才加载
   return <div ref={ref} style={{ position: "absolute", inset: 0, zIndex: 1 }} />;
-}
-
-function CtxMenuItem({ icon, label, onClick, danger }: { icon: string; label: string; onClick: () => void; danger?: boolean }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        padding: "10px 16px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        cursor: "pointer",
-        fontSize: ".9rem",
-        color: danger ? (hover ? "#e05050" : "#c03030") : (hover ? "var(--accent)" : "var(--text)"),
-        background: hover ? (danger ? "rgba(220,50,50,0.08)" : "rgba(var(--accent-rgb),0.06)") : "transparent",
-        transition: "all 0.15s ease",
-      }}
-    >
-      <span style={{ fontSize: "1rem" }}>{icon}</span>
-      <span>{label}</span>
-    </div>
-  );
 }
 
 function getMangaIcon(comic: ComicMeta): string {

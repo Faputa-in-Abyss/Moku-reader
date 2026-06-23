@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import { useStore } from "../store";
 import SidebarHandle from "./SidebarHandle";
 import WindowControls from "./WindowControls";
+import { GearIcon, topbarGlassStyle, BackButton } from "./SharedUI";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function Reader() {
@@ -634,22 +635,12 @@ export default function Reader() {
     >
       {/* 顶部导航栏 */}
       <div className="reader-topbar" style={{
-        position: "fixed", top: 0, left: 0, right: 0, width: "100%",
-        padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
-        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))", borderBottom: "1px solid var(--border-glass)",
-        opacity: 0, transform: "translateY(-100%)", transition: "all 0.45s ease", zIndex: 300,
+        ...topbarGlassStyle,
+        opacity: 0, transform: "translateY(-100%)",
       }} data-tauri-drag-region>
         <div className="light-follow" />
         <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
-          <button
-            className="btn"
-            onMouseEnter={(e) => { const t = e.currentTarget; t.style.background = "rgba(var(--accent-rgb), 0.12)"; t.style.boxShadow = "0 0 20px rgba(var(--accent-rgb), 0.25)"; }}
-            onMouseLeave={(e) => { const t = e.currentTarget; t.style.background = "none"; t.style.boxShadow = "none"; }}
-            style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: "var(--radius-md)", padding: "6px 14px", transition: "all 0.25s ease" }}
-            onClick={closeReader}>
-            ← 返回书库
-          </button>
+          <BackButton onClick={closeReader} label="← 返回书库" />
           <span style={{ fontFamily: "var(--font-title)", fontWeight: 500 }}>{book?.title}</span>
         </div>
         <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, alignItems: "center" }}>
@@ -664,11 +655,8 @@ export default function Reader() {
             </button>
           )}
           <button className="btn" onClick={() => setSidebarOpen(!sidebarOpen)}>📖 目录</button>
-          <button className="btn" onClick={() => setSettingsOpen(!settingsOpen)} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
+          <button className="btn" onClick={() => setSettingsOpen(!settingsOpen)} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text)" }}>
+            <GearIcon />
           </button>
           <div data-tauri-no-drag>
             <WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleClose} maximized={maximized} />

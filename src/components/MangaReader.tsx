@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import SidebarHandle from "./SidebarHandle";
 import WindowControls from "./WindowControls";
+import { topbarGlassStyle, BackButton } from "./SharedUI";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function MangaReader() {
@@ -427,21 +428,14 @@ export default function MangaReader() {
     <div ref={mainRef} style={mainStyle} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onClick={handleClick}>
       {/* Toolbar — 与小说阅读器一致的顶部栏风格 */}
       <div className="reader-topbar" style={{
-        position: "fixed", top: 0, left: 0, right: 0, width: "100%",
-        padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "linear-gradient(180deg, var(--glass-bg) 60%, transparent)",
-        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturate))", borderBottom: "1px solid var(--border-glass)",
+        ...topbarGlassStyle,
         opacity: toolbarVisible || !pdfReady ? 1 : 0,
         transform: toolbarVisible || !pdfReady ? "translateY(0)" : "translateY(-100%)",
-        transition: "all 0.45s ease", zIndex: 310,
         pointerEvents: "auto",
       }} data-tauri-drag-region>
         <div className="light-follow" />
         <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
-          <button className="btn" style={{ background: "none", border: "none", color: "var(--text)", fontSize: "1.2rem", cursor: "pointer", borderRadius: "var(--radius-md)", padding: "6px 14px", transition: "all 0.25s ease" }}
-            onMouseEnter={(e) => { const t = e.currentTarget; t.style.background = "rgba(var(--accent-rgb), 0.12)"; t.style.boxShadow = "0 0 20px rgba(var(--accent-rgb), 0.25)"; }}
-            onMouseLeave={(e) => { const t = e.currentTarget; t.style.background = "none"; t.style.boxShadow = "none"; }}
-            onClick={(e) => { e.stopPropagation(); closeMangaReader(); }}>← 返回</button>
+          <BackButton onClick={(e) => { e?.stopPropagation?.(); closeMangaReader(); }} />
           <span style={{ fontFamily: "var(--font-title)", fontWeight: 500 }}>{manga.title}</span>
           {currentSeriesIdx >= 0 && (
             <span style={{ fontSize: ".75rem", color: "var(--text-dim)", marginLeft: 4 }}>— {currentSeriesIdx + 1}/{seriesChapters.length}章</span>
