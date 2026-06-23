@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useStore, ComicData, ComicMeta } from "../store";
 import { handleCardGlow } from "../utils/glow";
 import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
+import { BookIcon, FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ArrowRightIcon, RefreshIcon, BanIcon, ImageIcon, SearchIcon } from "./FlatIcons";
 
 export default function MangaLibrary() {
   const comics = useStore((s) => s.comics);
@@ -388,7 +389,6 @@ export default function MangaLibrary() {
           <span className="library-count">0 本漫画</span>
         </div>
         <div className="empty-state">
-          <div className="empty-icon">🎴</div>
           <div className="empty-title">还没有漫画</div>
           <div className="empty-desc">点击右上角的"导入漫画"按钮，添加你的漫画吧！支持 CBZ/ZIP、PDF、图片文件夹</div>
         </div>
@@ -455,7 +455,7 @@ export default function MangaLibrary() {
         {(["name", "pages", "favorite"] as const).map((field) => (
           <SortButton key={field}
             field={field}
-            label={field === "name" ? "📄 名称" : field === "pages" ? "📄 页数" : "⭐ 收藏"}
+            label={field === "name" ? "名称" : field === "pages" ? "页数" : "⭐ 收藏"}
             currentField={sortField}
             asc={sortAsc}
             onClick={() => setSort(field)}
@@ -540,21 +540,21 @@ export default function MangaLibrary() {
 
       {ctxMenu && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} minWidth={200}>
-          <MenuItem icon="✏️" label="重命名" onClick={() => handleRename(ctxMenu.comic)} />
-          <MenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.comic); }} />
+          <MenuItem icon={<EditIcon />} label="重命名" onClick={() => handleRename(ctxMenu.comic)} />
+          <MenuItem icon={<PaletteIcon />} label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.comic); }} />
           <MenuItem icon="⭐" label={(optimisticFav[ctxMenu.comic.id] ?? ctxMenu.comic.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
           <MenuDivider />
-          <MenuItem icon="📂" label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.comic)} />
+          <MenuItem icon={<FolderIcon />} label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.comic)} />
           <MenuDivider />
-          <MenuItem icon="➡️" label={`阅读方向: ${ctxMenu.comic.direction === "rtl" ? "从右到左" : "从左到右"}`} onClick={() => handleSetDirection(ctxMenu.comic, ctxMenu.comic.direction === "rtl" ? "ltr" : "rtl")} />
+          <MenuItem icon={<ArrowRightIcon />} label={`阅读方向: ${ctxMenu.comic.direction === "rtl" ? "从右到左" : "从左到右"}`} onClick={() => handleSetDirection(ctxMenu.comic, ctxMenu.comic.direction === "rtl" ? "ltr" : "rtl")} />
           {ctxMenu.comic.source_type === "folder" && (
-            <MenuItem icon="🔄" label="重新扫描文件夹" onClick={() => handleRescan(ctxMenu.comic)} />
+            <MenuItem icon={<RefreshIcon />} label="重新扫描文件夹" onClick={() => handleRescan(ctxMenu.comic)} />
           )}
-          <MenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.comic)} />
+          <MenuItem icon={<TrashIcon />} label="删除" onClick={() => handleDelete(ctxMenu.comic)} />
           <MenuDivider />
-          <MenuItem icon="📑" label="添加到系列" onClick={() => { setCtxMenu(null); setSeriesTarget(ctxMenu.comic); }} />
+          <MenuItem icon={<FileIcon />} label="添加到系列" onClick={() => { setCtxMenu(null); setSeriesTarget(ctxMenu.comic); }} />
           {activeSeries !== "全部" ? (
-            <MenuItem icon="🚫" label={`从「${activeSeries}」移出`} onClick={() => {
+            <MenuItem icon={<BanIcon />} label={`从「${activeSeries}」移出`} onClick={() => {
               setCtxMenu(null);
               const cur = seriesMap[activeSeries] || [];
               const filtered = cur.filter((id: string) => id !== ctxMenu.comic.id);
@@ -567,7 +567,7 @@ export default function MangaLibrary() {
               triggerRefresh();
             }} />
           ) : ctxMenu.comic.series_id && (
-            <MenuItem icon="🚫" label={`从系列移出`} onClick={() => {
+            <MenuItem icon={<BanIcon />} label={`从系列移出`} onClick={() => {
               setCtxMenu(null);
               const sid = ctxMenu.comic.series_id!;
               const cur = seriesMap[sid] || [];
@@ -581,7 +581,7 @@ export default function MangaLibrary() {
               triggerRefresh();
             }} />
           )}
-          <MenuItem icon="☑️" label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
+          <MenuItem icon={<CheckSquareIcon />} label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
         </ContextMenu>
       )}
 
@@ -591,8 +591,8 @@ export default function MangaLibrary() {
             系列：{seriesCtx.name}
           </div>
           <MenuDivider />
-          <MenuItem icon="🗑️" label="仅删除文件夹（保留漫画）" onClick={() => handleDeleteSeries(seriesCtx.name, false)} />
-          <MenuItem icon="🗑️" label="删除文件夹及里面所有漫画" onClick={() => {
+          <MenuItem icon={<TrashIcon />} label="仅删除文件夹（保留漫画）" onClick={() => handleDeleteSeries(seriesCtx.name, false)} />
+          <MenuItem icon={<TrashIcon />} label="删除文件夹及里面所有漫画" onClick={() => {
             setSeriesCtx(null);
             if (confirm(`确定要删除系列「${seriesCtx.name}」及其包含的所有漫画吗？此操作不可恢复。`)) {
               handleDeleteSeries(seriesCtx.name, true);
@@ -633,7 +633,7 @@ export default function MangaLibrary() {
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <button className="btn" style={{ flex: 1, fontSize: ".78rem", justifyContent: "center", padding: "6px 0" }}
                 onClick={() => { handleBatchIcon(""); handleClearCoverCache(selectedIds); }}>
-                🖼️ 原封面
+                <ImageIcon size={16} style={{ verticalAlign: "middle", marginRight: 4 }} /> 原封面
               </button>
             </div>
           }
@@ -661,7 +661,7 @@ export default function MangaLibrary() {
                     triggerRefresh();
                   } catch {}
                 }}>
-                🖼️ 原封面
+                <ImageIcon size={16} style={{ verticalAlign: "middle", marginRight: 4 }} /> 原封面
               </button>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -1060,6 +1060,6 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
 
 function getMangaIcon(comic: ComicMeta): string {
   if (comic.book_icon) return comic.book_icon;
-  if (comic.source_type === "pdf") return "📕";
-  return "🎴";
+  if (comic.source_type === "pdf") return "";
+  return "";
 }

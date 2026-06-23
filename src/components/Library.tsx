@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useStore, BookData } from "../store";
 import { handleCardGlow } from "../utils/glow";
+import { BookIcon, FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ImageIcon } from "./FlatIcons";
 import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
 
 export default function Library() {
@@ -75,7 +76,7 @@ export default function Library() {
     return () => { cancelled = true; };
   }, [books, sortField, sortAsc, bookSearch]);
 
-  const ICON_LIST = ["📖", "☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
+  const ICON_LIST = ["☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
   useEffect(() => {
     let cancelled = false;
@@ -270,7 +271,7 @@ export default function Library() {
           <span className="library-count">0 本书</span>
         </div>
         <div className="empty-state">
-          <div className="empty-icon">📖</div>
+          <div className="empty-icon"><BookIcon size={48} /></div>
           <div className="empty-title">还没有书</div>
           <div className="empty-desc">点击右上角的"导入小说"按钮，添加你的第一本小说吧</div>
         </div>
@@ -287,13 +288,12 @@ export default function Library() {
           <span className="library-count">{books.length} 本书</span>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-          <SortButton field="name" label="📄 名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
-          <SortButton field="progress" label="📊 进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
+          <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
+          <SortButton field="progress" label="进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
           <SortButton field="favorite" label="⭐ 收藏" currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
           <SearchInput value={bookSearch} onChange={setBookSearch} />
         </div>
         <div className="empty-state">
-          <div className="empty-icon">🔍</div>
           <div className="empty-title">未找到匹配书籍</div>
           <div className="empty-desc">没有书名包含「{bookSearch}」的书籍，试试其他关键词</div>
         </div>
@@ -309,8 +309,8 @@ export default function Library() {
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
         <SearchInput value={bookSearch} onChange={setBookSearch} />
-        <SortButton field="name" label="📄 名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
-        <SortButton field="progress" label="📊 进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
+        <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
+        <SortButton field="progress" label="进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
         <SortButton field="favorite" label="⭐ 收藏" currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
       </div>
       <div className="book-grid">
@@ -366,14 +366,14 @@ export default function Library() {
       {/* 右键菜单 */}
       {ctxMenu && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
-          <MenuItem icon="✏️" label="重命名" onClick={() => handleRename(ctxMenu.book)} />
-          <MenuItem icon="🎨" label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.book); }} />
+          <MenuItem label="重命名" onClick={() => handleRename(ctxMenu.book)} />
+          <MenuItem label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.book); }} />
           <MenuItem icon="⭐" label={(optimisticFav[ctxMenu.book.id] ?? ctxMenu.book.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.book)} />
-          <MenuItem icon="🗑️" label="删除" onClick={() => handleDelete(ctxMenu.book)} />
+          <MenuItem label="删除" onClick={() => handleDelete(ctxMenu.book)} />
           <MenuDivider />
-          <MenuItem icon="📂" label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.book)} />
+          <MenuItem label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.book)} />
           <MenuDivider />
-          <MenuItem icon="☑️" label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
+          <MenuItem label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
         </ContextMenu>
       )}
 
@@ -530,7 +530,7 @@ function RenameMorphDialog({ book, cardRect, onClose, onRefresh }: { book: BookD
 
 function getBookIcon(title: string): string {
   const icons: Record<string, string> = { "仙逆": "☯", "诡秘之主": "🕯", "三体": "🌌", "全职高手": "🎮", "星辰变": "⭐" };
-  return icons[title] || "📖";
+  return icons[title] || "";
 }
 
 
@@ -548,13 +548,12 @@ function SearchInput({ value, onChange }: { value: string; onChange: (v: string)
           if (e.key === "Escape") { onChange(""); ref.current?.blur(); }
         }}
         style={{
-          width: "100%", padding: "5px 10px 5px 28px", fontSize: ".78rem",
+          width: "100%", padding: "5px 10px", fontSize: ".78rem",
           background: "var(--glass-bg)", color: "var(--text)",
           border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)",
           outline: "none", boxSizing: "border-box",
         }}
       />
-      <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: ".78rem", opacity: 0.4, pointerEvents: "none" }}>🔍</span>
       {value && (
         <span onClick={() => onChange("")}
           style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: ".7rem", cursor: "pointer", opacity: 0.4, color: "var(--text)", padding: "2px 4px" }}>

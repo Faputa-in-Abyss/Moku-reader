@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import SidebarHandle from "./SidebarHandle";
 import WindowControls from "./WindowControls";
 import { topbarGlassStyle, BackButton } from "./SharedUI";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { BookIcon, TrashIcon, ArrowRightIcon, SearchIcon, RefreshIcon, ArtIcon, ImageIcon } from "./FlatIcons";
 
 export default function MangaReader() {
   const currentManga = useStore((s) => s.currentManga);
@@ -474,7 +475,7 @@ export default function MangaReader() {
             setMangaViewMode(mangaViewMode === "double" ? "single" : "double");
           }}
             style={{ fontSize: ".78rem", padding: "6px 12px", background: mangaViewMode === "double" ? "rgba(var(--accent-rgb),0.12)" : undefined, borderColor: mangaViewMode === "double" ? "var(--accent)" : undefined }}>
-            {mangaViewMode === "double" ? "📄 双页" : "📄 单页"}
+            {mangaViewMode === "double" ? "双页" : "单页"}
           </button>
           <button className="btn" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setMangaZoom(Math.max(0.25, mangaZoom - 0.2)); }} title="缩小">
             <span style={{ fontSize: "1.1rem", lineHeight: 1, fontWeight: 600 }}>−</span>
@@ -687,6 +688,6 @@ function PageImg({ src, style }: { src?: string; style: React.CSSProperties }) {
 
 function getMangaIcon(c: { book_icon?: string; source_type?: string }): string {
   if (c.book_icon) return c.book_icon;
-  if (c.source_type === "pdf") return "📕";
-  return "🎴";
+  if (c.source_type === "pdf") return "";
+  return "";
 }
