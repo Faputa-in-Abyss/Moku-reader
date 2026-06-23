@@ -36,6 +36,13 @@ export default function MangaReader() {
   const sideTimer = useRef<number>(0);
   const [scrollVisibleRange, setScrollVisibleRange] = useState({ start: 0, end: 20 });
   const [showAllSidebar, setShowAllSidebar] = useState(false);
+  const [narrow, setNarrow] = useState(window.innerWidth < 420);
+  const [veryNarrow, setVeryNarrow] = useState(window.innerWidth < 360);
+  useEffect(() => {
+    const onResize = () => { setNarrow(window.innerWidth < 420); setVeryNarrow(window.innerWidth < 360); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const win = getCurrentWindow();
   const [maximized, setMaximized] = useState(false);
@@ -91,6 +98,13 @@ export default function MangaReader() {
   useEffect(() => {
     return () => { clearTimeout(tipTimer.current); clearTimeout(sideTimer.current); };
   }, []);
+
+  // 窄窗口自动切回单页模式
+  useEffect(() => {
+    if (narrow && mangaViewMode === "double") {
+      setMangaViewMode("single");
+    }
+  }, [narrow, mangaViewMode, setMangaViewMode]);
 
   useEffect(() => {
     if (!manga) return;
@@ -236,7 +250,7 @@ export default function MangaReader() {
 
     // 鼠标靠近左边缘弹出漫画侧栏——直接从 store 取漫画列表，避免全量 IPC
     // 缩窄触发区（30px）且避开顶部工具栏区域（Y > 120），避免误触
-    if (e.clientX < 30 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && mangaZoom === 1) {
+    if (!narrow && e.clientX < 30 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && mangaZoom === 1) {
       if (!mangaSidebar) {
         // 优先用已有 comics，为空时兜底读 store
         if (sidebarComics.length === 0) {
@@ -379,6 +393,47 @@ export default function MangaReader() {
   useEffect(() => { prevPageRef.current = prevPage; }, [prevPage]);
   useEffect(() => { nextPageRef.current = nextPage; }, [nextPage]);
 
+  // 触摸事件（窄屏用）
+  const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!narrow) return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+  }, [narrow]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!narrow) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartRef.current.x;
+    const dy = t.clientY - touchStartRef.current.y;
+    const dt = Date.now() - touchStartRef.current.time;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    // 滑动翻页
+    if (absDx > 30 && absDx > absDy * 1.5) {
+      if (isRtl) {
+        if (dx > 0) nextPageRef.current(); else prevPageRef.current();
+      } else {
+        if (dx > 0) prevPageRef.current(); else nextPageRef.current();
+      }
+      return;
+    }
+    // 点击翻页/菜单
+    if (absDx < 15 && absDy < 15 && dt < 300) {
+      const w = window.innerWidth;
+      const x = t.clientX;
+      if (x < w * 0.3) {
+        if (isRtl) nextPageRef.current(); else prevPageRef.current();
+      } else if (x > w * 0.7) {
+        if (isRtl) prevPageRef.current(); else nextPageRef.current();
+      } else {
+        setToolbarVisible(v => !v);
+      }
+    }
+  }, [narrow, isRtl]);
+
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (dragStart.current.moved) return; // 拖拽后不触发翻页
     if (mangaZoom !== 1) return; // 缩放时只拖拽不翻页
@@ -426,26 +481,36 @@ export default function MangaReader() {
   }, [mangaCurrentPage, totalPages, showDoublePages]);
 
   return (
-    <div ref={mainRef} style={mainStyle} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onClick={handleClick}>
+    <div ref={mainRef} style={mainStyle} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onClick={handleClick} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {/* Toolbar — 与小说阅读器一致的顶部栏风格 */}
       <div className="reader-topbar" style={{
         ...topbarGlassStyle,
+        ...(narrow ? { padding: "10px 12px" } : {}),
         opacity: toolbarVisible || !pdfReady ? 1 : 0,
         transform: toolbarVisible || !pdfReady ? "translateY(0)" : "translateY(-100%)",
         pointerEvents: "auto",
       }} data-tauri-drag-region>
         <div className="light-follow" />
-        <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
-          <BackButton onClick={(e) => { e?.stopPropagation?.(); closeMangaReader(); }} />
-          <span style={{ fontFamily: "var(--font-title)", fontWeight: 500 }}>{manga.title}</span>
-          {currentSeriesIdx >= 0 && (
-            <span style={{ fontSize: ".75rem", color: "var(--text-dim)", marginLeft: 4 }}>— {currentSeriesIdx + 1}/{seriesChapters.length}章</span>
-          )}
+        <div style={{ display: "flex", alignItems: "center", gap: narrow ? (veryNarrow ? 8 : 10) : 16, position: "relative", zIndex: 1, whiteSpace: "nowrap" }}>
+          <BackButton onClick={(e) => { e?.stopPropagation?.(); closeMangaReader(); }} label={narrow ? "←" : undefined} />
+          <span style={{ fontFamily: "var(--font-title)", fontWeight: 500, maxWidth: narrow ? (veryNarrow ? 0 : 120) : 240, opacity: veryNarrow ? 0 : 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", transition: "max-width 0.3s ease, opacity 0.3s ease" }}>{manga.title}</span>
+          <span style={{
+            fontSize: ".75rem", color: "var(--text-dim)", marginLeft: 4,
+            opacity: currentSeriesIdx >= 0 && !veryNarrow ? 1 : 0,
+            maxWidth: currentSeriesIdx >= 0 && !veryNarrow ? 80 : 0,
+            overflow: "hidden", whiteSpace: "nowrap",
+            transition: "opacity 0.3s ease, max-width 0.3s ease",
+          }}>{currentSeriesIdx >= 0 ? `— ${currentSeriesIdx + 1}/${seriesChapters.length}章` : ""}</span>
         </div>
-        <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, alignItems: "center" }}>
-          {currentSeriesIdx >= 0 && (
-            <>
-              <button className="btn" style={{ fontSize: ".78rem", padding: "6px 12px" }} onClick={(e) => {
+        <div style={{ display: "flex", gap: veryNarrow ? 4 : 8, position: "relative", zIndex: 1, alignItems: "center" }}>
+          {currentSeriesIdx >= 0 && (<>
+              <button className="btn" style={{
+                fontSize: ".78rem", padding: "6px 12px",
+                opacity: !veryNarrow ? 1 : 0,
+                maxWidth: !veryNarrow ? 80 : 0,
+                overflow: "hidden", whiteSpace: "nowrap",
+                transition: "opacity 0.3s ease, max-width 0.3s ease",
+              }} onClick={(e) => {
                 e.stopPropagation();
                 if (currentSeriesIdx > 0) {
                   const prev = seriesChapters[currentSeriesIdx - 1];
@@ -453,8 +518,14 @@ export default function MangaReader() {
                   setLoadedPages({});
                   setMangaZoom(1);
                 }
-              }} disabled={currentSeriesIdx <= 0}>← 上一章</button>
-              <button className="btn" style={{ fontSize: ".78rem", padding: "6px 12px" }} onClick={(e) => {
+              }} disabled={currentSeriesIdx <= 0}>{narrow ? "←" : "← 上一章"}</button>
+              <button className="btn" style={{
+                fontSize: ".78rem", padding: "6px 12px",
+                opacity: !veryNarrow ? 1 : 0,
+                maxWidth: !veryNarrow ? 80 : 0,
+                overflow: "hidden", whiteSpace: "nowrap",
+                transition: "opacity 0.3s ease, max-width 0.3s ease",
+              }} onClick={(e) => {
                 e.stopPropagation();
                 if (currentSeriesIdx < seriesChapters.length - 1) {
                   const next = seriesChapters[currentSeriesIdx + 1];
@@ -462,29 +533,52 @@ export default function MangaReader() {
                   setLoadedPages({});
                   setMangaZoom(1);
                 }
-              }} disabled={currentSeriesIdx >= seriesChapters.length - 1}>下一章 →</button>
-            </>
-          )}
-          <span style={{ fontSize: ".78rem", color: "var(--text)", fontWeight: 500, paddingRight: 4, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>
-            {mangaViewMode === "double" && doublePages
-              ? `页 ${Math.min(doublePages.left ?? 99, doublePages.right ?? 99) + 1}-${Math.max(doublePages.left ?? 0, doublePages.right ?? 0) + 1} / ${totalPages}`
-              : `页 ${mangaCurrentPage + 1} / ${totalPages}`}
-          </span>
+              }} disabled={currentSeriesIdx >= seriesChapters.length - 1}>{narrow ? "→" : "下一章 →"}</button>
+          </>)}
+          <span style={{
+            fontSize: ".78rem", color: "var(--text)", fontWeight: 500, paddingRight: 4, textShadow: "0 1px 4px rgba(0,0,0,0.3)",
+            opacity: !narrow ? 1 : 0,
+            maxWidth: !narrow ? 120 : 0,
+            overflow: "hidden", whiteSpace: "nowrap",
+            transition: "opacity 0.3s ease, max-width 0.3s ease",
+          }}>{(mangaViewMode === "double" && doublePages)
+            ? `页 ${Math.min(doublePages.left ?? 99, doublePages.right ?? 99) + 1}-${Math.max(doublePages.left ?? 0, doublePages.right ?? 0) + 1} / ${totalPages}`
+            : `页 ${mangaCurrentPage + 1} / ${totalPages}`}</span>
           <button className="btn" onClick={(e) => {
             e.stopPropagation();
             setMangaViewMode(mangaViewMode === "double" ? "single" : "double");
           }}
-            style={{ fontSize: ".78rem", padding: "6px 12px", background: mangaViewMode === "double" ? "rgba(var(--accent-rgb),0.12)" : undefined, borderColor: mangaViewMode === "double" ? "var(--accent)" : undefined }}>
+            style={{
+              fontSize: ".78rem", padding: "6px 12px",
+              background: mangaViewMode === "double" ? "rgba(var(--accent-rgb),0.12)" : undefined,
+              borderColor: mangaViewMode === "double" ? "var(--accent)" : undefined,
+              opacity: !narrow ? 1 : 0,
+              maxWidth: !narrow ? 80 : 0,
+              overflow: "hidden", whiteSpace: "nowrap",
+              transition: "opacity 0.3s ease, max-width 0.3s ease",
+            }}>
             {mangaViewMode === "double" ? "双页" : "单页"}
           </button>
           <button className="btn" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setMangaZoom(Math.max(0.25, mangaZoom - 0.2)); }} title="缩小">
             <span style={{ fontSize: "1.1rem", lineHeight: 1, fontWeight: 600 }}>−</span>
           </button>
-          <span style={{ fontSize: ".78rem", color: "var(--text-dim)", minWidth: 36, textAlign: "center" }}>{Math.round(mangaZoom * 100)}%</span>
+          <span style={{
+            fontSize: ".78rem", color: "var(--text-dim)", minWidth: 36, textAlign: "center",
+            opacity: !narrow ? 1 : 0,
+            maxWidth: !narrow ? 36 : 0,
+            overflow: "hidden", whiteSpace: "nowrap",
+            transition: "opacity 0.3s ease, max-width 0.3s ease",
+          }}>{Math.round(mangaZoom * 100)}%</span>
           <button className="btn" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setMangaZoom(Math.min(4, mangaZoom + 0.2)); }} title="放大">
             <span style={{ fontSize: "1.1rem", lineHeight: 1, fontWeight: 600 }}>+</span>
           </button>
-          <button className="btn" style={{ fontSize: ".78rem", padding: "6px 12px" }} onClick={async (e) => {
+          <button className="btn" style={{
+            fontSize: ".78rem", padding: "6px 12px",
+            opacity: !veryNarrow ? 1 : 0,
+            maxWidth: !veryNarrow ? 60 : 0,
+            overflow: "hidden", whiteSpace: "nowrap",
+            transition: "opacity 0.3s ease, max-width 0.3s ease",
+          }} onClick={async (e) => {
             e.stopPropagation();
             const newDir = isRtl ? "ltr" : "rtl";
             try {

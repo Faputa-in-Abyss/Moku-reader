@@ -183,14 +183,11 @@ header:hover .light-follow { opacity: 1; }
 }
 
 /* ===== 书库 ===== */
-.library { position: relative; z-index: 2; max-width: 1200px; margin: 0 auto; padding: 40px 32px 80px; min-height: calc(100vh - 180px); }
+.library { position: relative; z-index: 2; max-width: 1200px; margin: 0 auto; padding: clamp(12px, 3vw, 40px) max(8px, min(32px, 4vw)) clamp(32px, 6vw, 80px); min-height: calc(100vh - 180px); }
 .library-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 28px; }
-.library-title { font-family: 'Georgia','Noto Serif SC',serif; font-size: 1.8rem; font-weight: 500; letter-spacing: .04em; color: var(--text); transition: color 0.6s ease; }
-.library-count { color: var(--text-dim); font-size: .9rem; transition: color 0.6s ease; }
-.book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 28px; }
-@media(max-width:768px){
-  .book-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
-}
+.library-title { font-family: 'Georgia','Noto Serif SC',serif; font-size: clamp(1.1rem, 4vw, 1.8rem); font-weight: 500; letter-spacing: .04em; color: var(--text); transition: color 0.6s ease; }
+.library-count { color: var(--text-dim); font-size: clamp(.75rem, 2.2vw, .9rem); transition: color 0.6s ease; }
+.book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(95px, 22vw, 170px), 1fr)); gap: clamp(8px, 3vw, 28px); }
 
 /* ===== 书卡 ===== */
 .book-card { position: relative; cursor: pointer; transition: transform 0.5s ease; border-radius: var(--radius-lg); }
@@ -204,7 +201,7 @@ header:hover .light-follow { opacity: 1; }
   overflow: hidden;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  padding: 24px 20px; text-align: center;
+  padding: clamp(14px, 4vw, 24px) clamp(10px, 3vw, 20px); text-align: center;
   border: 1px solid var(--border-glass);
   box-shadow: 0 2px 16px var(--shadow);
   transition: box-shadow 0.5s ease, border-color 0.5s ease, background 0.6s ease;
@@ -226,7 +223,7 @@ header:hover .light-follow { opacity: 1; }
   border-color: var(--accent) !important;
 }
 .book-cover-icon {
-  font-size: 2.8rem; margin-bottom: 10px;
+  font-size: clamp(1.5rem, 5vw, 2.8rem); margin-bottom: clamp(4px, 1.2vw, 10px);
   filter: drop-shadow(0 2px 12px rgba(var(--accent-rgb),0.10));
   transition: transform 0.5s ease, filter 0.5s ease;
   position: relative; z-index: 2;
@@ -234,7 +231,7 @@ header:hover .light-follow { opacity: 1; }
 .book-card:hover .book-cover-icon { transform: scale(1.05); filter: drop-shadow(0 4px 20px rgba(var(--accent-rgb),0.18)); }
 .book-title {
   font-family: 'Georgia','Noto Serif SC',serif;
-  font-size: .95rem; font-weight: 600; color: var(--text);
+  font-size: clamp(.7rem, 2.3vw, .95rem); font-weight: 600; color: var(--text);
   line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; transition: color 0.6s ease; position: relative; z-index: 2;
   /* 日间模式浅色背景时加深文字对比度 */
@@ -333,13 +330,6 @@ header:hover .light-follow { opacity: 1; }
 .empty-title { font-family: 'Georgia','Noto Serif SC',serif; font-size: 1.4rem; font-weight: 500; color: var(--text); margin-bottom: 8px; }
 .empty-desc { color: var(--text-dim); font-size: .95rem; max-width: 360px; line-height: 1.6; margin-bottom: 24px; }
 
-/* ===== 响应式 ===== */
-@media(max-width:768px){
-  .library { padding: 24px 16px 60px; min-height: calc(100vh - 160px); }
-  .book-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
-}
-
-/* ===== reader-topbar 可见状态 ===== */
 .reader-topbar.visible {
   opacity: 1 !important;
   transform: translateY(0) !important;
@@ -388,9 +378,6 @@ header:hover .light-follow { opacity: 1; }
   background: rgba(128, 128, 128, 0.12);
 }
 
-@media(max-width:768px){
-  .comic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
-}
 
 @keyframes tipIn {
   from { opacity: 0; transform: translateX(-50%) translateY(10px); }
@@ -437,4 +424,8 @@ header:hover .light-follow { opacity: 1; }
 
 @keyframes pulseHint {
   0%, 100% { opacity: 0.4; transform: translateY(-50%) scale(1); }
-  50% { opacity: 0.9; transform
+  50% { opacity: 0.9; transform: translateY(-50%) scale(1.3); }
+}
+
+#series-tabs { overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; }
+#series-tabs .series-tab { display: inline-flex; white-space: nowrap; }

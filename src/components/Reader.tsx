@@ -37,6 +37,13 @@ export default function Reader() {
   const loadBookmarks = useStore((s) => s.loadBookmarks);
 
   const [recordingKey, setRecordingKey] = useState<string | null>(null);
+  const [narrow, setNarrow] = useState(window.innerWidth < 420);
+  const [veryNarrow, setVeryNarrow] = useState(window.innerWidth < 360);
+  useEffect(() => {
+    const onResize = () => { setNarrow(window.innerWidth < 420); setVeryNarrow(window.innerWidth < 360); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const book = currentBook;
 
   const win = getCurrentWindow();
@@ -76,7 +83,7 @@ export default function Reader() {
   const [chapterText, setChapterText] = useState("");
   const [chapterSearch, setChapterSearch] = useState("");
   const [fadeState, setFadeState] = useState<"in" | "out" | "visible">("visible");
-  const contentWidth = [408, 544, 680, 816, 952][windowSize] || 680;
+  const contentWidth = narrow ? Math.min(window.innerWidth - 32, 680) : ([408, 544, 680, 816, 952][windowSize] || 680);
   const fadeTimer = useRef<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const topbarTimer = useRef<number>(0);
@@ -97,7 +104,11 @@ export default function Reader() {
   const [tip, setTip] = useState("");
   const tipTimer = useRef<number>(0);
   const [sidebarHint, setSidebarHint] = useState(false);
+  const [toolbarVisible, setToolbarVisible] = useState(false);
   const COLOR_PRESETS = ["#e8ddd0", "#d4a96a", "#c0392b", "#e67e22", "#27ae60", "#2980b9", "#8e44ad", "#ecf0f1", "#bdc3c7", "#7f8c8d", "#2c3e50", "#1a1a2e"];
+
+  // 触摸状态（窄屏用）
+  const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
 
   sidebarOpenRef.current = sidebarOpen;
   settingsOpenRef.current = settingsOpen;
@@ -373,6 +384,8 @@ export default function Reader() {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     clearTimeout(topbarTimer.current);
+    // 窄屏用点击 toggle 工具栏，不靠鼠标接近
+    if (narrow) return;
     if (e.clientY < 80) {
       document.querySelector(".reader-topbar")?.classList.add("visible");
     } else {
@@ -575,6 +588,39 @@ export default function Reader() {
       className="reader-view"
       onContextMenu={(e) => e.preventDefault()}
       onMouseDown={(e) => { if (e.button === 2) { setCtxMenu({ x: e.clientX, y: e.clientY }); setCtxSubMenu(null); } }}
+      onTouchStart={(e) => {
+        if (!narrow) return;
+        const t = e.touches[0];
+        touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+      }}
+      onTouchEnd={(e) => {
+        if (!narrow) return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - touchStartRef.current.x;
+        const dy = t.clientY - touchStartRef.current.y;
+        const dt = Date.now() - touchStartRef.current.time;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+
+        // 滑动翻页：位移>30px 且水平方向占优势
+        if (absDx > 30 && absDx > absDy * 1.5) {
+          if (dx > 0) prevPage();
+          else nextPage();
+          return;
+        }
+        // 点击：位移小且时间短
+        if (absDx < 15 && absDy < 15 && dt < 300) {
+          const w = window.innerWidth;
+          const x = t.clientX;
+          if (x < w * 0.3) {
+            prevPage();
+          } else if (x > w * 0.7) {
+            nextPage();
+          } else {
+            setToolbarVisible(v => !v);
+          }
+        }
+      }}
       style={{
         display: "flex", position: "fixed", inset: 0, zIndex: 200,
         background: readerBgColor || "var(--reader-bg)",
@@ -642,25 +688,34 @@ export default function Reader() {
       {/* 顶部导航栏 */}
       <div className="reader-topbar" style={{
         ...topbarGlassStyle,
-        opacity: 0, transform: "translateY(-100%)",
+        ...(narrow ? { padding: "10px 12px" } : {}),
+        opacity: narrow ? (toolbarVisible ? 1 : 0) : 0,
+        transform: narrow ? (toolbarVisible ? "translateY(0)" : "translateY(-100%)") : "translateY(-100%)",
+        transition: "opacity 0.3s ease, transform 0.3s ease",
       }} data-tauri-drag-region>
         <div className="light-follow" />
-        <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
-          <BackButton onClick={closeReader} label="← 返回书库" />
-          <span style={{ fontFamily: "var(--font-title)", fontWeight: 500 }}>{book?.title}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1, whiteSpace: "nowrap" }}>
+          <BackButton onClick={closeReader} label={narrow ? "←" : "← 返回书库"} />
+          <span style={{ fontFamily: "var(--font-title)", fontWeight: 500, maxWidth: narrow ? (veryNarrow ? 0 : 120) : 240, opacity: veryNarrow ? 0 : 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", transition: "max-width 0.3s ease, opacity 0.3s ease" }}>{book?.title}</span>
         </div>
         <div style={{ display: "flex", gap: 8, position: "relative", zIndex: 1, alignItems: "center" }}>
-          {readingMode === "page" && (
-            <button className="btn" onClick={() => {
-              if (window.innerWidth < 768) { showTip("窗口过窄无法开启双页模式"); return; }
-              setReaderDoublePage(!readerDoublePage);
-            }}
-              disabled={window.innerWidth < 768}
-              style={{ fontSize: ".78rem", opacity: window.innerWidth < 768 ? 0.4 : 1, background: readerDoublePage ? "rgba(var(--accent-rgb),0.12)" : undefined, borderColor: readerDoublePage ? "var(--accent)" : undefined }}>
-              {readerDoublePage ? "双页" : "单页"}
-            </button>
-          )}
-          <button className="btn" onClick={() => setSidebarOpen(!sidebarOpen)}>目录</button>
+          <button className="btn" onClick={() => {
+            if (window.innerWidth < 768) { showTip("窗口过窄无法开启双页模式"); return; }
+            setReaderDoublePage(!readerDoublePage);
+          }}
+            disabled={window.innerWidth < 768}
+            style={{
+              fontSize: ".78rem",
+              opacity: readingMode === "page" && !narrow ? 1 : 0,
+              maxWidth: readingMode === "page" && !narrow ? 60 : 0,
+              overflow: "hidden", whiteSpace: "nowrap",
+              background: readerDoublePage ? "rgba(var(--accent-rgb),0.12)" : undefined,
+              borderColor: readerDoublePage ? "var(--accent)" : undefined,
+              transition: "opacity 0.3s ease, max-width 0.3s ease",
+            }}>
+            {readerDoublePage ? "双页" : "单页"}
+          </button>
+          <button className="btn" style={{ fontSize: ".78rem", opacity: narrow ? 0 : 1, maxWidth: narrow ? 0 : 60, overflow: "hidden", whiteSpace: "nowrap", transition: "opacity 0.3s ease, max-width 0.3s ease" }} onClick={() => setSidebarOpen(!sidebarOpen)}>目录</button>
           <button className="btn" onClick={() => setSettingsOpen(!settingsOpen)} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text)" }}>
             <GearIcon />
           </button>
