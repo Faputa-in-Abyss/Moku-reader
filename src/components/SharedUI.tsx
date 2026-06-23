@@ -1,4 +1,5 @@
 import React from "react";
+import { TrashIcon, ArtIcon, BookIcon, CheckSquareIcon, FolderIcon } from "./FlatIcons";
 
 // ===== 选择模式复选框 =====
 export function SelectCheckbox({ selected }: { selected: boolean }) {
@@ -87,12 +88,12 @@ export function BatchActionBar({
       </button>
       <button className="btn" style={{ fontSize: ".8rem" }} onClick={onCancel}>取消</button>
       <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedCount === 0} onClick={onFavorite}>⭐ 收藏所选</button>
-      <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedCount === 0} onClick={onIcon}>🎨 图标</button>
+      <button className="btn" style={{ fontSize: ".8rem", display: "inline-flex", alignItems: "center", gap: 4 }} disabled={selectedCount === 0} onClick={onIcon}><ArtIcon size={14} /> 图标</button>
       {onAddToSeries && (
-        <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedCount === 0} onClick={onAddToSeries}>📑 添加到系列</button>
+        <button className="btn" style={{ fontSize: ".8rem", display: "inline-flex", alignItems: "center", gap: 4 }} disabled={selectedCount === 0} onClick={onAddToSeries}><FolderIcon size={14} /> 添加到系列</button>
       )}
-      <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedCount === 0 ? undefined : "rgba(200,60,50,0.8)" }} disabled={selectedCount === 0} onClick={onDelete}>
-        🗑️ 删除所选
+      <button className="btn btn-primary" style={{ fontSize: ".8rem", background: selectedCount === 0 ? undefined : "rgba(200,60,50,0.8)", display: "inline-flex", alignItems: "center", gap: 4 }} disabled={selectedCount === 0} onClick={onDelete}>
+        <TrashIcon size={14} /> 删除所选
       </button>
     </div>
   );
@@ -215,7 +216,7 @@ export function ContextMenu({ x, y, children, minWidth }: ContextMenuProps) {
 
 // ===== 右键菜单项 =====
 interface MenuItemProps {
-  icon?: string;
+  icon?: React.ReactNode;
   label: string;
   onClick: () => void;
   danger?: boolean;
@@ -235,7 +236,7 @@ export function MenuItem({ icon, label, onClick, danger }: MenuItemProps) {
         transition: "all 0.15s ease",
       }}
     >
-      {icon && <span style={{ fontSize: "1rem" }}>{icon}</span>}
+      {icon && <span style={{ fontSize: "1rem", lineHeight: 1, display: "inline-flex" }}>{icon}</span>}
       <span>{label}</span>
     </div>
   );

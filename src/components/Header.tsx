@@ -2,12 +2,8 @@ import React from "react";
 import { useStore } from "../store";
 import { flashThemeFade } from "../App";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { SunIcon, MoonIcon, SettingsIcon, BookIcon, ArtIcon } from "./FlatIcons";
 import WindowControls from "./WindowControls";
-
-const THEME_ICONS: Record<string, string> = {
-  light: "☀️",
-  dark: "🌙",
-};
 
 export default function Header() {
   const theme = useStore((s) => s.theme);
@@ -247,8 +243,12 @@ export default function Header() {
             transition: "left 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)",
             zIndex: 0,
           }} />
-          <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "library" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease" }}>📖 小说</span>
-          <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "manga" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease" }}>🎴 漫画</span>
+          <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "library" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <BookIcon size={15} /> 小说
+          </span>
+          <span style={{ fontSize: ".82rem", padding: "6px 20px", position: "relative", zIndex: 1, fontWeight: 500, color: viewMode === "manga" ? "var(--text)" : "var(--text-dim)", transition: "color 0.3s ease", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <ArtIcon size={15} /> 漫画
+          </span>
         </div>
       </div>
       <div className="header-actions glow-border glow-inner" data-tauri-no-drag style={{
@@ -265,16 +265,13 @@ export default function Header() {
       >
         <div style={{ position: "absolute", top: -1, left: "10%", right: "10%", height: 1, background: "linear-gradient(90deg, transparent, rgba(var(--accent-rgb),0.4), transparent)", opacity: 0, transition: "opacity 0.3s ease", pointerEvents: "none" }} />
         <button className="btn" onClick={cycleTheme} title="切换主题" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span>{THEME_ICONS[theme]}</span>
+          {theme === "light" ? <SunIcon size={18} /> : <MoonIcon size={18} />}
         </button>
         <button className="btn btn-primary" onClick={viewMode === "library" ? handleImportNovel : handleImportManga} title={viewMode === "library" ? "导入小说" : "导入漫画"} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
           <span style={{ fontSize: "1.3rem", fontWeight: 300, lineHeight: 1 }}>+</span>
         </button>
         <button className="btn" onClick={() => setDebugPanelOpen(true)} title="设置 (字体/颜色/毛玻璃/日志)" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
+          <SettingsIcon size={18} />
         </button>
         {/* 红黄绿小点 → hover 展开窗口控制按钮 */}
         <WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleClose} maximized={maximized} />

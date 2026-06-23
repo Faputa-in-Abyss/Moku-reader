@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import SidebarHandle from "./SidebarHandle";
 import WindowControls from "./WindowControls";
 import { GearIcon, topbarGlassStyle, BackButton } from "./SharedUI";
+import { BookIcon, FileIcon, PaletteIcon, FontIcon, BookmarkIcon, SearchIcon, ArtIcon, TrashIcon, ImageIcon } from "./FlatIcons";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function Reader() {
@@ -90,6 +91,7 @@ export default function Reader() {
   const sideTimer = useRef<number>(0);
   // D5: Track wheel animation timeouts for cleanup
   const wheelTimerRef = useRef<number>(0);
+
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxSubMenu, setCtxSubMenu] = useState<string | null>(null);
   const [tip, setTip] = useState("");
@@ -308,6 +310,7 @@ export default function Reader() {
   }, [readingMode]);
 
   const nextPage = () => {
+    if (!chapterText || chapterText === "(没有章节内容)" || chapterText.startsWith("(读取章节失败") || chapterText === "") return;
     if (readingMode === "page") {
       const step = pageStep;
       if (pageIndex < pages.length - step) {
@@ -321,6 +324,7 @@ export default function Reader() {
   };
 
   const prevPage = () => {
+    if (!chapterText || chapterText === "(没有章节内容)" || chapterText.startsWith("(读取章节失败") || chapterText === "") return;
     if (readingMode === "page") {
       const step = pageStep;
       if (pageIndex > 0) {
@@ -351,7 +355,6 @@ export default function Reader() {
     const b = freshBook || book;
     if (b && b.chapters && currentChapter < b.chapters.length - 1) {
       setChapter(currentChapter + 1);
-      setPageIndex(0);
     }
   };
 
@@ -359,7 +362,6 @@ export default function Reader() {
     const b = freshBook || book;
     if (b && b.chapters && currentChapter > 0) {
       setChapter(currentChapter - 1);
-      setPageIndex(0);
     }
   };
 
@@ -581,6 +583,10 @@ export default function Reader() {
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onWheel={(e) => {
+        // 内容未加载完成时阻止翻页/跳章
+        if (!chapterText || chapterText === "(没有章节内容)" || chapterText.startsWith("(读取章节失败") || chapterText === "") {
+          return;
+        }
         if (readingMode === "page") {
           if (e.deltaY > 0) nextPage();
           else prevPage();
@@ -651,10 +657,10 @@ export default function Reader() {
             }}
               disabled={window.innerWidth < 768}
               style={{ fontSize: ".78rem", opacity: window.innerWidth < 768 ? 0.4 : 1, background: readerDoublePage ? "rgba(var(--accent-rgb),0.12)" : undefined, borderColor: readerDoublePage ? "var(--accent)" : undefined }}>
-              {readerDoublePage ? "📄 双页" : "📄 单页"}
+              {readerDoublePage ? "双页" : "单页"}
             </button>
           )}
-          <button className="btn" onClick={() => setSidebarOpen(!sidebarOpen)}>📖 目录</button>
+          <button className="btn" onClick={() => setSidebarOpen(!sidebarOpen)}>目录</button>
           <button className="btn" onClick={() => setSettingsOpen(!settingsOpen)} style={{ width: 36, height: 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text)" }}>
             <GearIcon />
           </button>
@@ -705,7 +711,7 @@ export default function Reader() {
         </div>
       ) : (
       <div ref={contentRef} style={{
-        flex: 1, overflowY: "auto", padding: "40px 16px 80px",
+        flex: 1, overflowY: readingMode === "page" ? "hidden" : "auto", padding: "40px 16px 80px",
         fontSize: `${fontSize}rem`, lineHeight: 2, letterSpacing: "0.02em",
         fontFamily: readerFont || "'Georgia','Noto Serif SC',serif",
         fontWeight: fontBold ? 700 : 400,
@@ -738,7 +744,7 @@ export default function Reader() {
         display: "flex", flexDirection: "column", overflow: "hidden",
       }} onWheel={(e) => e.stopPropagation()}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-glass)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 600, color: "var(--text)" }}>📖 目录</span>
+          <span style={{ fontWeight: 600, color: "var(--text)" }}>目录</span>
           <button className="btn" style={{ padding: "2px 8px", fontSize: ".7rem" }} onClick={() => setSidebarOpen(false)}>✕</button>
         </div>
         {/* 章节搜索框 */}
@@ -819,7 +825,7 @@ export default function Reader() {
         display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-glass)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 600, color: "var(--text)" }}>⚙️ 设置</span>
+          <span style={{ fontWeight: 600, color: "var(--text)" }}>设置</span>
           <button className="btn" style={{ padding: "2px 8px", fontSize: ".7rem" }} onClick={() => setSettingsOpen(false)}>✕</button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
@@ -898,10 +904,10 @@ export default function Reader() {
               setCtxMenu(null);
             }} />
             <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
-            <CtxItem label="🎨 主题颜色 ▸" onClick={() => setCtxSubMenu("colors")} />
-            <CtxItem label="🔤 字体 ▸" onClick={() => setCtxSubMenu("font")} />
+            <CtxItem label="主题颜色 ▸" onClick={() => setCtxSubMenu("colors")} />
+            <CtxItem label="字体 ▸" onClick={() => setCtxSubMenu("font")} />
             <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
-            <CtxItem label={fontBold ? "✅ 字体加粗" : "⬜ 字体加粗"} onClick={() => { setFontBold(!fontBold); setCtxMenu(null); }} />
+            <CtxItem label={fontBold ? "字体加粗" : "字体加粗"} onClick={() => { setFontBold(!fontBold); setCtxMenu(null); }} />
             <div style={{ height: 1, background: "var(--border-glass)", margin: "4px 12px" }} />
             <CtxItem label="A- 缩小字号" onClick={() => { setFontSize(fontSize - 0.1); setCtxMenu(null); }} />
             <CtxItem label="A+ 放大字号" onClick={() => { setFontSize(fontSize + 0.1); setCtxMenu(null); }} />
@@ -919,7 +925,7 @@ export default function Reader() {
             padding: 14, minWidth: 210, boxShadow: "0 8px 40px var(--shadow)",
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{ color: "var(--text)", fontSize: ".82rem", marginBottom: 10, fontWeight: 500, display: "flex", justifyContent: "space-between" }}>
-              <span>🎨 颜色</span>
+              <span>颜色</span>
               <span style={{ cursor: "pointer", color: "var(--text-dim)", fontSize: ".8rem" }} onClick={() => { setCtxSubMenu(null); }}>← 返回</span>
             </div>
             <div style={{ fontSize: ".75rem", color: "var(--text-dim)", marginBottom: 6 }}>字体颜色</div>
@@ -950,7 +956,7 @@ export default function Reader() {
             padding: "6px 0", minWidth: 200, boxShadow: "0 8px 40px var(--shadow)",
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: "8px 14px 4px", color: "var(--text-dim)", fontSize: ".78rem", display: "flex", justifyContent: "space-between" }}>
-              <span>🔤 字体</span>
+              <span>字体</span>
               <span style={{ cursor: "pointer", color: "var(--text-dim)", fontSize: ".8rem" }} onClick={() => { setCtxSubMenu(null); }}>← 返回</span>
             </div>
             {[

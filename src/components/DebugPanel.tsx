@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
+import { PackageIcon, BookIcon, RefreshIcon, SettingsIcon, ClipboardIcon, ImageIcon, ArtIcon } from "./FlatIcons";
 
 export interface LogEntry {
   id: number;
@@ -317,31 +318,31 @@ export default function DebugPanel() {
             {/* 应用占用内存 */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
-                <span>📦 应用占用内存</span>
+                <span>应用占用内存</span>
                 <span>{procMem > 0 ? fmtBytes(procMem * 1024 * 1024) : "—"}</span>
               </div>
             </div>
             {/* 本地存储 */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
-                <span>⚙️ 应用本身</span>
+                <span>应用本身</span>
                 <span>{storageApp > 0 ? fmtMB(storageApp) : "—"}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
-                <span>📚 小说漫画</span>
+                <span>小说漫画</span>
                 <span>{storageContent > 0 ? fmtMB(storageContent) : "—"}</span>
               </div>
             </div>
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>操作</div>
-            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={handleSetPath}>📂 更改书库路径</button>
-          <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={!libraryPath} onClick={handleScan}>{scanning ? "⏳ 扫描中..点击停止" : "🔄 扫描书库"}</button>
-            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>🗑️ 清除日志</button>
+            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={handleSetPath}>更改书库路径</button>
+          <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={!libraryPath} onClick={handleScan}>{scanning ? "扫描中..点击停止" : "扫描书库"}</button>
+            <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>清除日志</button>
             <div style={{ borderTop: "1px solid var(--border-glass)", margin: "14px 0 10px" }} />
             <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>面板</div>
             {(["settings", "logs", "fonts"] as const).map((tab) => (
               <button key={tab} className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginBottom: 4, background: rightTab === tab ? "rgba(var(--accent-rgb),0.12)" : undefined, border: rightTab === tab ? "1px solid rgba(var(--accent-rgb),0.3)" : undefined }}
                 onClick={() => setRightTab(tab)}>
-                {tab === "settings" ? "⚙️ 设置" : tab === "logs" ? "📋 日志" : "🔤 字体"}
+                {tab === "settings" ? "设置" : tab === "logs" ? "日志" : "字体"}
               </button>
             ))}
           </div>
@@ -349,7 +350,7 @@ export default function DebugPanel() {
             {rightTab === "settings" && (
               <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", marginBottom: 4 }}>
-                  <span style={{ color: "var(--text)" }}>🖼️ PDF 渲染精度</span>
+                  <span style={{ color: "var(--text)" }}>PDF 渲染精度</span>
                   {dpiEditing ? (
                     <input
                       ref={dpiInputRef}
@@ -388,7 +389,7 @@ export default function DebugPanel() {
                   <span>72</span><span>|</span><span>100</span><span>|</span><span>150</span><span>|</span><span>200</span><span>|</span><span>250</span><span>|</span><span>300</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "16px 0 4px" }}>
-                  <span style={{ color: "var(--text)" }}>🧵 PDF 渲染线程</span>
+                  <span style={{ color: "var(--text)" }}>PDF 渲染线程</span>
                   {threadEditing ? (
                     <input
                       type="number" min={1} max={16}
@@ -427,7 +428,7 @@ export default function DebugPanel() {
                   <span>1</span><span>|</span><span>4</span><span>|</span><span>8</span><span>|</span><span>12</span><span>|</span><span>16</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "16px 0 4px" }}>
-                  <span style={{ color: "var(--text)" }}>🔍 毛玻璃强度</span>
+                  <span style={{ color: "var(--text)" }}>毛玻璃强度</span>
                   <span style={{ color: "var(--accent)", fontWeight: 600 }}>{glassIntensity}px</span>
                 </div>
                 <input
@@ -446,7 +447,7 @@ export default function DebugPanel() {
                 </div>
                 <div style={{ borderTop: "1px solid var(--border-glass)", margin: "16px 0 10px" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "0 0 4px" }}>
-                  <span style={{ color: "var(--text)" }}>📐 圆角强度</span>
+                  <span style={{ color: "var(--text)" }}>圆角强度</span>
                   <span style={{ color: "var(--accent)", fontWeight: 600 }}>{radiusIntensity}px</span>
                 </div>
                 <input
@@ -472,8 +473,8 @@ export default function DebugPanel() {
                 </div>
                 <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 12 }} onClick={async () => {
                   try { const { invoke } = await import("@tauri-apps/api/core"); const dir: string = await invoke("get_comics_dir"); await invoke("open_file_location", { path: dir }); } catch {}
-                }}>📁 打开渲染目录</button>
-                <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 16 }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>🔄 重置所有设置</button>
+                }}>打开渲染目录</button>
+                <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 16 }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>重置所有设置</button>
               </div>
             )}
             {rightTab === "logs" && (
@@ -498,12 +499,11 @@ export default function DebugPanel() {
                   {displayLogs.length === 0 && <div style={{ color: "var(--text-dim)", opacity: 0.35, textAlign: "center", paddingTop: 50, fontSize: ".8rem" }}>暂无日志</div>}
                   {displayLogs.map((entry) => {
                     const color = levelColor(entry.level, entry.source);
-                    const tag = entry.source === "backend" ? "🖥 " : "";
                     return (
                       <div key={entry.id} style={{ color, marginBottom: 1, padding: "0 20px", background: entry.source === "backend" ? "rgba(var(--accent-rgb),0.03)" : "transparent" }}>
                         <span style={{ opacity: 0.4, marginRight: 6, fontSize: ".65rem", userSelect: "none" }}>{entry.timestamp}</span>
                         <span style={{ opacity: 0.5, marginRight: 4, fontSize: ".65rem", fontWeight: 700 }}>[{entry.level}]</span>
-                        {tag}{entry.message}
+                        {entry.message}
                       </div>
                     );
                   })}
@@ -585,7 +585,7 @@ function FontSettings() {
           {/* 阅读器字体 */}
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>📖 阅读器字体</span>
+              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>阅读器字体</span>
               <label style={{ fontSize: ".72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                 <input type="checkbox" checked={readerBold} onChange={() => { const v = !readerBold; setReaderBold(v); localStorage.setItem("nr-font-reader-bold", v ? "1" : "0"); document.documentElement.style.setProperty("--font-reader-weight", v ? "700" : "400"); }} style={{ accentColor: "var(--accent)" }} /> 加粗
               </label>
@@ -602,7 +602,7 @@ function FontSettings() {
           {/* 标题栏字体 */}
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>📰 标题栏字体</span>
+              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>标题栏字体</span>
               <label style={{ fontSize: ".72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                 <input type="checkbox" checked={titleBold} onChange={() => { const v = !titleBold; setTitleBold(v); localStorage.setItem("nr-font-title-bold", v ? "1" : "0"); document.documentElement.style.setProperty("--font-title-weight", v ? "700" : "600"); }} style={{ accentColor: "var(--accent)" }} /> 加粗
               </label>
@@ -619,7 +619,7 @@ function FontSettings() {
           {/* UI 组件字体 */}
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>🖥️ UI 组件字体</span>
+              <span style={{ fontSize: ".82rem", color: "var(--text)", fontWeight: 600 }}>UI 组件字体</span>
               <label style={{ fontSize: ".72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                 <input type="checkbox" checked={uiBold} onChange={() => { const v = !uiBold; setUiBold(v); localStorage.setItem("nr-font-ui-bold", v ? "1" : "0"); document.documentElement.style.setProperty("--font-ui-weight", v ? "700" : "400"); }} style={{ accentColor: "var(--accent)" }} /> 加粗
               </label>
@@ -635,14 +635,14 @@ function FontSettings() {
 
           {/* 预览 */}
           <div style={{ borderTop: "1px solid var(--border-glass)", paddingTop: 20 }}>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>📰 标题栏预览</div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>标题栏预览</div>
             <div style={{ background: "var(--glass-bg)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)", padding: "14px 20px" }}>
               <div style={{ fontFamily: titleFontFace, fontSize: FONT_SIZES[titleSize].value, fontWeight: titleBold ? 700 : 600, color: "var(--text)" }}>墨读</div>
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>📖 阅读正文预览</div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>阅读正文预览</div>
             <div style={{ background: "var(--reader-bg)", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)", padding: "20px 24px", lineHeight: 1.9 }}>
               <p style={{ fontFamily: readFontFace, fontSize: FONT_SIZES[readerSize].value, fontWeight: readerBold ? 700 : 400, color: "var(--text)", margin: 0, textIndent: "2em" }}>
                 却说那唐僧在马上，手指远处道："悟空，你看那山色青翠，好似有仙家之气。"行者笑道："师父好眼力！那山唤作浮云山，乃是五百年前老君炼丹之所。"</p>
@@ -652,7 +652,7 @@ function FontSettings() {
           </div>
 
           <div>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>🖥️ UI 组件预览</div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim)", marginBottom: 10 }}>UI 组件预览</div>
             <div style={{
               background: "var(--glass-bg)", border: "1px solid var(--border-glass)",
               borderRadius: "var(--radius-md)", padding: "16px 20px",
@@ -665,21 +665,21 @@ function FontSettings() {
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ padding: "6px 14px", background: "rgba(var(--accent-rgb),0.12)", borderRadius: "var(--radius-sm)", color: "var(--text)", cursor: "pointer" }}
                   onMouseEnter={(e) => e.currentTarget.style.background = "rgba(var(--accent-rgb),0.22)"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"}>📖 小说</span>
+                  onMouseLeave={(e) => e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"}>小说</span>
                 <span style={{ padding: "6px 14px", color: "var(--text-dim)", cursor: "pointer" }}
                   onMouseEnter={(e) => e.currentTarget.style.color = "var(--text)"}
-                  onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-dim)"}>🎴 漫画</span>
+                  onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-dim)"}>漫画</span>
                 <span style={{ padding: "6px 14px", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-sm)", color: "var(--text)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
                   onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
                   onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                  <span>☀️</span><span>导入</span><span>⋯</span>
+                  <span>导入</span><span>⋯</span>
                 </span>
               </div>
               {/* 按钮行 */}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>📂 更改路径</button>
-                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>🔄 扫描书库</button>
-                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>🗑️ 清除日志</button>
+                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>更改路径</button>
+                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>扫描书库</button>
+                <button className="btn" style={{ fontSize: "inherit", fontWeight: uiBold ? 700 : 400, fontFamily: "inherit" }}>清除日志</button>
               </div>
               {/* 下拉 + 输入框 */}
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
