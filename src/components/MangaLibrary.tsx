@@ -53,7 +53,7 @@ if (sortField === field) {
         id: c.id, title: c.title, source_type: c.source_type,
         total_pages: c.total_pages, current_page: c.current_page,
         direction: c.direction, favorite: c.favorite, book_icon: c.book_icon,
-        series_id: c.series_id,
+        series_id: c.series_id, last_read_at: c.last_read_at,
       }))
     : comicsMeta;
 
