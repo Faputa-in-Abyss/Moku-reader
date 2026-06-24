@@ -230,7 +230,7 @@ export default function ChapterList({
               <span style={{ fontSize: '.82rem', color: 'var(--text-dim)' }}>范围</span>
               {!rangeOpen && (
                 <span style={{ fontSize: '.78rem', color: 'var(--accent)', marginLeft: 2 }}>
-                  {rangeStart == null && rangeEnd == null ? '全书' : `第${rangeStart ?? 1}—${rangeEnd ?? totalChapters}章`}
+                  {(rangeStart == null || rangeStart === 1) && rangeEnd == null ? '全书' : `第${rangeStart ?? 1}—${rangeEnd ?? totalChapters}章`}
                 </span>
               )}
             </div>
