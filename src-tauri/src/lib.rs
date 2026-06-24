@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,6 +6,7 @@ use tauri::{Emitter, Manager, State};
 
 mod parser;
 mod comic;
+mod reader;
 use parser::{parse_chapters, read_txt_file, read_epub_file, read_html_file, extract_title, generate_id, Chapter};
 
 /// 全局 AppHandle，用于发送日志事件到前端（pub(crate) 以便 comic.rs 使用）
@@ -57,10 +56,19 @@ pub struct Book {
     pub current_chapter: usize,
     pub progress: f64,
     pub chapters: Vec<Chapter>,
+    #[serde(skip)]
     pub content: String,
     pub favorite: bool,
     #[serde(default)]
     pub book_icon: String,
+    #[serde(default)]
+    pub reading_progress: Option<reader::ReadingPositionData>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChapterContentResult {
+    pub title: String,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -208,6 +216,7 @@ fn import_book(path: String, state: State<AppState>) -> Result<Book, String> {
         content,
         favorite: false,
         book_icon: String::new(),
+        reading_progress: None,
     };
 
     let mut lib = lock_mutex(&state.library)?;
@@ -252,6 +261,7 @@ fn import_book_from_path(path: &str) -> Result<Book, String> {
         current_chapter: 0, progress: 0.0,
         chapters, content,
         favorite: false, book_icon: String::new(),
+        reading_progress: None,
     })
 }
 
@@ -413,6 +423,17 @@ fn update_progress(book_id: String, chapter_index: usize, state: State<AppState>
     } else {
         0.0
     };
+    // 同时尝试填充 reading_progress（如果已存在则更新章节号）
+    if let Some(ref mut rp) = book.reading_progress {
+        rp.chapter_index = chapter_index;
+    } else {
+        book.reading_progress = Some(reader::ReadingPositionData {
+            chapter_index,
+            char_offset: 0,
+            page_index: 0,
+            scroll_offset: 0.0,
+        });
+    }
     debug_log!("   进度: {:.1}%", book.progress * 100.0);
     save_library(&state.data_dir, &lib).ok();
     Ok(())
@@ -432,7 +453,7 @@ fn reparse_book_chapters(book_id: String, state: State<AppState>) -> Result<(), 
     debug_log!("🔄 重新解析章节: book={}", &book_id);
     let mut lib = lock_mutex(&state.library)?;
     let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
-    
+
     let new_chapters = if !book.file_path.is_empty() {
         debug_log!("   从文件重新读取: {}", &book.file_path);
         let content = crate::read_txt_file(&book.file_path)?;
@@ -444,7 +465,7 @@ fn reparse_book_chapters(book_id: String, state: State<AppState>) -> Result<(), 
         debug_log!("   既无文件路径也无内容，尝试查找在线书数据");
         return Err("无法重新解析：没有文件路径且内容为空".to_string());
     };
-    
+
     debug_log!("   旧章节数: {}, 新章节数: {}", book.chapters.len(), new_chapters.len());
     if !new_chapters.is_empty() {
         debug_log!("   第一章标题: {:?}", new_chapters[0].title);
@@ -492,6 +513,8 @@ pub struct SortBookData {
     pub favorite: bool,
     #[serde(default)]
     pub book_icon: String,
+    #[serde(default)]
+    pub reading_progress: Option<reader::ReadingPositionData>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -541,6 +564,7 @@ fn sort_books(field: String, asc: bool, state: State<AppState>) -> Result<Vec<So
         content: String::new(),
         favorite: b.favorite,
         book_icon: b.book_icon.clone(),
+        reading_progress: b.reading_progress.clone(),
     }).collect();
     Ok(result)
 }
@@ -630,6 +654,106 @@ fn get_comics_dir() -> String {
     let path = data_dir.to_string_lossy().to_string();
     debug_log!("📂 漫画渲染目录: {}", &path);
     path
+}
+
+// ===== 阅读引擎命令 (reader.rs) =====
+
+#[tauri::command]
+fn open_book_cache(book_id: String, state: State<AppState>) -> Result<(), String> {
+    debug_log!("📖 打开缓存: book={}", &book_id);
+
+    // 从库中获取书籍信息
+    let (file_path, file_type) = {
+        let lib = lock_mutex(&state.library)?;
+        let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
+        (book.file_path.clone(), book.file_type.clone())
+    };
+
+    if file_path.is_empty() {
+        return Err("该书无本地文件路径，无法缓存".to_string());
+    }
+
+    reader::load_book_cache(&book_id, &file_path, &file_type)?;
+    debug_log!("   ✅ 缓存加载完成");
+    Ok(())
+}
+
+#[tauri::command]
+fn close_book_cache(book_id: String) -> Result<(), String> {
+    debug_log!("📖 关闭缓存: book={}", &book_id);
+    reader::drop_book_cache(&book_id);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_reader_chapter(book_id: String, chapter_index: usize) -> Result<ChapterContentResult, String> {
+    debug_log!("📖 读取缓存章节: book={}, chapter={}", &book_id, chapter_index);
+    let (title, text) = reader::get_chapter_text_from_cache(&book_id, chapter_index)?;
+    Ok(ChapterContentResult { title, text })
+}
+
+#[tauri::command]
+fn get_pagination(book_id: String, chapter_index: usize, config: String, state: State<AppState>) -> Result<reader::PaginationResult, String> {
+    // config 是 JSON 字符串，反序列化为 PaginationConfig
+    let pagination_config: reader::PaginationConfig = serde_json::from_str(&config)
+        .map_err(|e| format!("分页配置解析失败: {}", e))?;
+
+    // 如果书未缓存，先尝试自动加载
+    if reader::get_cached_book(&book_id).is_none() {
+        let (file_path, file_type) = {
+            let lib = lock_mutex(&state.library)?;
+            let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
+            (book.file_path.clone(), book.file_type.clone())
+        };
+        if !file_path.is_empty() {
+            reader::load_book_cache(&book_id, &file_path, &file_type)?;
+        } else {
+            return Err("书籍未加载到缓存且无本地文件".to_string());
+        }
+    }
+
+    let result = reader::get_or_compute_pagination(&book_id, chapter_index, &pagination_config)?;
+    debug_log!("📖 分页结果: book={}, chapter={}, 共{}页", &book_id, chapter_index, result.total_pages);
+    Ok(result)
+}
+
+#[tauri::command]
+fn save_reading_position(
+    book_id: String,
+    chapter_index: usize,
+    char_offset: usize,
+    page_index: usize,
+    scroll_offset: f64,
+    state: State<AppState>,
+) -> Result<(), String> {
+    debug_log!("💾 保存阅读位置: book={}, chapter={}, page={}, offset={}", &book_id, chapter_index, page_index, scroll_offset);
+    let mut lib = lock_mutex(&state.library)?;
+    let book = lib.books.iter_mut().find(|b| b.id == book_id).ok_or("未找到书籍")?;
+
+    book.reading_progress = Some(reader::ReadingPositionData {
+        chapter_index,
+        char_offset,
+        page_index,
+        scroll_offset,
+    });
+
+    // 同时更新传统进度
+    book.current_chapter = chapter_index;
+    book.progress = if book.total_chapters > 0 {
+        chapter_index as f64 / book.total_chapters as f64
+    } else {
+        0.0
+    };
+
+    save_library(&state.data_dir, &lib).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn get_reading_position(book_id: String, state: State<AppState>) -> Result<Option<reader::ReadingPositionData>, String> {
+    let lib = lock_mutex(&state.library)?;
+    let book = lib.books.iter().find(|b| b.id == book_id).ok_or("未找到书籍")?;
+    Ok(book.reading_progress.clone())
 }
 
 // ===== 在线搜索/下载 =====
@@ -896,7 +1020,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
         // 导入漫画
         for (_idx, path) in comics_list.iter().enumerate() {
             if check_cancel() { break; }
-            let path_obj = PathBuf::from(path);
+            let path_obj = std::path::Path::new(path);
             let file_name = path_obj.file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("未知文件")
@@ -912,7 +1036,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
             }
 
             if path_obj.is_dir() {
-                match import_comic_folder_impl(&path_obj) {
+                match import_comic_folder_impl(path_obj) {
                     Ok(book) => {
                         // 直接推入内存 Mutex 再写磁盘，确保 comics-refreshed 时已最新
                         if let Ok(mut mem) = app.state::<AppState>().comic_library.lock() {
@@ -1341,12 +1465,17 @@ pub fn run() {
             get_render_dpi,
             set_render_dpi,
             get_render_threads,
-            set_render_threads,
             scan_library,
             cancel_scan,
             get_comics_dir,
+            // reader engine commands
+            open_book_cache,
+            close_book_cache,
+            get_reader_chapter,
+            get_pagination,
+            save_reading_position,
+            get_reading_position,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-                                     
