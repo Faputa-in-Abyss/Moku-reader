@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useStore, ComicData, ComicMeta } from "../store";
 import { handleCardGlow } from "../utils/glow";
 import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
-import { BookIcon, FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ArrowRightIcon, RefreshIcon, BanIcon, ImageIcon, SearchIcon } from "./FlatIcons";
+import { BookIcon, FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ArrowRightIcon, RefreshIcon, BanIcon, ImageIcon, SearchIcon, StarIcon } from "./FlatIcons";
 
 
 export default function MangaLibrary() {
@@ -456,7 +456,7 @@ if (sortField === field) {
         {(["name", "pages", "favorite"] as const).map((field) => (
           <SortButton key={field}
             field={field}
-            label={field === "name" ? "名称" : field === "pages" ? "页数" : "⭐ 收藏"}
+            label={field === "name" ? "名称" : field === "pages" ? "页数" : <><StarIcon size={14} style={{verticalAlign:'middle'}} /> 收藏</>}
             currentField={sortField}
             asc={sortAsc}
             onClick={() => setSort(field)}
@@ -543,7 +543,7 @@ if (sortField === field) {
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} minWidth={200}>
           <MenuItem icon={<EditIcon />} label="重命名" onClick={() => handleRename(ctxMenu.comic)} />
           <MenuItem icon={<PaletteIcon />} label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.comic); }} />
-          <MenuItem icon="⭐" label={(optimisticFav[ctxMenu.comic.id] ?? ctxMenu.comic.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
+          <MenuItem icon={<StarIcon size={14} />} label={(optimisticFav[ctxMenu.comic.id] ?? ctxMenu.comic.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.comic)} />
           <MenuDivider />
           <MenuItem icon={<FolderIcon />} label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.comic)} />
           <MenuDivider />

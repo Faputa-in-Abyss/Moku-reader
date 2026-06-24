@@ -1,5 +1,5 @@
 import React from "react";
-import { TrashIcon, ArtIcon, BookIcon, CheckSquareIcon, FolderIcon } from "./FlatIcons";
+import { TrashIcon, ArtIcon, BookIcon, CheckSquareIcon, FolderIcon, StarIcon } from "./FlatIcons";
 
 // ===== 选择模式复选框 =====
 export function SelectCheckbox({ selected }: { selected: boolean }) {
@@ -94,7 +94,7 @@ export function BatchActionBar({
       </button>
       <button className="btn" style={{ fontSize: ".8rem" }} onClick={onCancel}>取消</button>
       {!narrow && (<>
-      <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedCount === 0} onClick={onFavorite}>⭐ 收藏所选</button>
+      <button className="btn" style={{ fontSize: ".8rem" }} disabled={selectedCount === 0} onClick={onFavorite}><StarIcon size={14} style={{verticalAlign:'middle',marginRight:4}} />收藏所选</button>
       <button className="btn" style={{ fontSize: ".8rem", display: "inline-flex", alignItems: "center", gap: 4 }} disabled={selectedCount === 0} onClick={onIcon}><ArtIcon size={14} /> 图标</button>
       {onAddToSeries && (
         <button className="btn" style={{ fontSize: ".8rem", display: "inline-flex", alignItems: "center", gap: 4 }} disabled={selectedCount === 0} onClick={onAddToSeries}><FolderIcon size={14} /> 添加到系列</button>
@@ -258,7 +258,7 @@ export function MenuDivider() {
 // ===== 排序按钮 =====
 interface SortButtonProps {
   field: string;
-  label: string;
+  label: React.ReactNode;
   currentField: string;
   asc: boolean;
   onClick: () => void;

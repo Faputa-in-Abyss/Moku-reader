@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useStore, BookData } from "../store";
 import { handleCardGlow } from "../utils/glow";
-import { BookIcon, FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ImageIcon } from "./FlatIcons";
+import { BookIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, StarIcon } from "./FlatIcons";
 import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
 export default function Library() {
   const books = useStore((s) => s.books);
@@ -300,7 +300,7 @@ if (sortField === field) {
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
           <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
           <SortButton field="progress" label="进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
-          <SortButton field="favorite" label="⭐ 收藏" currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
+          <SortButton field="favorite" label={<><StarIcon size={14} style={{verticalAlign:'middle'}} /> 收藏</>} currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
           <SearchInput value={bookSearch} onChange={setBookSearch} />
         </div>
         <div className="empty-state">
@@ -321,7 +321,7 @@ if (sortField === field) {
         <SearchInput value={bookSearch} onChange={setBookSearch} />
         <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
         <SortButton field="progress" label="进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
-        <SortButton field="favorite" label="⭐ 收藏" currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
+        <SortButton field="favorite" label={<><StarIcon size={14} style={{verticalAlign:'middle'}} /> 收藏</>} currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
       </div>
       <div className="book-grid">
         {displayList.map((book) => (
@@ -372,14 +372,14 @@ if (sortField === field) {
       {/* 右键菜单 */}
       {ctxMenu && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
-          <MenuItem label="重命名" onClick={() => handleRename(ctxMenu.book)} />
-          <MenuItem label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.book); }} />
-          <MenuItem icon="⭐" label={(optimisticFav[ctxMenu.book.id] ?? ctxMenu.book.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.book)} />
-          <MenuItem label="删除" onClick={() => handleDelete(ctxMenu.book)} />
+          <MenuItem icon={<EditIcon size={14} />} label="重命名" onClick={() => handleRename(ctxMenu.book)} />
+          <MenuItem icon={<PaletteIcon size={14} />} label="选择封面图标" onClick={() => { setCtxMenu(null); setIconPicker(ctxMenu.book); }} />
+          <MenuItem icon={<StarIcon size={14} />} label={(optimisticFav[ctxMenu.book.id] ?? ctxMenu.book.favorite) ? "取消收藏" : "添加收藏"} onClick={() => handleToggleFavorite(ctxMenu.book)} />
+          <MenuItem icon={<TrashIcon size={14} />} label="删除" onClick={() => handleDelete(ctxMenu.book)} />
           <MenuDivider />
-          <MenuItem label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.book)} />
+          <MenuItem icon={<FolderIcon size={14} />} label="打开文件位置" onClick={() => handleOpenPath(ctxMenu.book)} />
           <MenuDivider />
-          <MenuItem label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
+          <MenuItem icon={<CheckSquareIcon size={14} />} label="批量功能" onClick={() => { setCtxMenu(null); setSelectMode(true); setSelectedIds(new Set()); }} />
         </ContextMenu>
       )}
 
