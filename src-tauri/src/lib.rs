@@ -1167,6 +1167,13 @@ fn set_comic_icon(comic_id: String, icon: String, state: State<AppState>) -> Res
     Ok(())
 }
 
+#[tauri::command]
+fn save_comic_order(comic_ids: Vec<String>, state: State<AppState>) -> Result<(), String> {
+    debug_log!("🔄 保存漫画库排序: {} 本漫画", comic_ids.len());
+    let mut lib = lock_mutex(&state.comic_library)?;
+    comic::save_comic_order(&state.data_dir, &comic_ids, &mut lib)
+}
+
 /// 获取系统资源信息（内存、存储）
 #[tauri::command]
 fn get_system_resources() -> SystemResource {
@@ -1312,9 +1319,9 @@ pub fn run() {
             update_comic_direction,
             remove_comic,
             rename_comic,
-            toggle_comic_favorite,            rename_comic,
             toggle_comic_favorite,
             set_comic_icon,
+            save_comic_order,
             rescan_comic_folder,
             get_system_resources,
             get_library_path,

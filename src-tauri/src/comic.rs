@@ -531,6 +531,24 @@ pub fn get_page_base64(image_dir: &str, filename: &str) -> Result<String, String
     Ok(format!("data:{};base64,{}", mime, b64))
 }
 
+/// 根据 comic_ids 顺序重排 comic_library.json 中的漫画
+pub fn save_comic_order(data_dir: &Path, comic_ids: &[String], lib: &mut ComicLibraryData) -> Result<(), String> {
+    let mut reordered: Vec<ComicBook> = Vec::with_capacity(comic_ids.len());
+    for id in comic_ids {
+        if let Some(idx) = lib.comics.iter().position(|c| c.id == *id) {
+            reordered.push(lib.comics.swap_remove(idx));
+        }
+    }
+    // 补回未被排序的漫画
+    for c in lib.comics.drain(..) {
+        if !reordered.iter().any(|r| r.id == c.id) {
+            reordered.push(c);
+        }
+    }
+    lib.comics = reordered;
+    save_comic_library(data_dir, lib)
+}
+
 pub fn rescan_folder(image_dir: &str) -> Result<Vec<ComicPage>, String> {
     let dir = Path::new(image_dir);
     let files = scan_image_dir(dir)?;
