@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import SidebarHandle from "./SidebarHandle";
 import WindowControls from "./WindowControls";
 import { topbarGlassStyle, BackButton } from "./SharedUI";
-import { BookIcon, TrashIcon, ArrowRightIcon, SearchIcon, RefreshIcon, ArtIcon, ImageIcon } from "./FlatIcons";
 
 export default function MangaReader() {
   const currentManga = useStore((s) => s.currentManga);
@@ -20,13 +19,11 @@ export default function MangaReader() {
 
   const manga = currentManga;
   const [loadedPages, setLoadedPages] = useState<Record<number, string>>({});
-  const [loading, setLoading] = useState(false);
   const [tip, setTip] = useState("");
   const tipTimer = useRef<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
   const mangaZoomRef = useRef(mangaZoom);
-  const navTimer = useRef<number>(0);
   const [toolbarVisible, setToolbarVisible] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -38,26 +35,19 @@ export default function MangaReader() {
   const [showAllSidebar, setShowAllSidebar] = useState(false);
   const [narrow, setNarrow] = useState(window.innerWidth < 420);
   const [veryNarrow, setVeryNarrow] = useState(window.innerWidth < 360);
-  useEffect(() => {
-    const onResize = () => { setNarrow(window.innerWidth < 420); setVeryNarrow(window.innerWidth < 360); };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
   const win = getCurrentWindow();
   const [maximized, setMaximized] = useState(false);
 
+  // 合并窗口大小和最大化状态的 resize 监听
   useEffect(() => {
-    (async () => {
-      try { setMaximized(await win.isMaximized()); } catch {}
-    })();
-    const onResize = () => {
-      (async () => {
-        try { setMaximized(await win.isMaximized()); } catch {}
-      })();
+    const check = () => {
+      setNarrow(window.innerWidth < 420);
+      setVeryNarrow(window.innerWidth < 360);
+      win.isMaximized().then(setMaximized).catch(() => {});
     };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, [win]);
 
   const handleMinimize = async () => { try { await win.minimize(); } catch {} };
@@ -110,7 +100,6 @@ export default function MangaReader() {
     if (!manga) return;
     if (mangaViewMode === "scroll") return;
 
-    const t1 = performance.now();
     const preloadAhead = 10;
     const preloadBehind = 2;
     const pagesToLoad: number[] = [];
@@ -120,15 +109,11 @@ export default function MangaReader() {
       if (!loadedPages[i]) pagesToLoad.push(i);
     }
     if (pagesToLoad.length === 0) return;
-    setLoading(true);
     const newPages: Record<number, string> = {};
     for (const idx of pagesToLoad) {
       newPages[idx] = getPageUrl(manga, idx);
     }
     setLoadedPages((prev) => ({ ...prev, ...newPages }));
-    const t2 = performance.now();
-    console.log(`[perf] 第${pagesToLoad.length}页路径构造完成, 耗时 ${(t2 - t1).toFixed(0)}ms`);
-    setLoading(false);
   }, [manga?.id, mangaCurrentPage, mangaViewMode, totalPages]);
 
   // 滚动模式：按可见区域加载，直接构造 URL
@@ -177,7 +162,6 @@ export default function MangaReader() {
     if (!manga) return;
     const tid = setTimeout(async () => {
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
         await invoke("update_comic_progress", { comicId: manga.id, pageIndex: mangaCurrentPage });
         // 同步更新内存中的 current_page，让侧栏进度条实时刷新
         useStore.setState({ currentManga: { ...manga, current_page: mangaCurrentPage } });
@@ -215,12 +199,14 @@ export default function MangaReader() {
         case "r": e.preventDefault();
           {
             const newDir = isRtl ? "ltr" : "rtl";
-            import("@tauri-apps/api/core").then(({ invoke }) => {
-              invoke("update_comic_direction", { comicId: manga.id, direction: newDir }).then(() => {
-                showTip(isRtl ? "已切换为从左到右" : "已切换为从右到左");
+            const label = isRtl ? "从左到右" : "从右到左";
+            (async () => {
+              try {
+                await invoke("update_comic_direction", { comicId: manga.id, direction: newDir });
+                showTip(`已切换为${label}`);
                 useStore.setState({ currentManga: { ...manga, direction: newDir } });
-              }).catch(() => {});
-            });
+              } catch {}
+            })();
           }
           break;
       }
@@ -236,8 +222,6 @@ export default function MangaReader() {
   }, [panOffset]);
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    clearTimeout(navTimer.current);
-
     // 鼠标靠近顶部（~80px）才显示栏，否则隐藏
     if (e.clientY < 100) {
       setToolbarVisible(true);
@@ -280,72 +264,58 @@ export default function MangaReader() {
     setIsDragging(false);
   }, []);
 
+  const goToChapter = useCallback((comic: any, page: number, label: string) => {
+    useStore.setState({ currentManga: comic, mangaCurrentPage: page });
+    setLoadedPages({});
+    showTip(`${label}：${comic.title}`);
+  }, []);
+
   const nextPage = useCallback(() => {
     if (!manga) return;
     setMangaZoom(1);
     setPanOffset({ x: 0, y: 0 });
+    const isLast = mangaCurrentPage >= totalPages - 1;
+    if (isLast && currentSeriesIdx >= 0 && currentSeriesIdx < seriesChapters.length - 1) {
+      return goToChapter(seriesChapters[currentSeriesIdx + 1], 0, "下一章");
+    }
+    if (isLast) return showTip("已经是最后一页");
     if (mangaViewMode === "double") {
       const advance = mangaCurrentPage === 0 ? 1 : 2;
-      const next = Math.min(totalPages - 1, mangaCurrentPage + advance);
-      if (next === mangaCurrentPage) {
-        // 最后一页 → 跳到下一章节（如果有）
-        if (currentSeriesIdx >= 0 && currentSeriesIdx < seriesChapters.length - 1) {
-          const nextComic = seriesChapters[currentSeriesIdx + 1];
-          useStore.setState({ currentManga: nextComic, mangaCurrentPage: 0 });
-          setLoadedPages({});
-          showTip(`下一章：${nextComic.title}`);
-        } else {
-          showTip("已经是最后一页");
-        }
-      } else setMangaPage(next);
+      setMangaPage(Math.min(totalPages - 1, mangaCurrentPage + advance));
     } else {
-      if (mangaCurrentPage < totalPages - 1) setMangaPage(mangaCurrentPage + 1);
-      else {
-        if (currentSeriesIdx >= 0 && currentSeriesIdx < seriesChapters.length - 1) {
-          const nextComic = seriesChapters[currentSeriesIdx + 1];
-          useStore.setState({ currentManga: nextComic, mangaCurrentPage: 0 });
-          setLoadedPages({});
-          showTip(`下一章：${nextComic.title}`);
-        } else {
-          showTip("已经是最后一页");
-        }
-      }
+      setMangaPage(mangaCurrentPage + 1);
     }
-  }, [manga, mangaCurrentPage, mangaViewMode, totalPages, currentSeriesIdx, seriesChapters]);
+  }, [manga, mangaCurrentPage, mangaViewMode, totalPages, currentSeriesIdx, seriesChapters, goToChapter]);
 
   const prevPage = useCallback(() => {
     if (!manga) return;
     setMangaZoom(1);
     setPanOffset({ x: 0, y: 0 });
+    if (mangaCurrentPage === 0 && currentSeriesIdx > 0) {
+      const prevComic = seriesChapters[currentSeriesIdx - 1];
+      return goToChapter(prevComic, prevComic.total_pages - 1, "上一章");
+    }
+    if (mangaCurrentPage === 0) return showTip("已经是第一页");
     if (mangaViewMode === "double") {
       const retreat = mangaCurrentPage <= 1 ? 1 : 2;
       const next = Math.max(0, mangaCurrentPage - retreat);
-      if (next === mangaCurrentPage) showTip("已经是第一页");
-      else setMangaPage(next);
+      if (next === mangaCurrentPage) return showTip("已经是第一页");
+      setMangaPage(next);
     } else {
-      if (mangaCurrentPage > 0) setMangaPage(mangaCurrentPage - 1);
-      else {
-        // 第一页 → 跳到上一章节（如果有）
-        if (currentSeriesIdx > 0) {
-          const prevComic = seriesChapters[currentSeriesIdx - 1];
-          useStore.setState({ currentManga: prevComic, mangaCurrentPage: prevComic.total_pages - 1 });
-          setLoadedPages({});
-          showTip(`上一章：${prevComic.title}`);
-        } else {
-          showTip("已经是第一页");
-        }
-      }
+      setMangaPage(mangaCurrentPage - 1);
     }
-  }, [manga, mangaCurrentPage, mangaViewMode, currentSeriesIdx, seriesChapters]);
+  }, [manga, mangaCurrentPage, mangaViewMode, totalPages, currentSeriesIdx, seriesChapters, goToChapter]);
 
   // 滚动翻页 + Ctrl+滚轮缩放（原生 addEventListener 避免 passive 报错）
   const isRtlRef = useRef(isRtl);
   const viewModeRef = useRef(mangaViewMode);
   const panOffsetRef = useRef(panOffset);
-  useEffect(() => { isRtlRef.current = isRtl; }, [isRtl]);
-  useEffect(() => { viewModeRef.current = mangaViewMode; }, [mangaViewMode]);
-  useEffect(() => { mangaZoomRef.current = mangaZoom; }, [mangaZoom]);
-  useEffect(() => { panOffsetRef.current = panOffset; }, [panOffset]);
+  useEffect(() => {
+    isRtlRef.current = isRtl;
+    viewModeRef.current = mangaViewMode;
+    mangaZoomRef.current = mangaZoom;
+    panOffsetRef.current = panOffset;
+  }, [isRtl, mangaViewMode, mangaZoom, panOffset]);
 
   useEffect(() => {
     const el = mainRef.current;
@@ -513,9 +483,7 @@ export default function MangaReader() {
               }} onClick={(e) => {
                 e.stopPropagation();
                 if (currentSeriesIdx > 0) {
-                  const prev = seriesChapters[currentSeriesIdx - 1];
-                  useStore.setState({ currentManga: prev, mangaCurrentPage: prev.current_page || 0 });
-                  setLoadedPages({});
+                  goToChapter(seriesChapters[currentSeriesIdx - 1], seriesChapters[currentSeriesIdx - 1].current_page || 0, "上一章");
                   setMangaZoom(1);
                 }
               }} disabled={currentSeriesIdx <= 0}>{narrow ? "←" : "← 上一章"}</button>
@@ -528,9 +496,7 @@ export default function MangaReader() {
               }} onClick={(e) => {
                 e.stopPropagation();
                 if (currentSeriesIdx < seriesChapters.length - 1) {
-                  const next = seriesChapters[currentSeriesIdx + 1];
-                  useStore.setState({ currentManga: next, mangaCurrentPage: next.current_page || 0 });
-                  setLoadedPages({});
+                  goToChapter(seriesChapters[currentSeriesIdx + 1], seriesChapters[currentSeriesIdx + 1].current_page || 0, "下一章");
                   setMangaZoom(1);
                 }
               }} disabled={currentSeriesIdx >= seriesChapters.length - 1}>{narrow ? "→" : "下一章 →"}</button>
@@ -581,10 +547,10 @@ export default function MangaReader() {
           }} onClick={async (e) => {
             e.stopPropagation();
             const newDir = isRtl ? "ltr" : "rtl";
+            const label = isRtl ? "从左到右" : "从右到左";
             try {
-              const { invoke } = await import("@tauri-apps/api/core");
               await invoke("update_comic_direction", { comicId: manga.id, direction: newDir });
-              showTip(isRtl ? "已切换为从左到右" : "已切换为从右到左");
+              showTip(`已切换为${label}`);
               useStore.setState({ currentManga: { ...manga, direction: newDir } });
             } catch {}
           }}>{isRtl ? "RTL" : "LTR"}</button>
@@ -724,10 +690,6 @@ export default function MangaReader() {
       <SidebarHandle open={mangaSidebar} hint={sidebarHint}
         transition="left 0.45s cubic-bezier(0.22, 1.3, 0.36, 1), opacity 0.3s ease" />
 
-      {loading && !loadedPages[mangaCurrentPage] ? (
-        <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "var(--text-dim)", fontSize: ".85rem", zIndex: 220, background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", padding: "8px 20px", borderRadius: "var(--radius-full)", border: "1px solid var(--border-glass)", pointerEvents: "none" }}>加载中...</div>
-      ) : null}
-
       {tip && (
         <div style={{ position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)", background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-tip-blur))", border: "1px solid var(--border-glass)", borderRadius: "var(--radius-full)", padding: "10px 24px", fontSize: ".85rem", color: "var(--text)", zIndex: 500, animation: "tipIn 0.3s ease" }}>{tip}</div>
       )}
@@ -753,7 +715,6 @@ function SidebarCover({ comicId }: { comicId: string }) {
     fetchedRef.current = true;
     (async () => {
       try {
-        const { invoke, convertFileSrc } = await import("@tauri-apps/api/core");
         const path: string = await invoke("get_comic_thumbnail", { comicId });
         if (path) {
           const url = convertFileSrc(path);
@@ -789,7 +750,6 @@ function PageImg({ src, style, mangaId, pageIdx: pageIndex, sourceType }: { src?
       setLoadErr(true);
       setImgSrc(undefined);
       try {
-        const { invoke, convertFileSrc } = await import("@tauri-apps/api/core");
         const path: string = await invoke("render_comic_page", { comicId: mangaId, pageIndex });
         if (path) {
           const url = convertFileSrc(path) + "?t=" + Date.now();
