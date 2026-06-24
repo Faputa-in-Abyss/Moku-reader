@@ -18,6 +18,7 @@ export interface BookData {
   chapters: Chapter[];
   favorite?: boolean;
   book_icon?: string;
+  last_read_at?: number;  // Unix 毫秒时间戳
 }
 
 export interface ComicPage {
@@ -41,6 +42,7 @@ export interface ComicData {
   book_icon?: string;
   /** 系列 ID（纯前端标记），同一系列的多本漫画共享一个 seriesId */
   series_id?: string;
+  last_read_at?: number;
 }
 
 /** comic_library.json 中除去 pages/image_dir 的轻量摘要，存 localStorage */
@@ -54,6 +56,7 @@ export interface ComicMeta {
   favorite?: boolean;
   book_icon?: string;
   series_id?: string;
+  last_read_at?: number;
 }
 
 type ThemeMode = "light" | "dark";

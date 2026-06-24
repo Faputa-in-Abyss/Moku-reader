@@ -38,6 +38,8 @@ pub struct ComicBook {
     pub favorite: bool,
     #[serde(default)]
     pub book_icon: String,
+    #[serde(default)]
+    pub last_read_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -491,7 +493,7 @@ pub fn import_comic(path: &str, data_dir: &Path, dpi: u32, num_threads: usize) -
         id, title, source_type, source_path: path.to_string(),
         image_dir: image_dir.to_string_lossy().to_string(), pages,
         total_pages: total, current_page: 0, direction: "ltr".to_string(),
-        favorite: false, book_icon: String::new(),
+        favorite: false, book_icon: String::new(), last_read_at: None,
     })
 }
 

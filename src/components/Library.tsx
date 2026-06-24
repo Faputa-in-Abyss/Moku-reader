@@ -26,6 +26,7 @@ export default function Library() {
   });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-novel-sort-asc") !== "false");
   const [bookSearch, setBookSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"全部" | "最近阅读">("全部");
 
 // 必须在所有引用它的 useCallback 之前声明
   const [sortedBooks, setSortedBooks] = useState<BookData[]>([]);
@@ -85,6 +86,12 @@ if (sortField === field) {
   const displayList = useMemo(() => {
     return sortedBooks;
   }, [sortedBooks, bookSearch]);
+
+  const recentList = useMemo(() => {
+    return displayList
+      .filter((b) => b.last_read_at != null)
+      .sort((a, b) => (b.last_read_at ?? 0) - (a.last_read_at ?? 0));
+  }, [displayList]);
 
   const ICON_LIST = ["☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
@@ -297,6 +304,19 @@ if (sortField === field) {
           <h1 className="library-title">我的书库</h1>
           <span className="library-count">{books.length} 本书</span>
         </div>
+        <div style={{ display: "flex", gap: 0, marginBottom: 12, background: "rgba(var(--accent-rgb),0.06)", borderRadius: "var(--radius-md)", padding: 3, width: "fit-content" }}>
+          {(["全部", "最近阅读"] as const).map((tab) => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              style={{
+                fontSize: ".78rem", padding: "5px 14px", border: "none", borderRadius: "var(--radius-md)", cursor: "pointer",
+                fontWeight: activeTab === tab ? 600 : 400,
+                color: activeTab === tab ? "var(--text)" : "var(--text-dim)",
+                background: activeTab === tab ? "rgba(var(--accent-rgb),0.18)" : "transparent",
+                transition: "all 0.3s ease",
+              }}
+            >{tab} ({activeTab === "全部" ? displayList.length : recentList.length})</button>
+          ))}
+        </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
           <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
           <SortButton field="progress" label="进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
@@ -317,6 +337,19 @@ if (sortField === field) {
         <h1 className="library-title">我的书库</h1>
         <span className="library-count">{displayList.length} 本书</span>
       </div>
+      <div style={{ display: "flex", gap: 0, marginBottom: 12, background: "rgba(var(--accent-rgb),0.06)", borderRadius: "var(--radius-md)", padding: 3, width: "fit-content" }}>
+          {(["全部", "最近阅读"] as const).map((tab) => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              style={{
+                fontSize: ".78rem", padding: "5px 14px", border: "none", borderRadius: "var(--radius-md)", cursor: "pointer",
+                fontWeight: activeTab === tab ? 600 : 400,
+                color: activeTab === tab ? "var(--text)" : "var(--text-dim)",
+                background: activeTab === tab ? "rgba(var(--accent-rgb),0.18)" : "transparent",
+                transition: "all 0.3s ease",
+              }}
+            >{tab} ({activeTab === "全部" ? displayList.length : recentList.length})</button>
+          ))}
+        </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
         <SearchInput value={bookSearch} onChange={setBookSearch} />
         <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
@@ -324,7 +357,7 @@ if (sortField === field) {
         <SortButton field="favorite" label={<><StarIcon size={14} style={{verticalAlign:'middle'}} /> 收藏</>} currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
       </div>
       <div className="book-grid">
-        {displayList.map((book) => (
+        {(activeTab === "最近阅读" ? recentList : displayList).map((book) => (
           <div
             key={book.id}
             className="book-card"

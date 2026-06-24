@@ -63,6 +63,8 @@ pub struct Book {
     pub book_icon: String,
     #[serde(default)]
     pub reading_progress: Option<reader::ReadingPositionData>,
+    #[serde(default)]
+    pub last_read_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,6 +219,7 @@ fn import_book(path: String, state: State<AppState>) -> Result<Book, String> {
         favorite: false,
         book_icon: String::new(),
         reading_progress: None,
+        last_read_at: None,
     };
 
     let mut lib = lock_mutex(&state.library)?;
@@ -262,6 +265,7 @@ fn import_book_from_path(path: &str) -> Result<Book, String> {
         chapters, content,
         favorite: false, book_icon: String::new(),
         reading_progress: None,
+        last_read_at: None,
     })
 }
 
@@ -435,6 +439,12 @@ fn update_progress(book_id: String, chapter_index: usize, state: State<AppState>
         });
     }
     debug_log!("   进度: {:.1}%", book.progress * 100.0);
+    book.last_read_at = Some(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64,
+    );
     save_library(&state.data_dir, &lib).ok();
     Ok(())
 }
@@ -515,6 +525,8 @@ pub struct SortBookData {
     pub book_icon: String,
     #[serde(default)]
     pub reading_progress: Option<reader::ReadingPositionData>,
+    #[serde(default)]
+    pub last_read_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -565,6 +577,7 @@ fn sort_books(field: String, asc: bool, state: State<AppState>) -> Result<Vec<So
         favorite: b.favorite,
         book_icon: b.book_icon.clone(),
         reading_progress: b.reading_progress.clone(),
+        last_read_at: b.last_read_at,
     }).collect();
     Ok(result)
 }
@@ -1204,6 +1217,7 @@ fn import_comic_folder_impl(folder: &Path) -> Result<comic::ComicBook, String> {
         pages, total_pages: total,
         current_page: 0, direction: "ltr".to_string(),
         favorite: false, book_icon: String::new(),
+        last_read_at: None,
     })
 }
 
@@ -1240,6 +1254,12 @@ fn update_comic_progress(comic_id: String, page_index: usize, state: State<AppSt
     let mut lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
     comic.current_page = page_index;
+    comic.last_read_at = Some(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64,
+    );
     comic::save_comic_library(&state.data_dir, &lib).ok();
     Ok(())
 }
