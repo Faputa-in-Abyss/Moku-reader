@@ -297,9 +297,6 @@ header:hover .light-follow { opacity: 1; }
 /* 有封面图时隐藏 emoji 图标 */
 .book-cover-img ~ .book-cover-icon { display: none; }
 
-/* 有封面图时移除 flex 居中 padding */
-.book-cover:has(.book-cover-img) { padding: 0; }
-
 /* 封面图淡入 — 用 transition 代替 @keyframes */
 .book-cover-img {
   opacity: 0;

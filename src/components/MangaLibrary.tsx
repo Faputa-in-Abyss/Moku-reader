@@ -3,10 +3,7 @@ import { useStore, ComicData, ComicMeta } from "../store";
 import { handleCardGlow } from "../utils/glow";
 import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
 import { BookIcon, FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ArrowRightIcon, RefreshIcon, BanIcon, ImageIcon, SearchIcon } from "./FlatIcons";
-import { DndContext, closestCenter } from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
-import { useDndSort, arrayMove } from "../hooks/useDndSort";
-import { SortableCard } from "./SortableCard";
+
 
 export default function MangaLibrary() {
   const comics = useStore((s) => s.comics);
@@ -27,35 +24,16 @@ export default function MangaLibrary() {
   const [seriesDialogOpen, setSeriesDialogOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ComicData | null>(null);
   const [renameCardRect, setRenameCardRect] = useState<DOMRect | null>(null);
-  type SortField = "name" | "pages" | "favorite" | "custom";
+  type SortField = "name" | "pages" | "favorite";
   const [sortField, setSortField] = useState<SortField>(() => {
     const saved = localStorage.getItem("nr-manga-sort-field");
-    if (saved === "pages" || saved === "favorite" || saved === "custom") return saved;
+    if (saved === "pages" || saved === "favorite") return saved;
     return "name";
   });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-manga-sort-asc") !== "false");
 
-  const [customOrder, setCustomOrder] = useState<ComicMeta[]>([]);
-const [dragActive, setDragActive] = useState(false);
-
-  useEffect(() => {
-    if (!dragActive) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDragActive(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [dragActive]);
-
-  useEffect(() => {
-    if (!dragActive) return;
-    const id = setTimeout(() => {
-      window.addEventListener("pointerdown", () => setDragActive(false), { once: true });
-    }, 100);
-    return () => clearTimeout(id);
-  }, [dragActive]);
-
   const setSort = (field: SortField) => {
-    if (field !== "custom") { setDragActive(false); }
-    if (sortField === field) {
+if (sortField === field) {
       const next = !sortAsc;
       setSortAsc(next);
       localStorage.setItem("nr-manga-sort-asc", String(next));

@@ -3,11 +3,6 @@ import { useStore, BookData } from "../store";
 import { handleCardGlow } from "../utils/glow";
 import { BookIcon, FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ImageIcon } from "./FlatIcons";
 import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
-import { DndContext, closestCenter } from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
-import { useDndSort, arrayMove } from "../hooks/useDndSort";
-import { SortableCard } from "./SortableCard";
-
 export default function Library() {
   const books = useStore((s) => s.books);
   const setBooks = useStore((s) => s.setBooks);
@@ -22,29 +17,21 @@ export default function Library() {
   const [batchIconPicker, setBatchIconPicker] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  type SortField = "name" | "progress" | "favorite" | "custom";
+  type SortField = "name" | "progress" | "favorite";
   // D1: Add runtime validation for sortField from localStorage
   const [sortField, setSortField] = useState<SortField>(() => {
     const saved = localStorage.getItem("nr-novel-sort-field");
-    if (saved === "name" || saved === "progress" || saved === "favorite" || saved === "custom") return saved;
+    if (saved === "name" || saved === "progress" || saved === "favorite") return saved;
     return "name";
   });
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-novel-sort-asc") !== "false");
   const [bookSearch, setBookSearch] = useState("");
 
-  // Drag sort state
-  const [customOrder, setCustomOrder] = useState<BookData[]>([]);
-  const [dragActive, setDragActive] = useState(false);
-
-  // 必须在所有引用它的 useCallback 之前声明
+// 必须在所有引用它的 useCallback 之前声明
   const [sortedBooks, setSortedBooks] = useState<BookData[]>([]);
 
   const setSort = (field: SortField) => {
-    // Exit drag mode when clicking a sort button (not custom)
-    if (field !== "custom") {
-      setDragActive(false);
-    }
-    if (sortField === field) {
+if (sortField === field) {
       const next = !sortAsc;
       setSortAsc(next);
       localStorage.setItem("nr-novel-sort-asc", String(next));
@@ -96,67 +83,8 @@ export default function Library() {
   }, [books, sortField, sortAsc, bookSearch]);
 
   const displayList = useMemo(() => {
-    if (sortField === "custom") {
-      if (customOrder.length > 0) {
-        return customOrder.filter(b => !bookSearch || b.title.includes(bookSearch));
-      }
-      // fallback: ensure sortedBooks is used as initial custom order
-      return sortedBooks;
-    }
     return sortedBooks;
-  }, [sortField, customOrder, sortedBooks, bookSearch]);
-
-  // Drag sort with dnd-kit
-  const { sensors, handleDragStart, handleDragEnd } = useDndSort({
-    onStart: () => {
-      // 如果不是 custom 模式，拖拽开始时自动切换
-      if (sortField !== "custom") {
-        const latestSorted = useStore.getState().books
-          .filter(b => !bookSearch || b.title.includes(bookSearch));
-        setCustomOrder(latestSorted);
-        setSortField("custom");
-        localStorage.setItem("nr-novel-sort-field", "custom");
-      }
-      setDragActive(true);
-    },
-    onEnd: (oldIndex, newIndex) => {
-      const newOrder = arrayMove(displayList, oldIndex, newIndex);
-      setCustomOrder(newOrder);
-      setDragActive(false);
-      (async () => {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("save_book_order", { bookIds: newOrder.map(b => b.id) }).catch(() => {});
-      })();
-    },
-  });
-
-  // Escape key exits drag mode
-  useEffect(() => {
-    if (!dragActive) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setDragActive(false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [dragActive]);
-
-  // Click outside exits drag mode
-  useEffect(() => {
-    if (!dragActive) return;
-    const handler = () => {
-      setDragActive(false);
-    };
-    // Delay to avoid the click that resulted from pointer up ending drag mode
-    const id = setTimeout(() => {
-      window.addEventListener("pointerdown", handler, { once: true });
-    }, 100);
-    return () => {
-      clearTimeout(id);
-      window.removeEventListener("pointerdown", handler);
-    };
-  }, [dragActive]);
+  }, [sortedBooks, bookSearch]);
 
   const ICON_LIST = ["☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
@@ -388,63 +316,40 @@ export default function Library() {
       <div className="library-header">
         <h1 className="library-title">我的书库</h1>
         <span className="library-count">{displayList.length} 本书</span>
-        {dragActive && sortField === "custom" && (
-          <span style={{ fontSize: ".72rem", color: "var(--accent)", marginLeft: 8, opacity: 0.8 }}>
-            拖动卡片排序
-          </span>
-        )}
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
         <SearchInput value={bookSearch} onChange={setBookSearch} />
         <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
         <SortButton field="progress" label="进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
         <SortButton field="favorite" label="⭐ 收藏" currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
-        {sortField === "custom" && (
-          <SortButton field="custom" label="📌 自定义" currentField="custom" asc={false} onClick={() => setSort("custom")} />
-        )}
       </div>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext items={displayList.map(b => b.id)} strategy={rectSortingStrategy}>
-        <div
-          className="book-grid"
-          style={{ userSelect: dragActive && sortField === "custom" ? "none" : undefined }}
-        >
-          {displayList.map((book) => (
-            <SortableCard
-              key={book.id}
-              id={book.id}
-              className="book-card"
-              onClick={() => {
-                if (dragActive && sortField === "custom") return;
-                if (selectMode) toggleSelect(book.id);
-                else openReader(book);
-              }}
-              onContextMenu={(e) => handleCtxMenu(e, book)}
-              onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
-              onDragStart={(e) => e.preventDefault()}
-            >
-              {selectMode && <SelectCheckbox selected={selectedIds.has(book.id)} />}
-              <div className={`book-cover${selectedIds.has(book.id) ? " cover-selected" : ""}`}>
-                <FavStar show={!!(optimisticFav[book.id] ?? book.favorite)} bursting={bursting.has(book.id)} />
-                <div className="book-cover-icon">{book.book_icon || getBookIcon(book.title)}</div>
-                <div className="book-title">{book.title}</div>
-                <ProgressBar pct={book.progress * 100} />
+      <div className="book-grid">
+        {displayList.map((book) => (
+          <div
+            key={book.id}
+            className="book-card"
+            onClick={() => {
+              if (selectMode) toggleSelect(book.id);
+              else openReader(book);
+            }}
+            onContextMenu={(e) => handleCtxMenu(e, book)}
+            onMouseMove={(e) => handleCardGlow(e, e.currentTarget)}
+          >
+            {selectMode && <SelectCheckbox selected={selectedIds.has(book.id)} />}
+            <div className={`book-cover${selectedIds.has(book.id) ? " cover-selected" : ""}`}>
+              <FavStar show={!!(optimisticFav[book.id] ?? book.favorite)} bursting={bursting.has(book.id)} />
+              <div className="book-cover-icon">{book.book_icon || getBookIcon(book.title)}</div>
+              <div className="book-title">{book.title}</div>
+              <ProgressBar pct={book.progress * 100} />
+            </div>
+            <div className="book-info">
+              <div className="book-chapter">
+                {book.total_chapters > 0 ? `第${book.current_chapter + 1}章` : "尚未阅读"}
               </div>
-              <div className="book-info">
-                <div className="book-chapter">
-                  {book.total_chapters > 0 ? `第${book.current_chapter + 1}章` : "尚未阅读"}
-                </div>
-              </div>
-            </SortableCard>
-          ))}
-        </div>
-        </SortableContext>
-      </DndContext>
+            </div>
+          </div>
+        ))}
+      </div>
 
       {selectMode && (
         <BatchActionBar

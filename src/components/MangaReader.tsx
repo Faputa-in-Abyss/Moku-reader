@@ -605,14 +605,14 @@ export default function MangaReader() {
             <div style={{ height: scrollVisibleRange.start * 600 }} />
             {Array.from({ length: scrollVisibleRange.end - scrollVisibleRange.start }, (_, idx) => {
               const pageIdx = scrollVisibleRange.start + idx;
-              return <PageImg key={pageIdx} src={loadedPages[pageIdx]} style={{ maxWidth: "min(100%, " + (800 * mangaZoom) + "px)", width: "100%" }} />;
+              return <PageImg key={pageIdx} src={loadedPages[pageIdx]} style={{ maxWidth: "min(100%, " + (800 * mangaZoom) + "px)", width: "100%" }} mangaId={manga?.id} pageIdx={pageIdx} sourceType={manga?.source_type} />;
             })}
           </div>
         ) : mangaViewMode === "double" && doublePages ? (
           <div style={{ display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 0, padding: "0", flexDirection: isRtl ? "row-reverse" : "row", transform: `scale(${mangaZoom}) translate(${panOffset.x / mangaZoom}px, ${panOffset.y / mangaZoom}px)`, transformOrigin: "center", transition: isDragging ? "none" : "transform 0.2s ease", cursor: isDragging ? "grabbing" : "pointer" }}>
             {doublePages.left !== null && (
               <div style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: isRtl ? "flex-start" : "flex-end", overflow: "hidden" }}>
-                <PageImg src={loadedPages[doublePages.left]} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                <PageImg src={loadedPages[doublePages.left]} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} mangaId={manga?.id} pageIdx={doublePages.left} sourceType={manga?.source_type} />
               </div>
             )}
             {doublePages.left !== null && doublePages.right !== null && (
@@ -620,13 +620,13 @@ export default function MangaReader() {
             )}
             {doublePages.right !== null && (
               <div style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: isRtl ? "flex-end" : "flex-start", overflow: "hidden" }}>
-                <PageImg src={loadedPages[doublePages.right]} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                <PageImg src={loadedPages[doublePages.right]} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} mangaId={manga?.id} pageIdx={doublePages.right} sourceType={manga?.source_type} />
               </div>
             )}
           </div>
         ) : (
           <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            <PageImg src={loadedPages[mangaCurrentPage]} style={imgStyle} />
+            <PageImg src={loadedPages[mangaCurrentPage]} style={imgStyle} mangaId={manga?.id} pageIdx={mangaCurrentPage} sourceType={manga?.source_type} />
           </div>
         )}
       </div>
@@ -773,11 +773,45 @@ function getPageUrl(manga: { image_dir: string; pages: { index: number; filename
   return page ? convertFileSrc(manga.image_dir + "\\" + page.filename) : "";
 }
 
-function PageImg({ src, style }: { src?: string; style: React.CSSProperties }) {
-  if (!src) {
-    return <div style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(var(--accent-rgb),0.03)", borderRadius: 2, color: "var(--text-dim)", fontSize: ".75rem" }}>…</div>;
+function PageImg({ src, style, mangaId, pageIdx: pageIndex, sourceType }: { src?: string; style: React.CSSProperties; mangaId?: string | null; pageIdx?: number; sourceType?: string }) {
+  const [imgSrc, setImgSrc] = useState<string | undefined>(src);
+  const [loadErr, setLoadErr] = useState(false);
+  const retrying = useRef(false);
+
+  useEffect(() => { setImgSrc(src); setLoadErr(false); }, [src]);
+
+  const handleError = useCallback(async () => {
+    if (retrying.current) return;
+    if (!src && !imgSrc) return;
+
+    if (sourceType === "pdf" && mangaId && pageIndex !== undefined && !retrying.current) {
+      retrying.current = true;
+      setLoadErr(true);
+      setImgSrc(undefined);
+      try {
+        const { invoke, convertFileSrc } = await import("@tauri-apps/api/core");
+        const path: string = await invoke("render_comic_page", { comicId: mangaId, pageIndex });
+        if (path) {
+          const url = convertFileSrc(path) + "?t=" + Date.now();
+          setImgSrc(url);
+          setLoadErr(false);
+        }
+      } catch { setImgSrc(undefined); }
+      retrying.current = false;
+      return;
+    }
+
+    setLoadErr(true);
+    retrying.current = false;
+  }, [sourceType, mangaId, pageIndex, src, imgSrc]);
+
+  if (loadErr) {
+    return <div style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(var(--accent-rgb),0.03)", borderRadius: 2, color: "var(--text-dim)", fontSize: ".75rem" }}>加载失败</div>;
   }
-  return <img src={src} alt="page" style={{ ...style, display: "block", borderRadius: 2 }} draggable={false} />;
+  if (!imgSrc) {
+    return <div style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(var(--accent-rgb),0.03)", borderRadius: 2, color: "var(--text-dim)", fontSize: ".75rem" }}>渲染中…</div>;
+  }
+  return <img src={imgSrc} alt="page" style={{ ...style, display: "block", borderRadius: 2 }} draggable={false} onError={handleError} />;
 }
 
 function getMangaIcon(c: { book_icon?: string; source_type?: string }): string {
