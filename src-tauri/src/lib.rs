@@ -701,9 +701,9 @@ fn close_book_cache(book_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn search_text(book_id: String, query: String) -> Result<Vec<reader::SearchSnippet>, String> {
-    debug_log!("🔍 搜索: book={}, query={}", &book_id, &query);
-    let results = reader::search_in_book(&book_id, &query)?;
+fn search_text(book_id: String, query: String, chapterStart: Option<usize>, chapterEnd: Option<usize>) -> Result<Vec<reader::SearchSnippet>, String> {
+    debug_log!("🔍 搜索: book={}, query={}, range={:?}-{:?}", &book_id, &query, &chapterStart, &chapterEnd);
+    let results = reader::search_in_book(&book_id, &query, chapterStart, chapterEnd)?;
     debug_log!("   🔍 匹配 {} 条", results.len());
     Ok(results)
 }

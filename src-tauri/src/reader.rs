@@ -148,7 +148,13 @@ pub fn drop_book_cache(book_id: &str) {
 // ===== 全文搜索 =====
 
 /// 在已缓存的书籍全文搜索关键词，返回匹配片段列表（最多 200 条）
-pub fn search_in_book(book_id: &str, query: &str) -> Result<Vec<SearchSnippet>, String> {
+/// chapter_start/chapter_end: 可选章节范围（0-based，含两端），None 搜全书
+pub fn search_in_book(
+    book_id: &str,
+    query: &str,
+    chapter_start: Option<usize>,
+    chapter_end: Option<usize>,
+) -> Result<Vec<SearchSnippet>, String> {
     if query.trim().is_empty() {
         return Ok(Vec::new());
     }
@@ -162,9 +168,21 @@ pub fn search_in_book(book_id: &str, query: &str) -> Result<Vec<SearchSnippet>, 
     let context_byte_approx: usize = 60; // 约 20 个中文字符
     let max_results: usize = 200;
 
+    let chapter_count = cached.chapters.len();
+
+    // 确定章节范围
+    let range_start = chapter_start.unwrap_or(0).min(chapter_count.saturating_sub(1));
+    let range_end = chapter_end.unwrap_or(chapter_count.saturating_sub(1)).min(chapter_count.saturating_sub(1));
+    let range = if range_start <= range_end {
+        range_start..=range_end
+    } else {
+        0..=chapter_count.saturating_sub(1)
+    };
+
     let mut results: Vec<SearchSnippet> = Vec::new();
 
-    for ch in &cached.chapters {
+    for ch_idx in range {
+        let ch = &cached.chapters[ch_idx];
         let ch_start = ch.start_pos.min(full_text.len());
         let ch_end = ch.end_pos.min(full_text.len());
         if ch_start >= ch_end {
