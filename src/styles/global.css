@@ -6,6 +6,16 @@
   box-sizing: border-box;
 }
 
+/* 隐藏数字输入框的上下箭头 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 :root,
 [data-theme="dark"] {
   --bg: #161210;

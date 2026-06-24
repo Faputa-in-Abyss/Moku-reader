@@ -31,8 +31,21 @@ export default function ChapterList({
   const [searching, setSearching] = useState(false);
   const [searchTab, setSearchTab] = useState<'章节' | '正文'>('章节');
   const [tabSliderStyle, setTabSliderStyle] = useState<React.CSSProperties>({});
+  const [rangeOpen, setRangeOpen] = useState(true);
+  const [rangeStart, setRangeStart] = useState<number | null>(1);
+  const [rangeEnd, setRangeEnd] = useState<number | null>(chapters?.length || null);
   const debounceRef = useRef<number>(0);
   const hasSearched = useRef(false);
+
+  const totalChapters = chapters?.length || 1;
+
+  // 章节数变化时同步范围默认值
+  useEffect(() => {
+    if (searchTab === '正文') {
+      setRangeStart(null);
+      setRangeEnd(null);
+    }
+  }, [totalChapters]);
 
   const filtered = chapters?.filter((ch, i) => {
     if (!chapterSearch) return true;
@@ -57,6 +70,9 @@ export default function ChapterList({
       setContentSearch('');
       setSearchResults([]);
       hasSearched.current = false;
+    } else {
+      // 切到正文 tab 时展开范围面板
+      setRangeOpen(true);
     }
   }, [searchTab]);
 
@@ -70,10 +86,14 @@ export default function ChapterList({
     hasSearched.current = true;
 
     debounceRef.current = window.setTimeout(async () => {
+      const startIdx = rangeStart != null ? Math.max(0, rangeStart - 1) : 0;
+      const endIdx = rangeEnd != null ? Math.min(totalChapters - 1, rangeEnd - 1) : totalChapters - 1;
       try {
         const results = await invoke('search_text', {
           bookId,
           query: contentSearch.trim(),
+          chapterStart: startIdx,
+          chapterEnd: endIdx,
         }) as SearchSnippet[];
         setSearchResults(results);
       } catch (e) {
@@ -84,6 +104,8 @@ export default function ChapterList({
           const results = await invoke('search_text', {
             bookId,
             query: contentSearch.trim(),
+            chapterStart: startIdx,
+            chapterEnd: endIdx,
           }) as SearchSnippet[];
           setSearchResults(results);
         } catch (e2) {
@@ -95,7 +117,7 @@ export default function ChapterList({
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [contentSearch, bookId, searchTab]);
+  }, [contentSearch, bookId, searchTab, rangeStart, rangeEnd, totalChapters]);
 
   const handleSelect = useCallback((idx: number, charOffset?: number) => {
     onSelect(idx, charOffset);
@@ -179,6 +201,7 @@ export default function ChapterList({
             }}
           />
         ) : (
+          <>
           <input
             placeholder="搜索正文内容..."
             value={contentSearch}
@@ -192,6 +215,74 @@ export default function ChapterList({
               outline: 'none', boxSizing: 'border-box',
             }}
           />
+          {/* 范围折叠面板 */}
+          <div style={{ marginTop: 6 }}>
+            <div onClick={() => setRangeOpen(!rangeOpen)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none', padding: '3px 4px', borderRadius: 'var(--radius-sm)' }}>
+              <span style={{ fontSize: '.9rem', color: 'var(--accent)', lineHeight: 1, display: 'flex' }}>
+                <svg width="12" height="12" viewBox="0 0 10 10" fill="none" style={{
+                  transform: rangeOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
+                }}>
+                  <path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span style={{ fontSize: '.82rem', color: 'var(--text-dim)' }}>范围</span>
+              {!rangeOpen && (
+                <span style={{ fontSize: '.78rem', color: 'var(--accent)', marginLeft: 2 }}>
+                  {rangeStart == null && rangeEnd == null ? '全书' : `第${rangeStart ?? 1}—${rangeEnd ?? totalChapters}章`}
+                </span>
+              )}
+            </div>
+            {rangeOpen && (
+              <div style={{ paddingLeft: 22, display: 'flex', alignItems: 'center', gap: 5, marginTop: 5 }}>
+                <span style={{ fontSize: '.82rem', color: 'var(--text-dim)' }}>第</span>
+                <input type="number" min={1} max={totalChapters}
+                  value={rangeStart ?? ''}
+                  placeholder="不限"
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === '') { setRangeStart(null); return; }
+                    const v = Math.max(1, Math.min(totalChapters, Number(raw) || 1));
+                    setRangeStart(rangeEnd != null ? Math.min(v, rangeEnd) : v);
+                  }}
+                  style={{
+                    width: 52, padding: '3px 0', fontSize: '.82rem', textAlign: 'center',
+                    background: 'var(--glass-bg)', color: 'var(--text)',
+                    border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-sm)',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                <span style={{ fontSize: '.82rem', color: 'var(--text-dim)' }}>—</span>
+                <input type="number" min={1} max={totalChapters}
+                  value={rangeEnd ?? ''}
+                  placeholder="不限"
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === '') { setRangeEnd(null); return; }
+                    const v = Math.max(1, Math.min(totalChapters, Number(raw) || 1));
+                    setRangeEnd(rangeStart != null ? Math.max(v, rangeStart) : v);
+                  }}
+                  style={{
+                    width: 52, padding: '3px 0', fontSize: '.82rem', textAlign: 'center',
+                    background: 'var(--glass-bg)', color: 'var(--text)',
+                    border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-sm)',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                <span style={{ fontSize: '.82rem', color: 'var(--text-dim)' }}>章</span>
+                <button className="btn" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '.78rem', lineHeight: '20px' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--accent-rgb),0.1)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.borderColor = ''; }}
+                  onClick={(e) => { e.stopPropagation(); setRangeStart(currentChapter + 1); setRangeEnd(currentChapter + 1); }}>
+                  当前章
+                </button>
+              </div>
+            )}
+          </div>
+          </>
         )}
       </div>
 
