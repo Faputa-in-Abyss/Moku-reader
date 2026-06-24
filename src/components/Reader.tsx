@@ -1173,9 +1173,34 @@ export default function Reader() {
           currentChapter={currentChapter}
           bookmarks={bookmarks}
           open={sidebarOpen}
-          onSelect={(idx) => {
+          bookId={book?.id}
+          onSelect={(idx, charOffset) => {
             saveScrollPosition(currentChapter);
             switchChapter(idx);
+
+            // 搜索结果跳转：尝试定位到匹配位置
+            if (charOffset !== undefined) {
+              if (readingMode === 'page') {
+                // 分页模式：查找匹配字符偏移属于哪一页
+                const matchPage = pageBreaks.findIndex(
+                  (pb) => charOffset >= pb.start_char && charOffset < pb.end_char
+                );
+                if (matchPage >= 0) {
+                  setPageIndex(matchPage);
+                }
+              } else {
+                // Scroll 模式：按字符比例估算滚动位置
+                const scrollToMatch = () => {
+                  const el = contentRef.current;
+                  if (!el) return;
+                  const totalLen = chapterText.length || 1;
+                  const ratio = Math.min(1, charOffset / totalLen);
+                  el.scrollTop = ratio * (el.scrollHeight - el.clientHeight);
+                };
+                setTimeout(scrollToMatch, 100);
+                setTimeout(scrollToMatch, 300);
+              }
+            }
           }}
           onClose={() => setSidebarOpen(false)}
           onRemoveBookmark={removeBookmark}

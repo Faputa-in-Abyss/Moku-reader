@@ -701,6 +701,14 @@ fn close_book_cache(book_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn search_text(book_id: String, query: String) -> Result<Vec<reader::SearchSnippet>, String> {
+    debug_log!("🔍 搜索: book={}, query={}", &book_id, &query);
+    let results = reader::search_in_book(&book_id, &query)?;
+    debug_log!("   🔍 匹配 {} 条", results.len());
+    Ok(results)
+}
+
+#[tauri::command]
 fn get_reader_chapter(book_id: String, chapter_index: usize) -> Result<ChapterContentResult, String> {
     debug_log!("📖 读取缓存章节: book={}, chapter={}", &book_id, chapter_index);
     let (title, text) = reader::get_chapter_text_from_cache(&book_id, chapter_index)?;
@@ -1497,6 +1505,7 @@ pub fn run() {
             get_pagination,
             save_reading_position,
             get_reading_position,
+            search_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
