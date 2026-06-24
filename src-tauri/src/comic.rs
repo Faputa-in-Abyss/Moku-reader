@@ -247,7 +247,7 @@ fn get_pdf_page_count(mutool: &Path, path: &Path) -> usize {
 }
 
 /// 渲染单页 PNG（带 60 秒超时防止 mutool 挂死）
-fn render_single_page(mutool: &Path, pdf_path: &Path, page_index: usize, dpi: u32, out_path: &Path) -> Result<(), String> {
+pub fn render_single_page(mutool: &Path, pdf_path: &Path, page_index: usize, dpi: u32, out_path: &Path) -> Result<(), String> {
     if out_path.exists() { return Ok(()); }
     fs::create_dir_all(out_path.parent().unwrap()).ok();
 
@@ -418,6 +418,16 @@ fn import_pdf(path: &Path, dest_dir: &Path, dpi: u32, num_threads: usize) -> Res
 /// 但 import_pdf 不复制 PDF，所以只需要在 import_comic 返回后由调用方处理
 
 // ===== 公开接口 =====
+
+/// 按需渲染 PDF 单页（前端请求时调用）
+/// 返回渲染后的 PNG 文件完整路径
+pub fn render_pdf_page(pdf_path: &str, image_dir: &str, page_index: usize, dpi: u32) -> Result<String, String> {
+    let mutool = find_mutool().ok_or_else(|| "未找到 mutool".to_string())?;
+    let page_file = format!("page_{:04}.png", page_index + 1);
+    let out_path = Path::new(image_dir).join(&page_file);
+    render_single_page(&mutool, Path::new(pdf_path), page_index, dpi, &out_path)?;
+    Ok(out_path.to_string_lossy().to_string())
+}
 
 pub fn import_comic(path: &str, data_dir: &Path, dpi: u32, num_threads: usize) -> Result<ComicBook, String> {
     let path_obj = Path::new(path);

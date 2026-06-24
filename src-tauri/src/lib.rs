@@ -946,6 +946,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                             });
                         }
                         let _ = app.emit("comics-refreshed", "");
+                        let _ = app.emit("comics-refreshed", "");
                     }
                     Err(e) => {
                         errors.push(format!("导入漫画失败 {}: {}", path, e));
@@ -1236,6 +1237,17 @@ fn dir_size_mb(dir: &Path) -> f64 {
 }
 
 #[tauri::command]
+fn render_comic_page(comic_id: String, page_index: usize, state: State<AppState>) -> Result<String, String> {
+    let lib = lock_mutex(&state.comic_library)?;
+    let comic = lib.comics.iter().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
+    if comic.source_type != "pdf" {
+        return Err("not a pdf comic".to_string());
+    }
+    let dpi = *lock_mutex(&state.render_dpi)?;
+    comic::render_pdf_page(&comic.source_path, &comic.image_dir, page_index, dpi)
+}
+
+#[tauri::command]
 fn rescan_comic_folder(comic_id: String, state: State<AppState>) -> Result<usize, String> {
     let mut lib = lock_mutex(&state.comic_library)?;
     let comic = lib.comics.iter_mut().find(|c| c.id == comic_id).ok_or("未找到漫画")?;
@@ -1337,3 +1349,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+                                     
