@@ -466,7 +466,7 @@ export default function MangaReader() {
     transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${mangaZoom})`,
     transformOrigin: "center",
     transition: isDragging ? "none" : "transform 0.2s ease",
-    cursor: isDragging ? "grabbing" : "pointer",
+    cursor: isDragging ? "grabbing" : "default",
   };
 
   const doublePages = useMemo(() => {
@@ -597,7 +597,7 @@ export default function MangaReader() {
       <div ref={scrollRef} style={{
         flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
         overflow: mangaViewMode === "scroll" ? "auto" : "hidden",
-        cursor: mangaViewMode !== "scroll" && pdfReady ? "pointer" : "default",
+        cursor: mangaViewMode !== "scroll" && pdfReady ? "default" : "default",
       }}>
         {!pdfReady ? <div style={{ color: "var(--text-dim)", fontSize: ".9rem" }} />
         : mangaViewMode === "scroll" ? (
@@ -609,7 +609,7 @@ export default function MangaReader() {
             })}
           </div>
         ) : mangaViewMode === "double" && doublePages ? (
-          <div style={{ display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 0, padding: "0", flexDirection: isRtl ? "row-reverse" : "row", transform: `scale(${mangaZoom}) translate(${panOffset.x / mangaZoom}px, ${panOffset.y / mangaZoom}px)`, transformOrigin: "center", transition: isDragging ? "none" : "transform 0.2s ease", cursor: isDragging ? "grabbing" : "pointer" }}>
+          <div style={{ display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 0, padding: "0", flexDirection: isRtl ? "row-reverse" : "row", transform: `scale(${mangaZoom}) translate(${panOffset.x / mangaZoom}px, ${panOffset.y / mangaZoom}px)`, transformOrigin: "center", transition: isDragging ? "none" : "transform 0.2s ease", cursor: isDragging ? "grabbing" : "default" }}>
             {doublePages.left !== null && (
               <div style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: isRtl ? "flex-start" : "flex-end", overflow: "hidden" }}>
                 <PageImg src={loadedPages[doublePages.left]} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} mangaId={manga?.id} pageIdx={doublePages.left} sourceType={manga?.source_type} />
