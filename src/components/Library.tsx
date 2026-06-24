@@ -27,8 +27,9 @@ export default function Library() {
   const [sortAsc, setSortAsc] = useState(() => localStorage.getItem("nr-novel-sort-asc") !== "false");
   const [bookSearch, setBookSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"全部" | "最近阅读">("全部");
+  const [tabSliderStyle, setTabSliderStyle] = useState<React.CSSProperties>({});
 
-// 必须在所有引用它的 useCallback 之前声明
+  // 在所有引用它的 useCallback 之前声明
   const [sortedBooks, setSortedBooks] = useState<BookData[]>([]);
 
   const setSort = (field: SortField) => {
@@ -92,6 +93,18 @@ if (sortField === field) {
       .filter((b) => b.last_read_at != null)
       .sort((a, b) => (b.last_read_at ?? 0) - (a.last_read_at ?? 0));
   }, [displayList]);
+
+  const tabNames = ["全部", "最近阅读"] as const;
+
+  useEffect(() => {
+    const el = document.getElementById("lib-tabs");
+    if (!el) return;
+    const activeEl = el.querySelector(`[data-tab="${activeTab}"]`) as HTMLElement | null;
+    if (!activeEl) return;
+    const parent = el.getBoundingClientRect();
+    const rect = activeEl.getBoundingClientRect();
+    setTabSliderStyle({ left: rect.left - parent.left, width: rect.width });
+  }, [activeTab]);
 
   const ICON_LIST = ["☯", "🕯", "🌌", "🎮", "⭐", "🔥", "⚔️", "🛡️", "🏔️", "🌊", "🌸", "👻", "🤖", "🧙"];
 
@@ -296,66 +309,60 @@ if (sortField === field) {
     );
   }
 
-  // 搜索无结果：保留搜索栏和排序按钮，显示"未找到"
-  if (displayList.length === 0 && bookSearch.trim()) {
-    return (
-      <section className="library">
-        <div className="library-header">
-          <h1 className="library-title">我的书库</h1>
-          <span className="library-count">{books.length} 本书</span>
-        </div>
-        <div style={{ display: "flex", gap: 0, marginBottom: 12, background: "rgba(var(--accent-rgb),0.06)", borderRadius: "var(--radius-md)", padding: 3, width: "fit-content" }}>
-          {(["全部", "最近阅读"] as const).map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              style={{
-                fontSize: ".78rem", padding: "5px 14px", border: "none", borderRadius: "var(--radius-md)", cursor: "pointer",
-                fontWeight: activeTab === tab ? 600 : 400,
-                color: activeTab === tab ? "var(--text)" : "var(--text-dim)",
-                background: activeTab === tab ? "rgba(var(--accent-rgb),0.18)" : "transparent",
-                transition: "all 0.3s ease",
-              }}
-            >{tab} ({activeTab === "全部" ? displayList.length : recentList.length})</button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-          <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
-          <SortButton field="progress" label="进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
-          <SortButton field="favorite" label={<><StarIcon size={14} style={{verticalAlign:'middle'}} /> 收藏</>} currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
-          <SearchInput value={bookSearch} onChange={setBookSearch} />
-        </div>
-        <div className="empty-state">
-          <div className="empty-title">未找到匹配书籍</div>
-          <div className="empty-desc">没有书名包含「{bookSearch}」的书籍，试试其他关键词</div>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section className="library">
       <div className="library-header">
         <h1 className="library-title">我的书库</h1>
-        <span className="library-count">{displayList.length} 本书</span>
+        <span className="library-count">{activeTab === "最近阅读" ? recentList.length : displayList.length} 本书</span>
       </div>
-      <div style={{ display: "flex", gap: 0, marginBottom: 12, background: "rgba(var(--accent-rgb),0.06)", borderRadius: "var(--radius-md)", padding: 3, width: "fit-content" }}>
-          {(["全部", "最近阅读"] as const).map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div id="lib-tabs" className="glow-border glow-inner" style={{
+          display: "flex", gap: 0, cursor: "pointer", userSelect: "none",
+          background: "rgba(var(--accent-rgb),0.06)",
+          borderRadius: "var(--radius-md)", padding: 3,
+          position: "relative",
+          flexShrink: 1, minWidth: 0,
+          overflow: "visible",
+        }}
+          onMouseMove={(e) => {
+            const el = e.currentTarget;
+            const rect = el.getBoundingClientRect();
+            el.style.setProperty("--mx", ((e.clientX - rect.left) / rect.width) * 100 + "%");
+            el.style.setProperty("--my", ((e.clientY - rect.top) / rect.height) * 100 + "%");
+          }}
+        >
+          <div style={{
+            position: "absolute", top: 3, bottom: 3,
+            background: "rgba(var(--accent-rgb),0.18)",
+            borderRadius: "var(--radius-md)",
+            willChange: "left, width",
+            transition: "left 0.4s cubic-bezier(0.22, 0.61, 0.36, 1), width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1)",
+            zIndex: 0, ...tabSliderStyle,
+          }} />
+          {tabNames.map((tab) => (
+            <span key={tab} data-tab={tab}
+              onClick={() => { if (tab === activeTab) return; setActiveTab(tab); }}
               style={{
-                fontSize: ".78rem", padding: "5px 14px", border: "none", borderRadius: "var(--radius-md)", cursor: "pointer",
+                fontSize: ".78rem", padding: "5px 14px", position: "relative", zIndex: 1,
                 fontWeight: activeTab === tab ? 600 : 400,
                 color: activeTab === tab ? "var(--text)" : "var(--text-dim)",
-                background: activeTab === tab ? "rgba(var(--accent-rgb),0.18)" : "transparent",
-                transition: "all 0.3s ease",
+                transition: "color 0.3s ease",
+                flexShrink: 0, whiteSpace: "nowrap", cursor: "pointer",
               }}
-            >{tab} ({activeTab === "全部" ? displayList.length : recentList.length})</button>
+            >{tab} ({tab === "全部" ? displayList.length : recentList.length})</span>
           ))}
+          <SearchInput value={bookSearch} onChange={setBookSearch} />
         </div>
-      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-        <SearchInput value={bookSearch} onChange={setBookSearch} />
         <SortButton field="name" label="名称" currentField={sortField} asc={sortAsc} onClick={() => setSort("name")} />
         <SortButton field="progress" label="进度" currentField={sortField} asc={sortAsc} onClick={() => setSort("progress")} />
         <SortButton field="favorite" label={<><StarIcon size={14} style={{verticalAlign:'middle'}} /> 收藏</>} currentField={sortField} asc={sortAsc} onClick={() => setSort("favorite")} />
       </div>
+      {displayList.length === 0 && bookSearch.trim() ? (
+        <div className="empty-state">
+          <div className="empty-title">未找到匹配书籍</div>
+          <div className="empty-desc">没有书名包含「{bookSearch}」的书籍，试试其他关键词</div>
+        </div>
+      ) : (
       <div className="book-grid">
         {(activeTab === "最近阅读" ? recentList : displayList).map((book) => (
           <div
@@ -383,6 +390,7 @@ if (sortField === field) {
           </div>
         ))}
       </div>
+      )}
 
       {selectMode && (
         <BatchActionBar
@@ -573,11 +581,11 @@ function getBookIcon(title: string): string {
 }
 
 
-/** 搜索输入框组件，与排序按钮在同一排 */
+/** 搜索输入框组件，与标签在同一排 */
 function SearchInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
-    <div style={{ position: "relative", flex: 1, minWidth: 140, maxWidth: 260 }}>
+    <div style={{ position: "relative", zIndex: 1, alignSelf: "center", marginLeft: "auto", minWidth: 100, maxWidth: 180 }}>
       <input
         ref={ref}
         placeholder="搜索书名..."
@@ -586,16 +594,17 @@ function SearchInput({ value, onChange }: { value: string; onChange: (v: string)
         onKeyDown={(e) => {
           if (e.key === "Escape") { onChange(""); ref.current?.blur(); }
         }}
+        onClick={(e) => e.stopPropagation()}
         style={{
-          width: "100%", padding: "5px 10px", fontSize: ".78rem",
+          width: "100%", padding: "5px 8px", fontSize: ".78rem",
           background: "var(--glass-bg)", color: "var(--text)",
           border: "1px solid var(--border-glass)", borderRadius: "var(--radius-md)",
           outline: "none", boxSizing: "border-box",
         }}
       />
       {value && (
-        <span onClick={() => onChange("")}
-          style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: ".7rem", cursor: "pointer", opacity: 0.4, color: "var(--text)", padding: "2px 4px" }}>
+        <span onClick={(e) => { e.stopPropagation(); onChange(""); }}
+          style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", fontSize: ".65rem", cursor: "pointer", opacity: 0.4, color: "var(--text)", padding: "2px 4px" }}>
           ✕
         </span>
       )}

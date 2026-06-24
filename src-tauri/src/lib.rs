@@ -542,6 +542,8 @@ pub struct SortComicMeta {
     pub book_icon: String,
     #[serde(default)]
     pub series_id: Option<String>,
+    #[serde(default)]
+    pub last_read_at: Option<i64>,
 }
 
 #[tauri::command]
