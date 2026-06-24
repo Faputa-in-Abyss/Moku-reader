@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useStore } from '../store';
 import SidebarHandle from './SidebarHandle';
 import WindowControls from './WindowControls';
@@ -286,6 +286,7 @@ export default function Reader() {
   const sidebarOpenRef = useRef(false);
   const settingsOpenRef = useRef(false);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
+  const skipChapterLoadRef = useRef(false);
 
   sidebarOpenRef.current = sidebarOpen;
   settingsOpenRef.current = settingsOpen;
@@ -380,6 +381,25 @@ export default function Reader() {
       }
 
       setIsLoading(false);
+
+      // 加载完成后，后台静默预取前后章节
+      if (book) {
+        chapterLoader.prefetchRange(book.id, currentChapter, chapters.length, {
+          font_size: fontSize,
+          line_height: 2.0,
+          container_width: readerDoublePage
+            ? Math.floor(window.innerWidth / 2) - 18
+            : contentWidth,
+          container_height: window.innerHeight,
+          double_page: readerDoublePage,
+        });
+      }
+    }
+
+    // 如果已由 switchChapter 同步填充，跳过异步加载
+    if (skipChapterLoadRef.current) {
+      skipChapterLoadRef.current = false;
+      return;
     }
 
     // 章节切换时重置
@@ -491,6 +511,26 @@ export default function Reader() {
     });
   }, [chapterText, pageBreaks]);
 
+  const switchChapter = useCallback((newIdx: number) => {
+    // 同步从缓存取数据
+    const cachedText = chapterLoader.textCache.current.get(newIdx);
+    const cachedPages = chapterLoader.paginationCache.current.get(newIdx);
+
+    if (cachedText && cachedPages) {
+      // 缓存命中：一口气设所有状态，零中间态，跳过章节加载 effect
+      skipChapterLoadRef.current = true;
+      setChapterText(cachedText.text);
+      setPageBreaks(cachedPages.pages);
+      setTotalPages(cachedPages.total_pages);
+      const saved = readingProgress.restorePosition(newIdx);
+      setPageIndex(saved?.chapterIndex === newIdx ? saved.pageIndex : 0);
+      setChapter(newIdx);
+    } else {
+      // 缓存未命中（预取都来不及，极低概率）：走正常异步流程
+      setChapter(newIdx);
+    }
+  }, [chapterLoader, readingProgress, setChapter]);
+
   // ── 翻页 ──
   const pageStep = readingMode === 'page' && readerDoublePage ? 2 : 1;
 
@@ -507,10 +547,12 @@ export default function Reader() {
       if (pageIndex < pages.length - pageStep) {
         setPageIndex(pageIndex + pageStep);
       } else {
-        transition.goNext();
+        saveScrollPosition(currentChapter);
+        switchChapter(currentChapter + 1);
       }
     } else {
-      transition.goNext();
+      saveScrollPosition(currentChapter);
+      switchChapter(currentChapter + 1);
     }
   };
 
@@ -527,10 +569,12 @@ export default function Reader() {
       if (pageIndex > 0) {
         setPageIndex(Math.max(0, pageIndex - pageStep));
       } else {
-        transition.goPrev();
+        saveScrollPosition(currentChapter);
+        switchChapter(currentChapter - 1);
       }
     } else {
-      transition.goPrev();
+      saveScrollPosition(currentChapter);
+      switchChapter(currentChapter - 1);
     }
   };
 
@@ -548,7 +592,6 @@ export default function Reader() {
     if (
       !book?.id ||
       !chapterText ||
-      transition.fadeState !== 'visible' ||
       readingMode !== 'page'
     )
       return;
@@ -607,11 +650,11 @@ export default function Reader() {
         el,
         () => {
           saveScrollPosition(currentChapter);
-          transition.goNext();
+          switchChapter(currentChapter + 1);
         },
         () => {
           saveScrollPosition(currentChapter);
-          transition.goPrev();
+          switchChapter(currentChapter - 1);
         }
       );
     }
@@ -785,10 +828,6 @@ export default function Reader() {
   }, []);
 
   // ── 渲染 ──
-  const fadeVisible = transition.fadeState === 'visible';
-  const fadeIn = transition.fadeState === 'fading-in';
-  const fadeOut = transition.fadeState === 'fading-out';
-  const showContent = !fadeOut;
 
   const pageFontFamily =
     readerFont || "'Georgia','Noto Serif SC',serif";
@@ -806,36 +845,27 @@ export default function Reader() {
           width: '50%',
         }}
       >
-        {showContent && (
+        {chapters?.[currentChapter]?.title && pageIndex === 0 && (
           <div
             style={{
-              opacity: fadeIn ? 0 : 1,
-              transition: 'opacity 0.3s ease',
+              textAlign: 'center',
+              marginBottom: 16,
+              fontSize: '.95rem',
+              fontWeight: 600,
+              color: 'var(--text)',
             }}
           >
-            {chapters?.[currentChapter]?.title && pageIndex === 0 && (
-              <div
-                style={{
-                  textAlign: 'center',
-                  marginBottom: 16,
-                  fontSize: '.95rem',
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                }}
-              >
-                {chapters[currentChapter].title}
-              </div>
-            )}
-            <PageRenderer
-              text={p}
-              fontSize={fontSize}
-              lineHeight={2}
-              fontFamily={pageFontFamily}
-              fontWeight={fontBold ? 700 : 400}
-              textColor={readerTextColor}
-            />
+            {chapters[currentChapter].title}
           </div>
         )}
+        <PageRenderer
+          text={p}
+          fontSize={fontSize}
+          lineHeight={2}
+          fontFamily={pageFontFamily}
+          fontWeight={fontBold ? 700 : 400}
+          textColor={readerTextColor}
+        />
       </div>
     );
   };
@@ -852,21 +882,14 @@ export default function Reader() {
           width: '50%',
         }}
       >
-        <div
-          style={{
-            opacity: fadeIn ? 0 : 1,
-            transition: 'opacity 0.3s ease',
-          }}
-        >
-          <PageRenderer
-            text={p}
-            fontSize={fontSize}
-            lineHeight={2}
-            fontFamily={pageFontFamily}
-            fontWeight={fontBold ? 700 : 400}
-            textColor={readerTextColor}
-          />
-        </div>
+        <PageRenderer
+          text={p}
+          fontSize={fontSize}
+          lineHeight={2}
+          fontFamily={pageFontFamily}
+          fontWeight={fontBold ? 700 : 400}
+          textColor={readerTextColor}
+        />
       </div>
     );
   };
@@ -883,63 +906,56 @@ export default function Reader() {
         width: '100%',
       }}
     >
-      {showContent ? (
+      {chapterText !== '(没有章节内容)' &&
+        chapterText !== '' &&
+        !chapterText.startsWith('(读取章节失败') && (
+          <div
+            style={{
+              textAlign: 'center',
+              marginBottom: 24,
+              fontSize: '1.1rem',
+              fontWeight: 600,
+              color: 'var(--text)',
+            }}
+          >
+            {chapters?.[currentChapter]?.title || ''}
+          </div>
+        )}
+      {chapterText ? (
+        readingMode === 'page' ? (
+          pages[pageIndex] ? (
+            <PageRenderer
+              text={pages[pageIndex]}
+              fontSize={fontSize}
+              lineHeight={2}
+              fontFamily={pageFontFamily}
+              fontWeight={fontBold ? 700 : 400}
+              textColor={readerTextColor}
+            />
+          ) : pageBreaks.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-dim)' }}>正在分页...</div>
+          ) : null
+        ) : (
+          <PageRenderer
+            text={chapterText}
+            fontSize={fontSize}
+            lineHeight={2}
+            fontFamily={pageFontFamily}
+            fontWeight={fontBold ? 700 : 400}
+            textColor={readerTextColor}
+          />
+        )
+      ) : (
         <div
           style={{
-            opacity: fadeIn ? 0 : 1,
-            transition: 'opacity 0.3s ease',
+            textAlign: 'center',
+            padding: 40,
+            color: 'var(--text-dim)',
           }}
         >
-          {chapterText !== '(没有章节内容)' &&
-            chapterText !== '' &&
-            !chapterText.startsWith('(读取章节失败') && (
-              <div
-                style={{
-                  textAlign: 'center',
-                  marginBottom: 24,
-                  fontSize: '1.1rem',
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                }}
-              >
-                {chapters?.[currentChapter]?.title || ''}
-              </div>
-            )}
-          {chapterText ? (
-            readingMode === 'page' ? (
-              pages[pageIndex] ? (
-                <PageRenderer
-                  text={pages[pageIndex]}
-                  fontSize={fontSize}
-                  lineHeight={2}
-                  fontFamily={pageFontFamily}
-                  fontWeight={fontBold ? 700 : 400}
-                  textColor={readerTextColor}
-                />
-              ) : null
-            ) : (
-              <PageRenderer
-                text={chapterText}
-                fontSize={fontSize}
-                lineHeight={2}
-                fontFamily={pageFontFamily}
-                fontWeight={fontBold ? 700 : 400}
-                textColor={readerTextColor}
-              />
-            )
-          ) : (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: 40,
-                color: 'var(--text-dim)',
-              }}
-            >
-              {isLoading ? '加载中...' : ''}
-            </div>
-          )}
+          {isLoading ? '加载中...' : ''}
         </div>
-      ) : null}
+      )}
     </div>
   );
 
@@ -1180,7 +1196,7 @@ export default function Reader() {
           open={sidebarOpen}
           onSelect={(idx) => {
             saveScrollPosition(currentChapter);
-            transition.goToChapter(idx);
+            switchChapter(idx);
           }}
           onClose={() => setSidebarOpen(false)}
           onRemoveBookmark={removeBookmark}
