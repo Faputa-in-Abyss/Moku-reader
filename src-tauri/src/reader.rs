@@ -79,6 +79,21 @@ pub struct ReadingPositionData {
     pub scroll_offset: f64,
 }
 
+// ===== 全文搜索数据结构 =====
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchSnippet {
+    pub chapter_index: usize,
+    pub chapter_title: String,
+    /// 匹配文本在 full_text 中的绝对位置
+    pub abs_start: usize,
+    pub abs_end: usize,
+    /// 在章节文本内的偏移（用于精确跳转）
+    pub chapter_char_offset: usize,
+    /// 上下文片段（关键词用 {{ }} 包围，前端替换为高亮标记）
+    pub snippet: String,
+}
+
 // ===== 缓存管理 =====
 
 pub fn load_book_cache(book_id: &str, file_path: &str, file_type: &str) -> Result<CachedBook, String> {
@@ -128,6 +143,104 @@ pub fn drop_book_cache(book_id: &str) {
         pcache.retain(|key, _| key.0 != book_id);
     }
     println!("[reader] 释放缓存: book={}", book_id);
+}
+
+// ===== 全文搜索 =====
+
+/// 在已缓存的书籍全文搜索关键词，返回匹配片段列表（最多 200 条）
+pub fn search_in_book(book_id: &str, query: &str) -> Result<Vec<SearchSnippet>, String> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let cached = get_cached_book(book_id)
+        .ok_or_else(|| format!("书籍未加载到缓存: {}", book_id))?;
+
+    let full_text = &cached.full_text;
+    let query_lower = query.to_lowercase();
+    let query_byte_len = query.len();
+    let context_byte_approx: usize = 60; // 约 20 个中文字符
+    let max_results: usize = 200;
+
+    let mut results: Vec<SearchSnippet> = Vec::new();
+
+    for ch in &cached.chapters {
+        let ch_start = ch.start_pos.min(full_text.len());
+        let ch_end = ch.end_pos.min(full_text.len());
+        if ch_start >= ch_end {
+            continue;
+        }
+        let chapter_text = &full_text[ch_start..ch_end];
+        let chapter_text_lower = chapter_text.to_lowercase();
+
+        // 预构建字符边界字节索引列表，用于安全切片
+        let boundaries: Vec<usize> = chapter_text.char_indices().map(|(i, _)| i).collect();
+
+        let mut search_byte_from = 0usize;
+        loop {
+            if results.len() >= max_results {
+                break;
+            }
+            let rel_byte = match chapter_text_lower[search_byte_from..].find(&query_lower) {
+                Some(p) => search_byte_from + p,
+                None => break,
+            };
+
+            // 安全计算上下文 start：找 <= target 的最近字符边界
+            let ctx_start = {
+                let target = rel_byte.saturating_sub(context_byte_approx);
+                match boundaries.binary_search(&target) {
+                    Ok(i) | Err(i) if i > 0 => boundaries[i - 1],
+                    _ => 0,
+                }
+            };
+
+            // 安全计算上下文 end：找 >= target 的最近字符边界
+            let ctx_end = {
+                let target = (rel_byte + query_byte_len + context_byte_approx).min(chapter_text.len());
+                if target >= chapter_text.len() {
+                    chapter_text.len()
+                } else {
+                    match boundaries.binary_search(&target) {
+                        Ok(i) => boundaries[i],
+                        Err(i) if i < boundaries.len() => boundaries[i],
+                        _ => chapter_text.len(),
+                    }
+                }
+            };
+
+            let mut snippet = String::new();
+            if ctx_start > 0 {
+                snippet.push('\u{2026}');
+            }
+            snippet.push_str(&chapter_text[ctx_start..rel_byte]);
+            snippet.push_str("{{");
+            let kw_end = (rel_byte + query_byte_len).min(chapter_text.len());
+            snippet.push_str(&chapter_text[rel_byte..kw_end]);
+            snippet.push_str("}}");
+            snippet.push_str(&chapter_text[kw_end..ctx_end]);
+            if ctx_end < chapter_text.len() {
+                snippet.push('\u{2026}');
+            }
+
+            results.push(SearchSnippet {
+                chapter_index: ch.index,
+                chapter_title: ch.title.clone(),
+                abs_start: ch_start + rel_byte,
+                abs_end: ch_start + rel_byte + query_byte_len,
+                chapter_char_offset: rel_byte,
+                snippet,
+            });
+
+            search_byte_from = rel_byte + query_byte_len;
+        }
+
+        if results.len() >= max_results {
+            break;
+        }
+    }
+
+    Ok(results)
 }
 
 pub fn get_chapter_text_from_cache(book_id: &str, chapter_idx: usize) -> Result<(String, String), String> {
