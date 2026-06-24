@@ -15,7 +15,6 @@ export function useReadingProgress(bookId: string | undefined) {
   const saveTimer = useRef<number>(0);
   const positionRef = useRef<ReadingPosition | null>(null);
 
-  // 恢复位置：从 localStorage 读取指定章节的位置
   const restorePosition = useCallback((chapterIndex: number): ReadingPosition | null => {
     if (!bookId) return null;
     try {
@@ -25,19 +24,13 @@ export function useReadingProgress(bookId: string | undefined) {
     return null;
   }, [bookId]);
 
-  // 保存位置：带 debounce 写入 localStorage + 后端
   const savePosition = useCallback((pos: Omit<ReadingPosition, 'updatedAt'>) => {
     positionRef.current = { ...pos, updatedAt: Date.now() };
-
     clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       if (!bookId || !positionRef.current) return;
-
-      // localStorage（按章节存储，让后退回上一章也能恢复位置）
       const key = `${STORAGE_KEY_PREFIX}${bookId}-${positionRef.current.chapterIndex}`;
       localStorage.setItem(key, JSON.stringify(positionRef.current));
-
-      // 后端
       invoke('save_reading_position', {
         bookId,
         chapterIndex: positionRef.current.chapterIndex,
@@ -48,14 +41,11 @@ export function useReadingProgress(bookId: string | undefined) {
     }, 500);
   }, [bookId]);
 
-  // 立即保存（关闭阅读器时）
   const saveNow = useCallback(() => {
     clearTimeout(saveTimer.current);
     if (!bookId || !positionRef.current) return;
-
     const key = `${STORAGE_KEY_PREFIX}${bookId}-${positionRef.current.chapterIndex}`;
     localStorage.setItem(key, JSON.stringify(positionRef.current));
-
     invoke('save_reading_position', {
       bookId,
       chapterIndex: positionRef.current.chapterIndex,
@@ -63,18 +53,14 @@ export function useReadingProgress(bookId: string | undefined) {
       pageIndex: positionRef.current.pageIndex,
       scrollOffset: positionRef.current.scrollOffset,
     }).catch(() => {});
-
     invoke('update_progress', {
       bookId,
       chapterIndex: positionRef.current.chapterIndex,
     }).catch(() => {});
   }, [bookId]);
 
-  // 清理
   useEffect(() => {
-    return () => {
-      clearTimeout(saveTimer.current);
-    };
+    return () => { clearTimeout(saveTimer.current); };
   }, []);
 
   return { restorePosition, savePosition, saveNow, positionRef };

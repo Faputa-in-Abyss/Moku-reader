@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useStore } from '../store';
 import SidebarHandle from './SidebarHandle';
 import WindowControls from './WindowControls';
-import { GearIcon, topbarGlassStyle, BackButton } from './SharedUI';
+import { ContextMenu, GearIcon, MenuDivider, MenuItem, topbarGlassStyle, BackButton } from './SharedUI';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useChapterLoader } from '../hooks/useChapterLoader';
 import { useReadingProgress } from '../hooks/useReadingProgress';
@@ -11,6 +11,7 @@ import { useChapterTransition } from '../hooks/useChapterTransition';
 import { useReaderKeyboard } from '../hooks/useReaderKeyboard';
 import PageRenderer from './PageRenderer';
 import ChapterList from './ChapterList';
+import { BookmarkIcon, LayoutIcon, TextIcon, FontIcon, PaletteIcon, BoldIcon, ChevronRightIcon, MinusIcon, PlusIcon } from './FlatIcons';
 
 const COLOR_PRESETS = [
   '#e8ddd0', '#d4a96a', '#c0392b', '#e67e22',
@@ -18,28 +19,6 @@ const COLOR_PRESETS = [
   '#bdc3c7', '#7f8c8d', '#2c3e50', '#1a1a2e',
 ];
 
-function CtxItem({ label, onClick }: { label: string; onClick: () => void }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        padding: '10px 16px',
-        cursor: 'pointer',
-        fontSize: '.85rem',
-        color: hover ? 'var(--accent)' : 'var(--text)',
-        background: hover
-          ? 'rgba(var(--accent-rgb),0.06)'
-          : 'transparent',
-        transition: 'all 0.15s ease',
-      }}
-    >
-      {label}
-    </div>
-  );
-}
 
 function FontSearchDropdown({
   fonts,
@@ -1249,7 +1228,7 @@ export default function Reader() {
                   marginBottom: 8,
                 }}
               >
-                阅读模式
+                <LayoutIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />阅读模式
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {['page', 'scroll'].map((mode) => (
@@ -1282,7 +1261,7 @@ export default function Reader() {
                   marginBottom: 8,
                 }}
               >
-                字号
+                <TextIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />字号
               </div>
               <div
                 style={{
@@ -1296,7 +1275,7 @@ export default function Reader() {
                   style={{ padding: '4px 10px', fontSize: '.7rem' }}
                   onClick={() => setFontSize(fontSize - 0.1)}
                 >
-                  A-
+                  <MinusIcon size={14} />
                 </button>
                 <span
                   style={{
@@ -1313,7 +1292,7 @@ export default function Reader() {
                   style={{ padding: '4px 10px', fontSize: '.7rem' }}
                   onClick={() => setFontSize(fontSize + 0.1)}
                 >
-                  A+
+                  <PlusIcon size={14} />
                 </button>
               </div>
             </div>
@@ -1325,7 +1304,7 @@ export default function Reader() {
                   marginBottom: 8,
                 }}
               >
-                字体
+                <FontIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />字体
               </div>
               <FontSearchDropdown
                 fonts={FONT_LIST}
@@ -1359,113 +1338,41 @@ export default function Reader() {
           </div>
         )}
 
-        {/* 右键菜单 */}
+        {/* 右键菜单 — 漫画库同款扁平图标 + 文字 */}
         {ctxMenu && !ctxSubMenu && (
           <div
-            style={{
-              position: 'fixed',
-              left: 0,
-              top: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 599,
-              cursor: 'default',
-            }}
-            onClick={() => {
-              setCtxMenu(null);
-              setCtxSubMenu(null);
-            }}
+            style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, zIndex: 599, cursor: 'default' }}
+            onClick={() => { setCtxMenu(null); setCtxSubMenu(null); }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <div
-              style={{
-                position: 'fixed',
-                left: ctxMenu.x,
-                top: ctxMenu.y,
-                zIndex: 600,
-                background: 'var(--glass-bg)',
-                backdropFilter:
-                  'blur(var(--glass-blur)) saturate(var(--glass-saturate))',
-                border: '1px solid var(--border-glass)',
-                borderRadius: 'var(--radius-md)',
-                padding: '6px 0',
-                minWidth: 190,
-                boxShadow: '0 8px 40px var(--shadow)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <CtxItem
-                label={
-                  bookmarks.find((b) => b.chapterIndex === currentChapter)
-                    ? '🔖 取消书签'
-                    : '🔖 添加书签'
-                }
+            <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
+              <MenuItem
+                icon={<BookmarkIcon size={16} />}
+                label={bookmarks.find((b) => b.chapterIndex === currentChapter) ? '取消书签' : '添加书签'}
                 onClick={() => {
-                  if (
-                    bookmarks.find((b) => b.chapterIndex === currentChapter)
-                  ) {
+                  if (bookmarks.find((b) => b.chapterIndex === currentChapter)) {
                     removeBookmark(currentChapter);
                   } else {
-                    addBookmark(
-                      currentChapter,
-                      chapters?.[currentChapter]?.title ||
-                        `第${currentChapter + 1}章`
-                    );
+                    addBookmark(currentChapter, chapters?.[currentChapter]?.title || `第${currentChapter + 1}章`);
                   }
                   setCtxMenu(null);
                 }}
               />
-              <div
-                style={{
-                  height: 1,
-                  background: 'var(--border-glass)',
-                  margin: '4px 12px',
-                }}
+              <MenuDivider />
+              <MenuItem icon={<PaletteIcon size={16} />} label="主题颜色" onClick={() => setCtxSubMenu('colors')} />
+              <MenuItem icon={<FontIcon size={16} />} label="字体" onClick={() => setCtxSubMenu('font')} />
+              <MenuDivider />
+              <MenuItem icon={<BoldIcon size={16} />} label={fontBold ? '取消加粗' : '字体加粗'}
+                onClick={() => { setFontBold(!fontBold); setCtxMenu(null); }}
               />
-              <CtxItem
-                label="主题颜色 ▸"
-                onClick={() => setCtxSubMenu('colors')}
+              <MenuDivider />
+              <MenuItem icon={<MinusIcon size={16} />} label="缩小字号"
+                onClick={() => { setFontSize(fontSize - 0.1); setCtxMenu(null); }}
               />
-              <CtxItem
-                label="字体 ▸"
-                onClick={() => setCtxSubMenu('font')}
+              <MenuItem icon={<PlusIcon size={16} />} label="放大字号"
+                onClick={() => { setFontSize(fontSize + 0.1); setCtxMenu(null); }}
               />
-              <div
-                style={{
-                  height: 1,
-                  background: 'var(--border-glass)',
-                  margin: '4px 12px',
-                }}
-              />
-              <CtxItem
-                label={fontBold ? '字体加粗' : '字体加粗'}
-                onClick={() => {
-                  setFontBold(!fontBold);
-                  setCtxMenu(null);
-                }}
-              />
-              <div
-                style={{
-                  height: 1,
-                  background: 'var(--border-glass)',
-                  margin: '4px 12px',
-                }}
-              />
-              <CtxItem
-                label="A- 缩小字号"
-                onClick={() => {
-                  setFontSize(fontSize - 0.1);
-                  setCtxMenu(null);
-                }}
-              />
-              <CtxItem
-                label="A+ 放大字号"
-                onClick={() => {
-                  setFontSize(fontSize + 0.1);
-                  setCtxMenu(null);
-                }}
-              />
-            </div>
+            </ContextMenu>
           </div>
         )}
 
@@ -1514,7 +1421,7 @@ export default function Reader() {
                   justifyContent: 'space-between',
                 }}
               >
-                <span>颜色</span>
+                <span><PaletteIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />颜色</span>
                 <span
                   style={{
                     cursor: 'pointer',
@@ -1535,7 +1442,7 @@ export default function Reader() {
                   marginBottom: 6,
                 }}
               >
-                字体颜色
+                <FontIcon size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />字体颜色
               </div>
               <div
                 style={{
@@ -1590,7 +1497,7 @@ export default function Reader() {
                   marginBottom: 6,
                 }}
               >
-                背景颜色
+                <PaletteIcon size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />背景颜色
               </div>
               <div
                 style={{
@@ -1644,38 +1551,11 @@ export default function Reader() {
         {/* 字体二级菜单 */}
         {ctxMenu && ctxSubMenu === 'font' && (
           <div
-            style={{
-              position: 'fixed',
-              left: 0,
-              top: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 609,
-              cursor: 'default',
-            }}
-            onClick={() => {
-              setCtxMenu(null);
-              setCtxSubMenu(null);
-            }}
+            style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, zIndex: 609, cursor: 'default' }}
+            onClick={() => { setCtxMenu(null); setCtxSubMenu(null); }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <div
-              style={{
-                position: 'fixed',
-                left: ctxMenu.x + 10,
-                top: ctxMenu.y,
-                zIndex: 610,
-                background: 'var(--glass-bg)',
-                backdropFilter:
-                  'blur(var(--glass-blur)) saturate(var(--glass-saturate))',
-                border: '1px solid var(--border-glass)',
-                borderRadius: 'var(--radius-md)',
-                padding: '6px 0',
-                minWidth: 200,
-                boxShadow: '0 8px 40px var(--shadow)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
+            <ContextMenu x={ctxMenu.x + 10} y={ctxMenu.y}>
               <div
                 style={{
                   padding: '8px 14px 4px',
@@ -1685,35 +1565,22 @@ export default function Reader() {
                   justifyContent: 'space-between',
                 }}
               >
-                <span>字体</span>
+                <span><FontIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />字体</span>
                 <span
-                  style={{
-                    cursor: 'pointer',
-                    color: 'var(--text-dim)',
-                    fontSize: '.8rem',
-                  }}
-                  onClick={() => {
-                    setCtxSubMenu(null);
-                  }}
+                  style={{ cursor: 'pointer', color: 'var(--text-dim)', fontSize: '.8rem' }}
+                  onClick={() => { setCtxSubMenu(null); }}
                 >
                   ← 返回
                 </span>
               </div>
               {FONT_LIST_SHORT.map((f) => (
-                <CtxItem
+                <MenuItem
                   key={f.value}
-                  label={
-                    (readerFont || '') === f.value ? '✓ ' + f.label : f.label
-                  }
-                  onClick={() => {
-                    setReaderFont(f.value);
-                    setCtxMenu(null);
-                    setCtxSubMenu(null);
-                  }}
+                  label={(readerFont || '') === f.value ? '✓ ' + f.label : f.label}
+                  onClick={() => { setReaderFont(f.value); setCtxMenu(null); setCtxSubMenu(null); }}
                 />
-
               ))}
-            </div>
+            </ContextMenu>
           </div>
         )}
       </div>
