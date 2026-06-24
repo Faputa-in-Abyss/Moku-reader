@@ -429,3 +429,12 @@ header:hover .light-follow { opacity: 1; }
 
 #series-tabs { overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; }
 #series-tabs .series-tab { display: inline-flex; white-space: nowrap; }
+
+/* ===== 拖拽排序 - dnd-kit ===== */
+.book-card.dragging {
+  opacity: 0.85 !important;
+  z-index: 999 !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25) !important;
+  pointer-events: none;
+  cursor: grabbing;
+}
