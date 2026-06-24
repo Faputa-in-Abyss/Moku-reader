@@ -89,7 +89,7 @@ if (sortField === field) {
 
   // 系列标签
   const seriesTabs = useMemo(() => {
-    return ["全部", ...Object.keys(seriesMap)];
+    return ["全部", "最近阅读", ...Object.keys(seriesMap)];
   }, [seriesMap]);
 
   // 每个系列各自维护一份过滤后的列表，保证 DOM 稳定
@@ -97,7 +97,11 @@ if (sortField === field) {
     const map: Record<string, ComicMeta[]> = {};
     for (const name of seriesTabs) {
       if (name === "全部") map[name] = displayList;
-      else {
+      else if (name === "最近阅读") {
+        map[name] = displayList
+          .filter((c) => c.last_read_at != null)
+          .sort((a, b) => (b.last_read_at ?? 0) - (a.last_read_at ?? 0));
+      } else {
         const sids = seriesMap[name] || [];
         map[name] = displayList.filter((c) => sids.includes(c.id));
       }
@@ -123,7 +127,7 @@ if (sortField === field) {
 
   // 当前选中的系列被删除时自动回到"全部"
   useEffect(() => {
-    if (activeSeries !== "全部" && !seriesMap[activeSeries]) {
+    if (activeSeries !== "全部" && activeSeries !== "最近阅读" && !seriesMap[activeSeries]) {
       setActiveSeries("全部");
     }
   }, [activeSeries, seriesMap]);
@@ -436,7 +440,7 @@ if (sortField === field) {
                   setActiveSeries(name);
                 }}
                 onContextMenu={(e) => {
-                  if (name === "全部") return;
+                  if (name === "全部" || name === "最近阅读") return;
                   e.preventDefault();
                   setSeriesCtx({ name, x: e.clientX, y: e.clientY });
                 }}
