@@ -525,13 +525,17 @@ export default function Reader() {
     if (readingMode === 'page') {
       if (pageIndex < pages.length - pageStep) {
         setPageIndex(pageIndex + pageStep);
-      } else {
+      } else if (currentChapter < chapters.length - 1) {
         saveScrollPosition(currentChapter);
         switchChapter(currentChapter + 1);
+      } else {
+        showTip('已经是最后一页');
       }
-    } else {
+    } else if (currentChapter < chapters.length - 1) {
       saveScrollPosition(currentChapter);
       switchChapter(currentChapter + 1);
+    } else {
+      showTip('已经是最后一章');
     }
   };
 
@@ -547,13 +551,17 @@ export default function Reader() {
     if (readingMode === 'page') {
       if (pageIndex > 0) {
         setPageIndex(Math.max(0, pageIndex - pageStep));
-      } else {
+      } else if (currentChapter > 0) {
         saveScrollPosition(currentChapter);
         switchChapter(currentChapter - 1);
+      } else {
+        showTip('已经是第一页');
       }
-    } else {
+    } else if (currentChapter > 0) {
       saveScrollPosition(currentChapter);
       switchChapter(currentChapter - 1);
+    } else {
+      showTip('已经是第一章');
     }
   };
 

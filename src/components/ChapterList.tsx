@@ -52,6 +52,22 @@ export default function ChapterList({
     return ch.title?.includes(chapterSearch) || `第${i + 1}章`.includes(chapterSearch);
   }) || [];
 
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // 侧栏打开时自动滚动到当前章节
+  useEffect(() => {
+    if (!open || searchTab !== '章节') return;
+    requestAnimationFrame(() => {
+      const el = listRef.current;
+      if (!el) return;
+      const activeEl = el.querySelector('[data-current="true"]') as HTMLElement | null;
+      if (activeEl) {
+        // 当前章节定位到容器上方约 0.5 个章节高度处
+        el.scrollTop = activeEl.offsetTop - el.clientHeight * 0.25 - activeEl.offsetHeight * 2;
+      }
+    });
+  }, [open, searchTab, chapterSearch]);
+
   const tabNames = ['章节', '正文'] as const;
 
   useEffect(() => {
@@ -306,7 +322,7 @@ export default function ChapterList({
       )}
 
       {/* 内容区域 */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
         {searchTab === '章节' ? (
           /* ── 章节列表 ── */
           filtered.length === 0 ? (
@@ -316,6 +332,7 @@ export default function ChapterList({
               const realIdx = chapters?.indexOf(ch) ?? fi;
               return (
                 <div key={realIdx}
+                  data-current={realIdx === currentChapter ? 'true' : undefined}
                   onClick={() => handleSelect(realIdx)}
                   style={{
                     padding: '10px 20px', cursor: 'pointer', fontSize: '.85rem',
