@@ -363,6 +363,7 @@ if (sortField === field) {
           <div
             key={book.id}
             className="book-card"
+            id={`lib-card-${book.id}`}
             onClick={() => {
               if (selectMode) toggleSelect(book.id);
               else openReader(book);
