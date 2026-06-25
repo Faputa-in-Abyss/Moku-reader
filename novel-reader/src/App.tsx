@@ -4,24 +4,45 @@ import Header from "./components/Header";
 import Library from "./components/Library";
 import Reader from "./components/Reader";
 import DebugPanel, { initDebugCapture } from "./components/DebugPanel";
-import OnlineSearch from "./components/OnlineSearch";
+import MangaLibrary from "./components/MangaLibrary";
+import MangaReader from "./components/MangaReader";
+import ImportToast from "./components/ImportToast";
 import { useStore } from "./store";
 
 initDebugCapture();
 
 export default function App() {
-  const theme = useStore((s) => s.theme);
   const reading = useStore((s) => s.reading);
+  const viewMode = useStore((s) => s.viewMode);
+  const mangaReading = useStore((s) => s.mangaReading);
 
   React.useEffect(() => {
-    const saved = localStorage.getItem("nr-theme") || "dark";
-    document.documentElement.setAttribute("data-theme", saved);
-    useStore.getState().setTheme(saved as any);
+    useStore.getState().setTheme(
+      (localStorage.getItem("nr-theme") || "dark") as "light" | "dark"
+    );
+    // 恢复毛玻璃强度
+    const glass = localStorage.getItem("nr-glass-intensity");
+    if (glass) {
+      document.documentElement.style.setProperty("--glass-blur", glass + "px");
+    }
+    // 恢复圆角强度
+    const radius = localStorage.getItem("nr-radius-intensity");
+    if (radius) {
+      const v = Number(radius);
+      const sm = Math.max(2, Math.round(v * 0.5));
+      const md = v;
+      const lg = Math.min(32, Math.round(v * 1.4));
+      const xl = Math.min(40, Math.round(v * 2));
+      document.documentElement.style.setProperty("--radius-sm", sm + "px");
+      document.documentElement.style.setProperty("--radius-md", md + "px");
+      document.documentElement.style.setProperty("--radius-lg", lg + "px");
+      document.documentElement.style.setProperty("--radius-xl", xl + "px");
+    }
   }, []);
 
   return (
     <>
-      <ParticleCanvas />
+      {!reading && !mangaReading && <ParticleCanvas />}
       <div
         className="theme-fade"
         id="theme-fade"
@@ -36,10 +57,37 @@ export default function App() {
         }}
       />
       <Header />
-      <Library />
+      <div style={{
+        position: "fixed",
+        top: 50,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: "hidden",
+      }}>
+        {viewMode === "library" && !reading && (
+          <div style={{
+            position: "absolute", inset: 0,
+            overflowY: "auto",
+            height: "100%",
+          }}>
+            <Library />
+          </div>
+        )}
+        {viewMode === "manga" && !mangaReading && (
+          <div style={{
+            position: "absolute", inset: 0,
+            overflowY: "auto",
+            height: "100%",
+          }}>
+            <MangaLibrary />
+          </div>
+        )}
+      </div>
       {reading && <Reader />}
+      {mangaReading && <MangaReader />}
       <DebugPanel />
-      <OnlineSearch />
+      <ImportToast />
     </>
   );
 }

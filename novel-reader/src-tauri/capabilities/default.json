@@ -10,8 +10,12 @@
     "core:window:allow-center",
     "core:window:allow-maximize",
     "core:window:allow-unmaximize",
-    "core:window:allow-outer-size",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "core:window:allow-toggle-maximize",
     "core:window:allow-is-maximized",
+    "core:window:allow-outer-size",
+    "core:window:allow-start-dragging",
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-message",
@@ -20,6 +24,7 @@
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-read-dir",
-    "fs:allow-exists"
+    "fs:allow-exists",
+    "fs:allow-app-read"
   ]
 }
