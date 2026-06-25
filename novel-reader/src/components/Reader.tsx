@@ -926,6 +926,10 @@ export default function Reader() {
       {chapterText ? (
         readingMode === 'page' ? (
           pages[pageIndex] ? (
+            (() => {
+              const pageCharStart = pageIndex > 0 ? pageBreaks[pageIndex - 1].end_char : 0;
+              const paraOffset = chapterText ? chapterText.slice(0, pageCharStart).split('\n').filter(l => l.trim()).length : 0;
+              return (
             <PageRenderer
               text={pages[pageIndex]}
               fontSize={fontSize}
@@ -934,8 +938,10 @@ export default function Reader() {
               fontWeight={fontBold ? 700 : 400}
               textColor={readerTextColor}
             bookmarkParagraphIndices={curParas}
-            paragraphOffset={0}
+            paragraphOffset={paraOffset}
             />
+              );
+            })()
           ) : pageBreaks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-dim)' }}>正在分页...</div>
           ) : null
