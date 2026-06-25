@@ -31,7 +31,7 @@ export default function ChapterList({
   const [searching, setSearching] = useState(false);
   const [searchTab, setSearchTab] = useState<'章节' | '正文'>('章节');
   const [tabSliderStyle, setTabSliderStyle] = useState<React.CSSProperties>({});
-  const [rangeOpen, setRangeOpen] = useState(true);
+  const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeStart, setRangeStart] = useState<number | null>(1);
   const [rangeEnd, setRangeEnd] = useState<number | null>(chapters?.length || null);
   const [bookmarkOpen, setBookmarkOpen] = useState(false);
