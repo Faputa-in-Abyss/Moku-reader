@@ -13,6 +13,9 @@ export default function Header() {
   const setDebugPanelOpen = useStore((s) => s.setDebugPanelOpen);
   const viewMode = useStore((s) => s.viewMode);
   const setViewMode = useStore((s) => s.setViewMode);
+  const scanAnimating = useStore((s) => s.scanAnimating);
+  const setScanAnimating = useStore((s) => s.setScanAnimating);
+  const setScanResult = useStore((s) => s.setScanResult);
   const [aboutOpen, setAboutOpen] = React.useState(false);
   const [aboutFlying, setAboutFlying] = React.useState(false);
   const [aboutFlyStyle, setAboutFlyStyle] = React.useState<React.CSSProperties>({});
@@ -39,6 +42,22 @@ export default function Header() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [win]);
+
+  // 扫描完成监听（放在 Header 独一份）
+  React.useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlisten = await listen<any>("scan-complete", (event) => {
+        const r = event.payload;
+        setScanAnimating(false);
+        setScanResult({ novels: r.novels_imported ?? 0, comics: r.comics_imported ?? 0, errors: r.errors ?? [] });
+        triggerNovelRefresh();
+        triggerComicRefresh();
+      });
+    })();
+    return () => { unlisten?.(); };
+  }, []);
 
   const handleMinimize = async () => { try { await win.minimize(); } catch {} };
   const handleMaximizeToggle = async () => {
@@ -95,78 +114,34 @@ export default function Header() {
     }, 470);
   };
 
-  const handleImportNovel = async () => {
+  const handleScan = async () => {
+    if (scanAnimating) return;
+    const { invoke } = await import("@tauri-apps/api/core");
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: true,
-        filters: [
-          { name: "小说文件", extensions: ["txt", "epub", "html", "htm"] },
-        ],
-      });
-      if (!selected) return;
-      const paths: string[] = Array.isArray(selected) ? selected.map(s => typeof s === "string" ? s : s.path) : [typeof selected === "string" ? selected : selected.path];
-      if (paths.length === 0) return;
-
-      const { invoke } = await import("@tauri-apps/api/core");
-      for (const path of paths) {
-        try {
-          await invoke("import_book", { path });
-        } catch (e) {
-          console.error(`导入失败: ${path}`, e);
-        }
+      const path: string = await invoke("get_library_path");
+      if (!path) {
+        // 没设书库路径 → 先弹选择器
+        const { open } = await import("@tauri-apps/plugin-dialog");
+        const selected = await open({ directory: true, multiple: false });
+        if (!selected) return;
+        const selPath = typeof selected === "string" ? selected : selected.path;
+        if (!selPath) return;
+        await invoke("set_library_path", { newPath: selPath });
       }
-      triggerNovelRefresh();
-    } catch (e) {
-      console.error("导入失败:", e);
-    }
-  };
-
-  const handleImportManga = async () => {
+    } catch {}
+    setScanAnimating(true);
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: true,
-        filters: [
-          { name: "所有漫画文件 (ZIP/PDF/图片)", extensions: ["pdf", "cbz", "zip", "jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"] },
-        ],
-      });
-      if (!selected) return;
-      const rawPaths: string[] = Array.isArray(selected) ? selected.map(s => typeof s === "string" ? s : s.path) : [typeof selected === "string" ? selected : selected.path];
-      if (rawPaths.length === 0) return;
-
-      // 图片文件取其父文件夹路径（去重），CBZ/ZIP/PDF 直接走文件导入
-      const IMG_EXTS = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
-      const { invoke } = await import("@tauri-apps/api/core");
-      let hasError = false;
-      const processed = new Set<string>();
-      for (const rawPath of rawPaths) {
-        const ext = rawPath.split('.').pop()?.toLowerCase() || "";
-        const path = IMG_EXTS.includes(ext)
-          ? rawPath.replace(/[/\\][^/\\]*$/, '')
-          : rawPath;
-        if (processed.has(path)) continue;
-        processed.add(path);
-        try {
-          console.log("[墨读前端] 开始导入漫画:", path);
-          const result = await invoke("import_comic", { path });
-          console.log("[墨读前端] 导入完成:", result);
-        } catch (e) {
-          console.error(`导入漫画失败: ${rawPath}`, e);
-          hasError = true;
-        }
-      }
-      triggerComicRefresh();
-      if (hasError) console.warn("[墨读前端] 部分导入失败");
+      const msg: string = await invoke("scan_library");
+      console.log("[墨读] 扫描已启动:", msg);
     } catch (e) {
-      console.error("导入漫画失败:", e);
+      console.error("[墨读] 扫描启动失败:", e);
+      setScanAnimating(false);
     }
   };
 
   const handleImportFolder = async () => {
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      // 使用 directory 选项打开文件夹选择器（Tauri v2 支持）
       const selected = await open({
         multiple: false,
         directory: true,
@@ -180,7 +155,7 @@ export default function Header() {
         await invoke("import_comic", { path });
         triggerComicRefresh();
       } catch (e) {
-        console.error(`导入文件夹失败:`, e);
+        console.error("导入文件夹失败:", e);
         alert("导入失败，请确认文件夹中包含图片文件");
       }
     } catch (e) {
@@ -315,8 +290,21 @@ export default function Header() {
         }}>
           {theme === "light" ? <SunIcon size={14} /> : <MoonIcon size={14} />}
         </button>
-        <button className="btn btn-primary" onClick={viewMode === "library" ? handleImportNovel : handleImportManga} title={viewMode === "library" ? "导入小说" : "导入漫画"} style={{ width: veryNarrow ? 30 : 36, height: veryNarrow ? 30 : 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
-          <span style={{ fontSize: veryNarrow ? "1.1rem" : "1.3rem", fontWeight: 300, lineHeight: 1 }}>+</span>
+        <button className="btn btn-primary" onClick={handleScan} title={scanAnimating ? "扫描中…" : "扫描书库"} style={{ width: veryNarrow ? 30 : 36, height: veryNarrow ? 30 : 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
+          {scanAnimating ? (
+            <svg width={veryNarrow ? 14 : 18} height={veryNarrow ? 14 : 18} viewBox="0 0 24 24" fill="none" style={{ animation: "scanSpin 1.6s linear infinite" }}>
+              <path d="M12 2A10 10 0 0 1 22 12" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+              <line x1="12" y1="12" x2="20" y2="12" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" opacity="0.9" />
+              <circle cx="12" cy="12" r="9" stroke="var(--accent)" strokeWidth="0.8" strokeDasharray="3 4" opacity="0.5" />
+              <circle cx="12" cy="12" r="1.5" fill="var(--accent)" />
+            </svg>
+          ) : (
+            <svg width={veryNarrow ? 14 : 18} height={veryNarrow ? 14 : 18} viewBox="0 0 24 24" fill="none">
+              <path d="M12 2A10 10 0 0 1 22 12" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="12" y1="12" x2="20" y2="10.5" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
+              <circle cx="12" cy="12" r="1.5" fill="var(--accent)" />
+            </svg>
+          )}
         </button>
         <button className="btn" onClick={() => setDebugPanelOpen(true)} title="设置 (字体/颜色/毛玻璃/日志)" style={{ width: veryNarrow ? 30 : 36, height: veryNarrow ? 30 : 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <SettingsIcon size={veryNarrow ? 14 : 18} />

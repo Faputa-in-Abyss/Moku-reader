@@ -137,12 +137,7 @@ if (sortField === field) {
     e.stopPropagation();
     // 保存最新 book 引用
     const latest = useStore.getState().books.find(b => b.id === book.id) || book;
-    // 估算菜单高度 ~460px，防止底部超出窗口
-    const menuH = 460;
-    const viewH = window.innerHeight;
-    const x = Math.min(e.clientX, window.innerWidth - 220);
-    const y = e.clientY + menuH > viewH ? Math.max(8, viewH - menuH - 8) : e.clientY;
-    setCtxMenu({ book: latest, x, y });
+    setCtxMenu({ book: latest, x: e.clientX, y: e.clientY });
   };
 
   const handleRename = (book: BookData) => {

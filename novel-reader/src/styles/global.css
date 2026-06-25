@@ -397,6 +397,12 @@ header:hover .light-follow { opacity: 1; }
   100% { transform: translateX(-100%); }
 }
 
+/* 光锥扫描动画 — 至少转 3 圈才停，用户角度至少看 4.8s */
+@keyframes scanSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 /* 收藏星星入场动画：由小到大弹出然后落下 */
 @keyframes starPop {
   0% { transform: scale(0) translateY(-30px); opacity: 0; }

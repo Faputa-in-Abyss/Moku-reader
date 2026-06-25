@@ -139,8 +139,14 @@ interface AppStore {
   mangaZoom: number;
   setMangaZoom: (z: number) => void;
   // 导入进度
-  importProgress: { title: string; status: string; message: string } | null;
-  setImportProgress: (p: { title: string; status: string; message: string } | null) => void;
+  importProgress: { title: string; status: string; message: string; current?: number; total?: number } | null;
+  setImportProgress: (p: { title: string; status: string; message: string; current?: number; total?: number } | null) => void;
+  // 扫描动画状态
+  scanAnimating: boolean;
+  setScanAnimating: (v: boolean) => void;
+  // 扫描完成结果
+  scanResult: { novels: number; comics: number; errors: string[] } | null;
+  setScanResult: (r: { novels: number; comics: number; errors: string[] } | null) => void;
   // 翻页模式下的双页开关
   readerDoublePage: boolean;
   setReaderDoublePage: (v: boolean) => void;
@@ -313,6 +319,12 @@ export const useStore = create<AppStore>((set, get) => ({
   // 导入进度
   importProgress: null,
   setImportProgress: (p) => set({ importProgress: p }),
+  // 扫描动画状态
+  scanAnimating: false,
+  setScanAnimating: (v) => set({ scanAnimating: v }),
+  // 扫描完成结果
+  scanResult: null,
+  setScanResult: (r) => set({ scanResult: r }),
   readerDoublePage: localStorage.getItem("nr-reader-double") === "true",
   setReaderDoublePage: (v) => { localStorage.setItem("nr-reader-double", String(v)); set({ readerDoublePage: v }); },
 }));
