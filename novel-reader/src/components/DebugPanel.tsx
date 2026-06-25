@@ -87,7 +87,6 @@ export default function DebugPanel() {
   const [filterSource, setFilterSource] = useState<"all" | "frontend" | "backend">("all");
   const logEndRef = useRef<HTMLDivElement>(null);
   const [libraryPath, setLibraryPath] = useState("");
-  const [scanning, setScanning] = useState(false);
   const [renderDpi, setRenderDpi] = useState(150);
   const [dpiEditing, setDpiEditing] = useState(false);
   const [dpiEditValue, setDpiEditValue] = useState("150");
@@ -212,7 +211,6 @@ export default function DebugPanel() {
           if (r.errors?.length > 0) {
             console.error("[墨读] 扫描错误:", r.errors);
           }
-          setScanning(false);
           triggerRefresh();
         });
       } catch {}
@@ -241,25 +239,23 @@ export default function DebugPanel() {
     }
   };
 
-  const handleScan = async () => {
-    if (scanning) {
-      // 发送取消请求
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("cancel_scan");
-      } catch {}
-      setScanning(false);
-      console.log("[墨读] 用户主动停止扫描");
-      return;
-    }
-    setScanning(true);
+  const handleImportFolder = async () => {
     try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({ directory: true, multiple: false });
+      if (!selected) return;
+      const path = typeof selected === "string" ? selected : selected.path;
+      if (!path) return;
       const { invoke } = await import("@tauri-apps/api/core");
-      const msg: string = await invoke("scan_library");
-      console.log("[墨读] 扫描已启动:", msg);
+      try {
+        await invoke("import_comic", { path });
+        triggerRefresh();
+        console.log("[墨读] 导入文件夹完成:", path);
+      } catch (e) {
+        console.error("[墨读] 导入文件夹失败:", e);
+      }
     } catch (e) {
-      console.error("[墨读] 扫描启动失败:", e);
-      setScanning(false);
+      console.error("[墨读] 导入文件夹失败:", e);
     }
   };
 
@@ -274,8 +270,6 @@ export default function DebugPanel() {
       await invoke("set_library_path", { newPath: path });
       setLibraryPath(path);
       console.log("[墨读] 书库路径已设置:", path);
-      // 自动触发扫描
-      await handleScan();
     } catch (e) {
       console.error("[墨读] 设置书库路径失败:", e);
     }
@@ -344,7 +338,7 @@ export default function DebugPanel() {
             </div>
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>操作</div>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={handleSetPath}>更改书库路径</button>
-          <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={!libraryPath} onClick={handleScan}>{scanning ? "扫描中..点击停止" : "扫描书库"}</button>
+          <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} disabled={!libraryPath} onClick={handleImportFolder}>导入文件夹</button>
             <button className="btn" style={{ width: "100%", marginBottom: 5, justifyContent: "center", fontSize: ".78rem" }} onClick={() => { clearLogs(); setLogs([]); }}>清除日志</button>
             <div style={{ borderTop: "1px solid var(--border-glass)", margin: "14px 0 10px" }} />
             <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--text)", fontSize: ".88rem" }}>面板</div>
