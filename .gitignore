@@ -1,7 +1,24 @@
-﻿node_modules/
-.vite/
+# Rust 编译产物
+src-tauri/target/
+
+# npm
+node_modules/
+
+# 构建产物
 dist/
-target/
-*.log
+dist2/
+dist3/
+dist4/
+dist5/
+
+# 预编译工具
+mutool/*.exe
+
+# Vite 临时文件
+vite.config.ts.timestamp-*
+
+# 系统文件
 .DS_Store
 Thumbs.db
+*.log
+.vite/
