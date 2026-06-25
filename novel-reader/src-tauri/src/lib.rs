@@ -1174,6 +1174,8 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
             title: title.clone(),
             status: "processing".to_string(),
             message: format!("正在渲染 {} …", &title),
+            current: 0,
+            total: 0,
         });
     }
 
@@ -1194,6 +1196,8 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
                         title: book.title.clone(),
                         status: "done".to_string(),
                         message: format!("导入完成：{} ({} 页)", book.title, book.total_pages),
+                        current: 0,
+                        total: 0,
                     });
                 }
                 Err(e) => {
@@ -1201,6 +1205,8 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
                         title: title,
                         status: "error".to_string(),
                         message: format!("导入失败: {}", e),
+                        current: 0,
+                        total: 0,
                     });
                 }
             }

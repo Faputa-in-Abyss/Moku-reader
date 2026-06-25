@@ -257,6 +257,7 @@ export default function Reader() {
   const [toolbarVisible, setToolbarVisible] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxSubMenu, setCtxSubMenu] = useState<string | null>(null);
+  const [ctxParagraphIndex, setCtxParagraphIndex] = useState<number | undefined>(undefined);
 
   const tipTimer = useRef<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -822,6 +823,10 @@ export default function Reader() {
   const renderLeftPage = () => {
     const p = pages[pageIndex];
     if (!p) return null;
+    // 计算本页在全文段落中的起始索引
+    const leftPageCharStart = pageIndex > 0 ? pageBreaks[pageIndex - 1].end_char : 0;
+    const leftParaOffset = chapterText ? chapterText.slice(0, leftPageCharStart).split('\n').filter(l => l.trim()).length : 0;
+    const curParas = new Set(bookmarks.filter(b => b.chapterIndex === currentChapter && b.paragraphIndex !== undefined).map(b => b.paragraphIndex));
     return (
       <div
         ref={contentRef}
@@ -852,6 +857,8 @@ export default function Reader() {
           fontFamily={pageFontFamily}
           fontWeight={fontBold ? 700 : 400}
           textColor={readerTextColor}
+          bookmarkParagraphIndices={curParas}
+          paragraphOffset={leftParaOffset}
         />
       </div>
     );
@@ -860,6 +867,10 @@ export default function Reader() {
   const renderRightPage = () => {
     const p = pages[pageIndex + 1];
     if (!p) return null;
+    // 计算本页在全文段落中的起始索引
+    const rightPageCharStart = pageBreaks[pageIndex].end_char;
+    const rightParaOffset = chapterText ? chapterText.slice(0, rightPageCharStart).split('\n').filter(l => l.trim()).length : 0;
+    const curParas = new Set(bookmarks.filter(b => b.chapterIndex === currentChapter && b.paragraphIndex !== undefined).map(b => b.paragraphIndex));
     return (
       <div
         style={{
@@ -876,12 +887,16 @@ export default function Reader() {
           fontFamily={pageFontFamily}
           fontWeight={fontBold ? 700 : 400}
           textColor={readerTextColor}
+          bookmarkParagraphIndices={curParas}
+          paragraphOffset={rightParaOffset}
         />
       </div>
     );
   };
 
-  const renderSinglePage = () => (
+  const renderSinglePage = () => {
+    const curParas = new Set(bookmarks.filter(b => b.chapterIndex === currentChapter && b.paragraphIndex !== undefined).map(b => b.paragraphIndex));
+    return (
     <div
       ref={contentRef}
       style={{
@@ -918,6 +933,8 @@ export default function Reader() {
               fontFamily={pageFontFamily}
               fontWeight={fontBold ? 700 : 400}
               textColor={readerTextColor}
+            bookmarkParagraphIndices={curParas}
+            paragraphOffset={0}
             />
           ) : pageBreaks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-dim)' }}>正在分页...</div>
@@ -930,6 +947,8 @@ export default function Reader() {
             fontFamily={pageFontFamily}
             fontWeight={fontBold ? 700 : 400}
             textColor={readerTextColor}
+            bookmarkParagraphIndices={curParas}
+            paragraphOffset={0}
           />
         )
       ) : (
@@ -945,6 +964,7 @@ export default function Reader() {
       )}
     </div>
   );
+  };
 
   return (
     <>
@@ -964,6 +984,14 @@ export default function Reader() {
         onContextMenu={(e) => e.preventDefault()}
         onMouseDown={(e) => {
           if (e.button === 2) {
+            let pIdx;
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+            const pEl = el?.closest('[data-paragraph-index]');
+            if (pEl) {
+              const idx = pEl.getAttribute('data-paragraph-index');
+              if (idx) pIdx = parseInt(idx, 10);
+            }
+            setCtxParagraphIndex(pIdx);
             setCtxMenu({ x: e.clientX, y: e.clientY });
             setCtxSubMenu(null);
           }
@@ -1381,14 +1409,23 @@ export default function Reader() {
             <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
               <MenuItem
                 icon={<BookmarkIcon size={16} />}
-                label={bookmarks.find((b) => b.chapterIndex === currentChapter) ? '取消书签' : '添加书签'}
+                label={bookmarks.find((b) => b.chapterIndex === currentChapter && b.paragraphIndex === ctxParagraphIndex) ? '取消书签' : '添加书签'}
                 onClick={() => {
-                  if (bookmarks.find((b) => b.chapterIndex === currentChapter)) {
-                    removeBookmark(currentChapter);
+                  const existing = bookmarks.find((b) => b.chapterIndex === currentChapter && b.paragraphIndex === ctxParagraphIndex);
+                  if (existing) {
+                    useStore.setState({ bookmarks: bookmarks.filter(b => !(b.chapterIndex === currentChapter && b.paragraphIndex === ctxParagraphIndex)) });
                   } else {
+                    const paras = chapterText.split('\n').filter(l => l.trim());
+                    const snippet = paras[ctxParagraphIndex]?.slice(0, 40) || '';
                     addBookmark(currentChapter, chapters?.[currentChapter]?.title || `第${currentChapter + 1}章`);
+                    const cur = useStore.getState().bookmarks;
+                    if (cur.length > 0) {
+                      const updated = [...cur.slice(0, -1), { ...cur[cur.length - 1], paragraphIndex: ctxParagraphIndex, textSnippet: snippet }];
+                      useStore.setState({ bookmarks: updated });
+                    }
                   }
                   setCtxMenu(null);
+                  setCtxParagraphIndex(undefined);
                 }}
               />
               <MenuDivider />

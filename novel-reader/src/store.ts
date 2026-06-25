@@ -72,6 +72,10 @@ export interface Bookmark {
   chapterTitle: string;
   timestamp: number;
   note?: string;
+  /** 段落索引（行级别书签） */
+  paragraphIndex?: number;
+  /** 段落文本预览（侧边栏显示） */
+  textSnippet?: string;
 }
 
 type MangaViewMode = "single" | "double" | "scroll";
@@ -245,14 +249,14 @@ export const useStore = create<AppStore>((set, get) => ({
   bookmarks: [],
   addBookmark: (chapterIndex, chapterTitle) => {
     const cur = get().bookmarks;
-    if (cur.find(b => b.chapterIndex === chapterIndex)) return;
+    if (cur.find(b => b.chapterIndex === chapterIndex && b.paragraphIndex === undefined)) return;
     const next = [...cur, { chapterIndex, chapterTitle, timestamp: Date.now() }];
     set({ bookmarks: next });
     const book = get().currentBook;
     if (book) localStorage.setItem(`nr-bookmarks-${book.id}`, JSON.stringify(next));
   },
   removeBookmark: (chapterIndex) => {
-    const next = get().bookmarks.filter(b => b.chapterIndex !== chapterIndex);
+    const next = get().bookmarks.filter(b => !(b.chapterIndex === chapterIndex && b.paragraphIndex === undefined));
     set({ bookmarks: next });
     const book = get().currentBook;
     if (book) localStorage.setItem(`nr-bookmarks-${book.id}`, JSON.stringify(next));
