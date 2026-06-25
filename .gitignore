@@ -23,8 +23,8 @@ Thumbs.db
 *.log
 .vite/
 
-src/
-src-tauri/
+/src/
+/src-tauri/
 
-src/
-src-tauri/
+/src/
+/src-tauri/
