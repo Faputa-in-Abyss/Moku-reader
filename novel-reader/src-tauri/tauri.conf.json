@@ -1,6 +1,6 @@
 {
   "productName": "墨读",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "identifier": "com.mokureader.app",
   "build": {
     "beforeDevCommand": "npm run dev",

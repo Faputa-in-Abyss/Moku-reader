@@ -1,6 +1,6 @@
 {
   "productName": "墨读",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "identifier": "com.novel-reader.app",
   "build": {
     "beforeDevCommand": "npm run dev",
