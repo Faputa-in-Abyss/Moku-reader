@@ -222,7 +222,12 @@ export default function Reader() {
       setVeryNarrow(window.innerWidth < 360);
     };
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const onWheel = () => { setCtxMenu(null); setCtxSubMenu(null); };
+    window.addEventListener('wheel', onWheel, { passive: true });
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('wheel', onWheel);
+    };
   }, []);
 
   // Window controls
@@ -1407,12 +1412,7 @@ export default function Reader() {
 
         {/* 右键菜单 — 漫画库同款扁平图标 + 文字 */}
         {ctxMenu && !ctxSubMenu && (
-          <div
-            style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, zIndex: 599, cursor: 'default' }}
-            onClick={() => { setCtxMenu(null); setCtxSubMenu(null); }}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
+          <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
               <MenuItem
                 icon={<BookmarkIcon size={16} />}
                 label={bookmarks.find((b) => b.chapterIndex === currentChapter && b.paragraphIndex === ctxParagraphIndex) ? '取消书签' : '添加书签'}
@@ -1449,7 +1449,6 @@ export default function Reader() {
                 onClick={() => { setFontSize(fontSize + 0.1); setCtxMenu(null); }}
               />
             </ContextMenu>
-          </div>
         )}
 
         {/* 颜色二级菜单 */}
@@ -1457,35 +1456,19 @@ export default function Reader() {
           <div
             style={{
               position: 'fixed',
-              left: 0,
-              top: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 609,
-              cursor: 'default',
+              left: ctxMenu.x + 10,
+              top: ctxMenu.y,
+              zIndex: 610,
+              background: 'var(--glass-bg)',
+              backdropFilter:
+                'blur(var(--glass-blur)) saturate(var(--glass-saturate))',
+              border: '1px solid var(--border-glass)',
+              borderRadius: 'var(--radius-md)',
+              padding: 14,
+              minWidth: 210,
+              boxShadow: '0 8px 40px var(--shadow)',
             }}
-            onClick={() => {
-              setCtxMenu(null);
-              setCtxSubMenu(null);
-            }}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <div
-              style={{
-                position: 'fixed',
-                left: ctxMenu.x + 10,
-                top: ctxMenu.y,
-                zIndex: 610,
-                background: 'var(--glass-bg)',
-                backdropFilter:
-                  'blur(var(--glass-blur)) saturate(var(--glass-saturate))',
-                border: '1px solid var(--border-glass)',
-                borderRadius: 'var(--radius-md)',
-                padding: 14,
-                minWidth: 210,
-                boxShadow: '0 8px 40px var(--shadow)',
-              }}
-              onClick={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             >
               <div
                 style={{
@@ -1621,25 +1604,19 @@ export default function Reader() {
                 ) : null}
               </div>
             </div>
-          </div>
         )}
 
         {/* 字体二级菜单 */}
         {ctxMenu && ctxSubMenu === 'font' && (
-          <div
-            style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, zIndex: 609, cursor: 'default' }}
-            onClick={() => { setCtxMenu(null); setCtxSubMenu(null); }}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <ContextMenu x={ctxMenu.x + 10} y={ctxMenu.y}>
-              <div
-                style={{
-                  padding: '8px 14px 4px',
-                  color: 'var(--text-dim)',
-                  fontSize: '.78rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
+          <ContextMenu x={ctxMenu.x + 10} y={ctxMenu.y}>
+            <div
+              style={{
+                padding: '8px 14px 4px',
+                color: 'var(--text-dim)',
+                fontSize: '.78rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+              }}
               >
                 <span><FontIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />字体</span>
                 <span
@@ -1657,7 +1634,6 @@ export default function Reader() {
                 />
               ))}
             </ContextMenu>
-          </div>
         )}
       </div>
     </>
