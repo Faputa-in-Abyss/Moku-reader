@@ -381,6 +381,7 @@ fn import_pdf(path: &Path, dest_dir: &Path, dpi: u32, num_threads: usize) -> Res
         let end = total.min(start + batch_size);
         if start >= total { break; }
         let counter = Arc::clone(&rendered);
+        let pdf_title = title.clone();
         handles.push(std::thread::spawn(move || {
             for i in start..end {
                 let page_file = format!("page_{:04}.png", i + 1);
@@ -394,12 +395,13 @@ fn import_pdf(path: &Path, dest_dir: &Path, dpi: u32, num_threads: usize) -> Res
                     let msg = format!("🖼️ PDF 渲染进度: {}/{} 页 ({:.0}%)", done, total, done as f64 / total as f64 * 100.0);
                     println!("[墨读] {}", &msg);
                     if let Some(handle) = crate::APP_HANDLE.get() {
-                        let now = chrono::Local::now().format("%H:%M:%S%.3f").to_string();
-                        let _ = handle.emit("debug-log", &serde_json::json!({
-                            "level": "BACKEND",
-                            "message": msg,
-                            "timestamp": now,
-                        }));
+                        let _ = handle.emit("comic-import-progress", &crate::ImportProgress {
+                            title: pdf_title.clone(),
+                            status: "processing".to_string(),
+                            message: format!("正在渲染 {}…", pdf_title),
+                            current: done,
+                            total: total,
+                        });
                     }
                 }
             }

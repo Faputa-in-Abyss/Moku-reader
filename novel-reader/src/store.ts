@@ -164,6 +164,9 @@ interface AppStore {
   // 翻页模式下的双页开关
   readerDoublePage: boolean;
   setReaderDoublePage: (v: boolean) => void;
+  // 自动翻页间隔（秒），0=关闭
+  autoFlipInterval: number;
+  setAutoFlipInterval: (v: number) => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -346,4 +349,6 @@ export const useStore = create<AppStore>((set, get) => ({
   setScanResult: (r) => set({ scanResult: r }),
   readerDoublePage: localStorage.getItem("nr-reader-double") === "true",
   setReaderDoublePage: (v) => { localStorage.setItem("nr-reader-double", String(v)); set({ readerDoublePage: v }); },
+  autoFlipInterval: 0,
+  setAutoFlipInterval: (v) => set({ autoFlipInterval: v }),
 }));

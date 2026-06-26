@@ -282,8 +282,6 @@ pub fn get_chapter_text_from_cache(book_id: &str, chapter_idx: usize) -> Result<
 // ===== 分页算法 =====
 
 /// 顶部/底部 padding（导航栏 + 内容 padding）
-/// VERTICAL_PADDING 现在由前端视口裁剪决定，后端只按宽度分页（高度给大值）
-/// 这里仅保留基础文字 padding 避免分页过于稀疏
 const VERTICAL_PADDING: u32 = 120;
 
 /// 首行缩进字符数
@@ -311,15 +309,14 @@ pub fn paginate_chapter(
     let avail_height = (config.container_height.saturating_sub(VERTICAL_PADDING)) as f64;
 
     // 每行字符数 (cpl = chars per line)
-    let font_size_px = config.font_size * 14.0; // 14px base（近似浏览器渲染）
+    let font_size_px = config.font_size * 14.0; // 14px base
     let cpl = (config.container_width as f64 / (font_size_px * 1.02)).floor() as usize;
     let cpl = cpl.max(1); // 至少 1 个字符
 
     // 每页最大行数
     let line_height_px = font_size_px * config.line_height;
-    let mut max_lines_per_page = (avail_height / line_height_px).floor() as usize;
-    // 保守一行，避免浏览器渲染稍多字符时的溢出
-    max_lines_per_page = max_lines_per_page.saturating_sub(1).max(1);
+    let max_lines_per_page = (avail_height / line_height_px).floor() as usize;
+    let max_lines_per_page = max_lines_per_page.max(1);
 
     // 如果是双页模式，可用宽度加倍
     let effective_cpl = if config.double_page {
@@ -460,8 +457,11 @@ pub fn paginate_chapter(
         char_offset += para_len + 1; // 内容 + 换行符
     }
 
-    // 最后一页
-    if current_page_lines > 0 || pages.is_empty() {
+    // 最后一页 — 仅在确实有未封装的内容时才追加，防止空白页
+    // 检查 current_page_start 之后是否还有非空白字符（排除尾部空行导致的多余页）
+    // 用 chars().skip() 避免 UTF-8 字节切片越界
+    let remaining_has_text = text.chars().skip(current_page_start).any(|c| !c.is_whitespace());
+    if (current_page_lines > 0 && remaining_has_text) || pages.is_empty() {
         pages.push(PageBreak {
             page_index: pages.len(),
             start_char: current_page_start,

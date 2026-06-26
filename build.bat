@@ -98,8 +98,8 @@ echo         BUILD SUCCESS!
 echo ============================================
 echo.
 echo Copying outputs to root folder...
-copy /Y "src-tauri\target\release\novel-reader.exe" "..\墨读.exe" 2>nul && echo [OK] novel-reader.exe -> ..\墨读.exe
-copy /Y "src-tauri\target\release\bundle\nsis\*.exe" "..\" 2>nul && echo [OK] installer -> ..\
+copy /Y "novel-reader\src-tauri\target\release\novel-reader.exe" "..\墨读.exe" 2>nul && echo [OK] novel-reader.exe -> ..\墨读.exe
+copy /Y "novel-reader\src-tauri\target\release\bundle\nsis\*.exe" "..\" 2>nul && echo [OK] installer -> ..\
 
 echo.
 echo Installer location:
