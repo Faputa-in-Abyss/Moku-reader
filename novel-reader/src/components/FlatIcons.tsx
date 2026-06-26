@@ -300,3 +300,32 @@ export function ScrollModeIcon({ size = 16, className, style }: IconProps) {
     </svg>
   );
 }
+
+/** 翻页模式 — 两页纸叠放右上角翘起 */
+export function FlipPageIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <rect x="3" y="4" width="12" height="16" rx="1" />
+      <rect x="7" y="6" width="13" height="16" rx="1" />
+      <path d="M7 6v12l-2 1" opacity="0.5" />
+      <line x1="6" y1="9" x2="11" y2="9" />
+      <line x1="6" y1="12" x2="11" y2="12" />
+      <line x1="6" y1="15" x2="10" y2="15" />
+      <line x1="10" y1="9" x2="17" y2="9" />
+      <line x1="10" y1="12" x2="17" y2="12" />
+      <line x1="10" y1="15" x2="15" y2="15" />
+    </svg>
+  );
+}
+
+/** 单页模式 */
+export function SinglePageIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <rect x="2" y="3" width="20" height="18" rx="1" />
+      <line x1="6" y1="8" x2="18" y2="8" />
+      <line x1="6" y1="12" x2="18" y2="12" />
+      <line x1="6" y1="16" x2="14" y2="16" />
+    </svg>
+  );
+}

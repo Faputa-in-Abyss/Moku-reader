@@ -113,8 +113,6 @@ interface AppStore {
   setTextIndent: (v: number) => void;
   textAlign: "left" | "center" | "justify";
   setTextAlign: (a: "left" | "center" | "justify") => void;
-  autoFlipInterval: number;
-  setAutoFlipInterval: (v: number) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (o: boolean) => void;
   settingsOpen: boolean;
@@ -246,8 +244,6 @@ export const useStore = create<AppStore>((set, get) => ({
     localStorage.setItem("nr-text-align", a);
     set({ textAlign: a });
   },
-  autoFlipInterval: 0,
-  setAutoFlipInterval: (v) => set({ autoFlipInterval: v }),
   sidebarOpen: false,
   setSidebarOpen: (o) => set({ sidebarOpen: o }),
   settingsOpen: false,
