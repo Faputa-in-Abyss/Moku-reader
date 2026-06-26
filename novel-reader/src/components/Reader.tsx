@@ -190,6 +190,8 @@ export default function Reader() {
   const restoreTargetRef = useRef<number | null>(null);
   const lastTopParaRef = useRef(0);
   const wheelLockRef = useRef(false);
+  const scrollToEndRef = useRef(false);
+  const goToEndRef = useRef(false);
   const pendingCharOffsetRef = useRef<number | null>(null);
   sidebarOpenRef.current = sidebarOpen;
   
@@ -274,6 +276,13 @@ export default function Reader() {
   }, [currentChapter, book?.id]);
   useEffect(() => {
     if (readingMode !== 'scroll' || !book?.id || !chapterText || chapterText.startsWith('(')) return;
+    if (scrollToEndRef.current) {
+      scrollToEndRef.current = false;
+      requestAnimationFrame(() => {
+        if (contentRef.current) { contentRef.current.scrollTop = contentRef.current.scrollHeight; }
+      });
+      return;
+    }
     const savedScrollTop = localStorage.getItem('nr-scroll-pos-' + book.id + '-' + currentChapter);
     requestAnimationFrame(() => {
       if (contentRef.current) { contentRef.current.scrollTop = savedScrollTop ? Number(savedScrollTop) : 0; }
@@ -324,9 +333,10 @@ export default function Reader() {
       if (aligned - step >= 0) {
         setPageIndex(aligned - step);
       } else if (currentChapter > 0) {
+        goToEndRef.current = true;
         switchChapter(currentChapter - 1);
       } else { showTip('已经是第一页'); }
-    } else if (currentChapter > 0) { saveScrollPosition(currentChapter); switchChapter(currentChapter - 1); } else { showTip('已经是第一章'); }
+    } else if (currentChapter > 0) { saveScrollPosition(currentChapter); scrollToEndRef.current = true; switchChapter(currentChapter - 1); } else { showTip('已经是第一章'); }
   };
   useReaderKeyboard(keybindings, fontSize, setFontSize, prevPage, nextPage, recordingKey);
   useEffect(() => {
@@ -349,6 +359,19 @@ export default function Reader() {
   useEffect(() => {
     if (readingMode !== 'page' || pages.length === 0) return;
     let target: number;
+
+    if (goToEndRef.current) {
+      goToEndRef.current = false;
+      if (readerDoublePage) {
+        let lastIdx = pages.length - 1;
+        if (lastIdx % 2 === 1) lastIdx--;
+        setPageIndex(Math.max(0, lastIdx));
+      } else {
+        setPageIndex(Math.max(0, pages.length - 1));
+      }
+      return;
+    }
+
     if (pendingCharOffsetRef.current != null) {
       target = charOffsetToParaIndex(chapterText, pendingCharOffsetRef.current);
       pendingCharOffsetRef.current = null;
@@ -376,7 +399,7 @@ export default function Reader() {
       if (e.deltaY > 0) nextPage(); else if (e.deltaY < 0) prevPage();
       if (e.deltaY !== 0) {
         wheelLockRef.current = true;
-        setTimeout(() => { wheelLockRef.current = false; }, 220);
+        setTimeout(() => { wheelLockRef.current = false; }, 10);
       }
       return;
     }
@@ -385,7 +408,7 @@ export default function Reader() {
       if (!el) return;
       wheelHandler.onWheel(e, currentChapter, chapters.length, el.scrollTop, el.scrollHeight, el.clientHeight, el,
         () => { saveScrollPosition(currentChapter); switchChapter(currentChapter + 1); },
-        () => { saveScrollPosition(currentChapter); switchChapter(currentChapter - 1); }
+        () => { saveScrollPosition(currentChapter); scrollToEndRef.current = true; switchChapter(currentChapter - 1); }
       );
     }
   };
