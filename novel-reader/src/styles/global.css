@@ -360,7 +360,7 @@ header:hover .light-follow { opacity: 1; }
   opacity: 1;
 }
 
-/* 滚动条 */
+/* 默认滚动条 */
 ::-webkit-scrollbar {
   width: 3px;
 }
@@ -368,21 +368,21 @@ header:hover .light-follow { opacity: 1; }
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.04);
+  background: rgba(var(--accent-rgb), 0.3);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 128, 128, 0.15);
+  background: rgba(var(--accent-rgb), 0.5);
   border-radius: 4px;
 }
 
-/* 阅读器内滚动条用更浅的颜色 */
+/* 阅读器内滚动条比默认更淡 */
 .reader-view::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.08);
+  background: rgba(var(--accent-rgb), 0.15);
   border-radius: 4px;
 }
 .reader-view:hover::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.12);
+  background: rgba(var(--accent-rgb), 0.25);
 }
 
 
@@ -397,7 +397,13 @@ header:hover .light-follow { opacity: 1; }
   100% { transform: translateX(-100%); }
 }
 
-/* 光锥扫描动画 — 至少转 3 圈才停，用户角度至少看 4.8s */
+/* 扫描动画 — 外环旋转 */
+/* 扫描动画 — 中心光晕呼吸 */
+@keyframes scanBreath {
+  0%, 100% { transform: scale(1); opacity: 0.25; }
+  50% { transform: scale(1.5); opacity: 0.85; }
+}
+
 @keyframes scanSpin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
