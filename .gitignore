@@ -11,6 +11,9 @@ dist3/
 dist4/
 dist5/
 
+# 安装包输出
+Download-package/
+
 # 预编译工具
 mutool/*.exe
 
