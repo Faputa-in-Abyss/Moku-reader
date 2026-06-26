@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useStore, ComicData, ComicMeta } from "../store";
 import { handleCardGlow } from "../utils/glow";
 import { SelectCheckbox, FavStar, ProgressBar, ContextMenu, MenuItem, MenuDivider, BatchActionBar, BatchIconPicker, IconPicker, SortButton } from "./SharedUI";
-import { BookIcon, FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ArrowRightIcon, RefreshIcon, BanIcon, ImageIcon, SearchIcon, StarIcon } from "./FlatIcons";
+import { FileIcon, FolderIcon, EditIcon, PaletteIcon, TrashIcon, CheckSquareIcon, ArrowRightIcon, RefreshIcon, BanIcon, ImageIcon, StarIcon } from "./FlatIcons";
 
 
 export default function MangaLibrary() {
@@ -1063,8 +1063,7 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
     );
   }
 
-  // 不渲染占位 div，等进入视口才加载
-  return <div ref={ref} style={{ position: "absolute", inset: 0, zIndex: 1 }} />;
+  return <div ref={ref} style={{ position: 'absolute', inset: 0, zIndex: 1 }} />;
 }
 
 function getMangaIcon(comic: ComicMeta): string {

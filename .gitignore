@@ -1,5 +1,5 @@
 # Rust 编译产物
-src-tauri/target/
+target/
 
 # npm
 node_modules/
