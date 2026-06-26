@@ -31,12 +31,18 @@ export interface PaginationParams {
   fontFamily: string;
   /** 字重 */
   fontWeight: number;
+  /** 字间距 px */
+  letterSpacing?: number;
+  /** 段落缩进 em */
+  textIndent?: number;
+  /** 对齐方式 */
+  textAlign?: string;
   /** 是否启用分页（仅翻页模式为 true） */
   enabled: boolean;
 }
 
 export function usePagination(params: PaginationParams) {
-  const { text, pageWidth, pageHeight, fontSize, lineHeight, fontFamily, fontWeight, enabled } = params;
+  const { text, pageWidth, pageHeight, fontSize, lineHeight, fontFamily, fontWeight, letterSpacing = 0, textIndent = 2, textAlign = 'justify', enabled } = params;
   /** pages[i] = 第 i 页包含的段落索引数组（章节级索引） */
   const [pages, setPages] = useState<number[][]>([]);
   /** 章节段落总数 */
@@ -66,10 +72,12 @@ export function usePagination(params: PaginationParams) {
     host.style.lineHeight = String(lineHeight);
     host.style.fontFamily = fontFamily;
     host.style.fontWeight = String(fontWeight);
+    host.style.letterSpacing = letterSpacing > 0 ? letterSpacing + 'px' : '';
+    host.style.textAlign = textAlign;
 
     // 一次性填入所有段落，只触发一次 reflow
     host.innerHTML = paras
-      .map((p, i) => `<p data-i="${i}" style="margin:0;text-indent:2em;white-space:pre-wrap;word-break:break-word">${escapeHtml(p)}</p>`)
+      .map((p, i) => `<p data-i="${i}" style="margin:0;text-indent:${textIndent}em;white-space:pre-wrap;word-break:break-word">${escapeHtml(p)}</p>`)
       .join('');
 
     const pEls = host.querySelectorAll('p');

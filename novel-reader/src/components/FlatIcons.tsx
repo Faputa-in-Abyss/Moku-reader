@@ -185,3 +185,118 @@ export function MinusIcon({ size = 16, className, style }: IconProps) {
     </svg>
   );
 }
+
+// ========================
+// 底部栏新增图标
+// ========================
+
+/** 行距 — 三条水平线 + 左侧上下箭头 */
+export function LineHeightIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <line x1="6" y1="5" x2="18" y2="5" />
+      <line x1="6" y1="10" x2="18" y2="10" />
+      <line x1="6" y1="15" x2="18" y2="15" />
+      <line x1="3" y1="3" x2="3" y2="17" strokeWidth="1.2" />
+      <polyline points="1,6 3,4 5,6" strokeWidth="1.3" />
+      <polyline points="1,14 3,16 5,14" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+/** 字距 — 两个 A 之间双向箭头 */
+export function LetterSpacingIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <text x="4" y="16" fontSize="10" fontWeight="600" fill="currentColor" stroke="none" fontFamily="serif">A</text>
+      <text x="17" y="16" fontSize="8" fontWeight="600" fill="currentColor" stroke="none" fontFamily="serif">A</text>
+      <line x1="8" y1="12" x2="20" y2="12" />
+      <polyline points="8,12 10,10" /><polyline points="20,12 18,10" />
+      <line x1="8" y1="13.5" x2="20" y2="13.5" />
+      <polyline points="8,13.5 10,15.5" /><polyline points="20,13.5 18,15.5" />
+    </svg>
+  );
+}
+
+/** 缩进 — 左侧箭头 + 段落行 */
+export function IndentIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <line x1="3" y1="5" x2="21" y2="5" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <line x1="9" y1="15" x2="21" y2="15" />
+      <line x1="3" y1="20" x2="21" y2="20" />
+      <polyline points="9,15 5,13 5,17" />
+    </svg>
+  );
+}
+
+/** 对齐 · 左对齐 */
+export function AlignLeftIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <line x1="3" y1="5" x2="21" y2="5" /><line x1="3" y1="10" x2="15" y2="10" />
+      <line x1="3" y1="15" x2="21" y2="15" /><line x1="3" y1="20" x2="17" y2="20" />
+    </svg>
+  );
+}
+
+/** 对齐 · 居中 */
+export function AlignCenterIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <line x1="3" y1="5" x2="21" y2="5" /><line x1="6" y1="10" x2="18" y2="10" />
+      <line x1="3" y1="15" x2="21" y2="15" /><line x1="5" y1="20" x2="19" y2="20" />
+    </svg>
+  );
+}
+
+/** 对齐 · 两端对齐 */
+export function AlignJustifyIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <line x1="3" y1="5" x2="21" y2="5" /><line x1="3" y1="10" x2="21" y2="10" />
+      <line x1="3" y1="15" x2="21" y2="15" /><line x1="3" y1="20" x2="21" y2="20" />
+    </svg>
+  );
+}
+
+/** 内容宽度 — 梯形收缩 */
+export function ContentWidthIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <line x1="3" y1="5" x2="21" y2="5" /><line x1="5" y1="10" x2="19" y2="10" />
+      <line x1="8" y1="15" x2="16" y2="15" /><line x1="3" y1="20" x2="21" y2="20" />
+    </svg>
+  );
+}
+
+/** 播放 — 用于自动翻页 */
+export function PlayIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <polygon points="6,3 20,12 6,21" />
+    </svg>
+  );
+}
+
+/** 阅读模式 — 双页/滚动切换 */
+export function PageModeIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <rect x="3" y="3" width="7" height="18" rx="1" />
+      <rect x="14" y="3" width="7" height="18" rx="1" />
+    </svg>
+  );
+}
+
+/** 滚动模式 */
+export function ScrollModeIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="8" y1="7" x2="16" y2="7" /><line x1="8" y1="11" x2="16" y2="11" />
+      <line x1="8" y1="15" x2="12" y2="15" />
+    </svg>
+  );
+}
