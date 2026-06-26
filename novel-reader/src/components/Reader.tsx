@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import BottomBar from './BottomBar';
-import { useStore } from '../store';
+import { useStore, Bookmark } from '../store';
 import SidebarHandle from './SidebarHandle';
 import WindowControls from './WindowControls';
 import { ContextMenu, MenuDivider, MenuItem, topbarGlassStyle, BackButton } from './SharedUI';
@@ -12,13 +12,8 @@ import { useReaderKeyboard } from '../hooks/useReaderKeyboard';
 import { usePagination } from '../hooks/usePagination';
 import PageRenderer from './PageRenderer';
 import ChapterList from './ChapterList';
-import { BookmarkIcon, LayoutIcon, TextIcon, FontIcon, PaletteIcon, BoldIcon, MinusIcon, PlusIcon } from './FlatIcons';
+import { BookmarkIcon, LayoutIcon, TextIcon, FontIcon, BoldIcon, MinusIcon, PlusIcon } from './FlatIcons';
 
-const COLOR_PRESETS = [
-  '#e8ddd0', '#d4a96a', '#c0392b', '#e67e22',
-  '#27ae60', '#2980b9', '#8e44ad', '#ecf0f1',
-  '#bdc3c7', '#7f8c8d', '#2c3e50', '#1a1a2e',
-];
 
 function FontSearchDropdown({ fonts, current, onSelect }: {
   fonts: { value: string; label: string }[];
@@ -116,13 +111,12 @@ export default function Reader() {
   const readerFont = useStore((s) => s.readerFont);
   const setReaderFont = useStore((s) => s.setReaderFont);
   const readerTextColor = useStore((s) => s.readerTextColor);
-  const setReaderTextColor = useStore((s) => s.setReaderTextColor);
   const readerBgColor = useStore((s) => s.readerBgColor);
-  const setReaderBgColor = useStore((s) => s.setReaderBgColor);
   const lineHeight = useStore((s) => s.lineHeight);
   const letterSpacing = useStore((s) => s.letterSpacing);
   const textIndent = useStore((s) => s.textIndent);
   const textAlign = useStore((s) => s.textAlign);
+  const autoFlipInterval = useStore((s) => s.autoFlipInterval);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
   const settingsOpen = false;
@@ -132,7 +126,6 @@ export default function Reader() {
   const keybindings = useStore((s) => s.keybindings);
   const windowSize = useStore((s) => s.windowSize);
   const bookmarks = useStore((s) => s.bookmarks);
-  const addBookmark = useStore((s) => s.addBookmark);
   const removeBookmark = useStore((s) => s.removeBookmark);
   const loadBookmarks = useStore((s) => s.loadBookmarks);
   const readerDoublePage = useStore((s) => s.readerDoublePage);
@@ -149,7 +142,7 @@ export default function Reader() {
   useEffect(() => {
     const onResize = () => { setNarrow(window.innerWidth < 420); setVeryNarrow(window.innerWidth < 360); };
     window.addEventListener('resize', onResize);
-    const onWheel = () => { setCtxMenu(null); setCtxSubMenu(null); };
+    const onWheel = () => { setCtxMenu(null); };
     window.addEventListener('wheel', onWheel, { passive: true });
     return () => { window.removeEventListener('resize', onResize); window.removeEventListener('wheel', onWheel); };
   }, []);
@@ -172,7 +165,6 @@ export default function Reader() {
   const [sidebarHint, setSidebarHint] = useState(false);
   const [toolbarVisible, setToolbarVisible] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
-  const [ctxSubMenu, setCtxSubMenu] = useState<string | null>(null);
   const [ctxParagraphIndex, setCtxParagraphIndex] = useState<number | undefined>(undefined);
   const tipTimer = useRef<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -398,7 +390,7 @@ export default function Reader() {
       if (e.deltaY > 0) nextPage(); else if (e.deltaY < 0) prevPage();
       if (e.deltaY !== 0) {
         wheelLockRef.current = true;
-        setTimeout(() => { wheelLockRef.current = false; }, 10);
+        setTimeout(() => { wheelLockRef.current = false; }, 220);
       }
       return;
     }
@@ -477,7 +469,12 @@ export default function Reader() {
     animate();
     return () => { running = false; window.removeEventListener('resize', resize); };
   }, []);
-
+  // 自动翻页定时器
+  useEffect(() => {
+    if (autoFlipInterval <= 0) return;
+    const id = setInterval(() => { nextPage(); }, autoFlipInterval * 1000);
+    return () => clearInterval(id);
+  }, [autoFlipInterval, pageIndex, currentChapter]);
   useEffect(() => { return () => { clearTimeout(topbarTimer.current); clearTimeout(tipTimer.current); clearTimeout(sideTimer.current); }; }, []);
   const renderContent = () => {
     const curParas = new Set(bookmarks.filter(b => b.chapterIndex === currentChapter && b.paragraphIndex !== undefined).map(b => b.paragraphIndex!));
@@ -542,9 +539,11 @@ export default function Reader() {
       <div className="reader-view" onContextMenu={(e) => e.preventDefault()}
         onMouseDown={(e) => {
           if (e.button === 0) {
-            // 关闭右键菜单
+            // 如果点击在右键菜单内则不关闭
+            const menuEl = document.querySelector('.ctx-menu-container');
+            if (menuEl && menuEl.contains(e.target as Node)) return;
             setCtxMenu(null);
-            setCtxSubMenu(null);
+
             // 收起顶部栏（点击顶栏外部时）
             const tb = document.querySelector('.reader-topbar');
             if (tb && !tb.contains(e.target as Node)) {
@@ -556,7 +555,7 @@ export default function Reader() {
             const el = document.elementFromPoint(e.clientX, e.clientY);
             const pEl = el?.closest('[data-paragraph-index]');
             if (pEl) { const idx = pEl.getAttribute('data-paragraph-index'); if (idx) pIdx = parseInt(idx, 10); }
-            setCtxParagraphIndex(pIdx); setCtxMenu({ x: e.clientX, y: e.clientY }); setCtxSubMenu(null);
+            setCtxParagraphIndex(pIdx); setCtxMenu({ x: e.clientX, y: e.clientY }); 
           }
         }}
         onTouchStart={(e) => { if (!narrow) return; const t = e.touches[0]; touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() }; }}
@@ -586,6 +585,11 @@ export default function Reader() {
             <span style={{ fontFamily: 'var(--font-title)', fontWeight: 500, maxWidth: narrow ? (veryNarrow ? 0 : 120) : 240, opacity: veryNarrow ? 0 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'max-width 0.3s ease, opacity 0.3s ease' }}>{book?.title}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, position: 'relative', zIndex: 1, alignItems: 'center' }}>
+            <button className="btn" onClick={() => { if (window.innerWidth < 768) { showTip('窗口过窄无法开启双页模式'); return; } setReaderDoublePage(!readerDoublePage); }}
+              disabled={window.innerWidth < 768}
+              style={{ fontSize: '.78rem', opacity: readingMode === 'page' && !narrow ? 1 : 0, maxWidth: readingMode === 'page' && !narrow ? 60 : 0, overflow: 'hidden', whiteSpace: 'nowrap', background: readerDoublePage ? 'rgba(var(--accent-rgb),0.12)' : undefined, borderColor: readerDoublePage ? 'var(--accent)' : undefined, transition: 'opacity 0.3s ease, max-width 0.3s ease' }}
+            >{readerDoublePage ? '双页' : '单页'}</button>
+            <button className="btn" style={{ fontSize: '.78rem', opacity: narrow ? 0 : 1, maxWidth: narrow ? 0 : 60, overflow: 'hidden', whiteSpace: 'nowrap', transition: 'opacity 0.3s ease, max-width 0.3s ease' }} onClick={() => setSidebarOpen(!sidebarOpen)}>目录</button>
 
             <div data-tauri-no-drag><WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleWindowClose} maximized={maximized} /></div>
           </div>
@@ -609,50 +613,34 @@ export default function Reader() {
 
         <BottomBar />
         {tip && <div style={{ position: 'fixed', bottom: 60, left: '50%', transform: 'translateX(-50%)', background: 'var(--glass-bg)', backdropFilter: 'blur(var(--glass-tip-blur))', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-full)', padding: '10px 24px', fontSize: '.85rem', color: 'var(--text)', zIndex: 500, animation: 'tipIn 0.3s ease' }}>{tip}</div>}
-        {ctxMenu && !ctxSubMenu && (
+        {ctxMenu && (
+          <div className="ctx-menu-container">
           <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
             <MenuItem icon={<BookmarkIcon size={16} />}
               label={bookmarks.find((b) => b.chapterIndex === currentChapter && b.paragraphIndex === ctxParagraphIndex) ? '取消书签' : '添加书签'}
               onClick={() => {
                 const existing = bookmarks.find((b) => b.chapterIndex === currentChapter && b.paragraphIndex === ctxParagraphIndex);
-                if (existing) { useStore.setState({ bookmarks: bookmarks.filter(b => !(b.chapterIndex === currentChapter && b.paragraphIndex === ctxParagraphIndex)) }); } else {
-                  const paras = chapterText.split('\n').filter(l => l.trim());
-                  const snippet = paras[ctxParagraphIndex ?? 0]?.slice(0, 40) || '';
-                  addBookmark(currentChapter, chapters?.[currentChapter]?.title || '第' + (currentChapter + 1) + '章');
-                  const cur = useStore.getState().bookmarks;
-                  if (cur.length > 0) { const updated = [...cur.slice(0, -1), { ...cur[cur.length - 1], paragraphIndex: ctxParagraphIndex, textSnippet: snippet }]; useStore.setState({ bookmarks: updated }); }
+                const paras = chapterText.split('\n').filter(l => l.trim());
+                const snippet = paras[ctxParagraphIndex ?? 0]?.slice(0, 40) || '';
+                const title = chapters?.[currentChapter]?.title || '第' + (currentChapter + 1) + '章';
+                if (existing) {
+                  const next = bookmarks.filter(b => !(b.chapterIndex === currentChapter && b.paragraphIndex === ctxParagraphIndex));
+                  useStore.setState({ bookmarks: next });
+                  const book = useStore.getState().currentBook;
+                  if (book) localStorage.setItem(`nr-bookmarks-${book.id}`, JSON.stringify(next));
+                } else {
+                  const newBm: Bookmark = { chapterIndex: currentChapter, chapterTitle: title, timestamp: Date.now(), paragraphIndex: ctxParagraphIndex, textSnippet: snippet };
+                  const next = [...bookmarks, newBm];
+                  useStore.setState({ bookmarks: next });
+                  const book = useStore.getState().currentBook;
+                  if (book) localStorage.setItem(`nr-bookmarks-${book.id}`, JSON.stringify(next));
                 }
                 setCtxMenu(null); setCtxParagraphIndex(undefined);
               }} />
-            <MenuDivider />
-            <MenuItem icon={<PaletteIcon size={16} />} label="主题颜色" onClick={() => setCtxSubMenu('colors')} />
+
           </ContextMenu>
-        )}
-        {ctxMenu && ctxSubMenu === 'colors' && (
-          <div style={{ position: 'fixed', left: ctxMenu.x + 10, top: ctxMenu.y, zIndex: 610, background: 'var(--glass-bg)', backdropFilter: 'blur(var(--glass-blur)) saturate(var(--glass-saturate))', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-md)', padding: 14, minWidth: 210, boxShadow: '0 8px 40px var(--shadow)' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ color: 'var(--text)', fontSize: '.82rem', marginBottom: 10, fontWeight: 500, display: 'flex', justifyContent: 'space-between' }}>
-              <span><PaletteIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />颜色</span>
-              <span style={{ cursor: 'pointer', color: 'var(--text-dim)', fontSize: '.8rem' }} onClick={() => { setCtxSubMenu(null); }}>{'←'} 返回</span>
-            </div>
-            <div style={{ fontSize: '.75rem', color: 'var(--text-dim)', marginBottom: 6 }}><FontIcon size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />字体颜色</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-              {COLOR_PRESETS.map((c) => (
-                <div key={'t' + c} onClick={() => { setReaderTextColor(c); setCtxMenu(null); setCtxSubMenu(null); }}
-                  style={{ width: 26, height: 26, borderRadius: 'var(--radius-sm)', background: c, cursor: 'pointer', outline: readerTextColor === c ? '2px solid var(--accent)' : 'none', outlineOffset: 2 }} />
-              ))}
-              {readerTextColor ? <span onClick={() => { setReaderTextColor(''); }} style={{ color: 'var(--text-dim)', fontSize: '.7rem', cursor: 'pointer', padding: '4px 6px' }}>重置</span> : null}
-            </div>
-            <div style={{ fontSize: '.75rem', color: 'var(--text-dim)', marginBottom: 6 }}><PaletteIcon size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />背景颜色</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-              {COLOR_PRESETS.map((c) => (
-                <div key={'b' + c} onClick={() => { setReaderBgColor(c); setCtxMenu(null); setCtxSubMenu(null); }}
-                  style={{ width: 26, height: 26, borderRadius: 'var(--radius-sm)', background: c, cursor: 'pointer', outline: readerBgColor === c ? '2px solid var(--accent)' : 'none', outlineOffset: 2 }} />
-              ))}
-              {readerBgColor ? <span onClick={() => { setReaderBgColor(''); }} style={{ color: 'var(--text-dim)', fontSize: '.7rem', cursor: 'pointer', padding: '4px 6px' }}>重置</span> : null}
-            </div>
           </div>
         )}
-
       </div>
     </>
   );

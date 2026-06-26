@@ -91,6 +91,8 @@ pub struct ImportProgress {
     pub title: String,
     pub status: String,   // "processing" | "done" | "error"
     pub message: String,
+    pub current: usize,   // 当前处理到第几个
+    pub total: usize,     // 总共需要处理几个（0 = 未知）
 }
 
 /// 系统资源信息
@@ -1024,7 +1026,9 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
             } else { false }
         };
 
-        // 导入小说
+        let total_items = comics_list.len();
+
+        // 导入小说（小说只是复制+解析，秒完成，不需要进度事件）
         for path in &novels_list {
             if check_cancel() { break; }
             match import_book_from_path(path) {
@@ -1041,7 +1045,7 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
         }
 
         // 导入漫画
-        for (_idx, path) in comics_list.iter().enumerate() {
+        for (comic_idx, path) in comics_list.iter().enumerate() {
             if check_cancel() { break; }
             let path_obj = std::path::Path::new(path);
             let file_name = path_obj.file_name()
@@ -1049,12 +1053,16 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                 .unwrap_or("未知文件")
                 .to_string();
 
-            // 发送进度事件（复用导入 Toast）
+            let current_item = comic_idx;
+
+            // 发送进度事件
             if let Some(handle) = crate::APP_HANDLE.get() {
                 let _ = handle.emit("comic-import-progress", &crate::ImportProgress {
                     title: file_name.clone(),
                     status: "processing".to_string(),
                     message: format!("正在渲染 {} …", &file_name),
+                    current: current_item,
+                    total: total_items,
                 });
             }
 
@@ -1063,29 +1071,13 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                     Ok(book) => {
                         // 直接推入内存 Mutex 再写磁盘，确保 comics-refreshed 时已最新
                         if let Ok(mut mem) = app.state::<AppState>().comic_library.lock() {
-                            mem.comics.push(book.clone());
+                            mem.comics.push(book);
                             comic::save_comic_library(&data_dir, &mem).ok();
                         }
                         comics_imported += 1;
-                        if let Some(handle) = crate::APP_HANDLE.get() {
-                            let _ = handle.emit("comic-import-progress", &crate::ImportProgress {
-                                title: book.title.clone(),
-                                status: "done".to_string(),
-                                message: format!("扫描导入：{} ({} 页)", book.title, book.total_pages),
-                            });
-                        }
                         let _ = app.emit("comics-refreshed", "");
                     }
-                    Err(e) => {
-                        if let Some(handle) = crate::APP_HANDLE.get() {
-                            let _ = handle.emit("comic-import-progress", &crate::ImportProgress {
-                                title: file_name.clone(),
-                                status: "error".to_string(),
-                                message: format!("导入失败: {}", e),
-                            });
-                        }
-                        errors.push(format!("导入漫画文件夹失败 {}: {}", path, e));
-                    }
+                    Err(e) => errors.push(format!("导入漫画文件夹失败 {}: {}", path, e)),
                 }
             } else {
                 let result = comic::import_comic(path, &data_dir, render_dpi, render_threads);
@@ -1106,6 +1098,8 @@ async fn scan_library(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
                                 title: title.clone(),
                                 status: "done".to_string(),
                                 message: format!("扫描导入：{} ({} 页)", title, total_pages),
+                                    current: current_item + 1,
+                                    total: total_items,
                             });
                         }
                         let _ = app.emit("comics-refreshed", "");
@@ -1181,6 +1175,8 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
             title: title.clone(),
             status: "processing".to_string(),
             message: format!("正在渲染 {} …", &title),
+            current: 0,
+            total: 1,
         });
     }
 
@@ -1201,6 +1197,8 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
                         title: book.title.clone(),
                         status: "done".to_string(),
                         message: format!("导入完成：{} ({} 页)", book.title, book.total_pages),
+                        current: 1,
+                        total: 1,
                     });
                 }
                 Err(e) => {
@@ -1208,6 +1206,8 @@ async fn import_comic(path: String, state: State<'_, AppState>) -> Result<comic:
                         title: title,
                         status: "error".to_string(),
                         message: format!("导入失败: {}", e),
+                        current: 1,
+                        total: 1,
                     });
                 }
             }
