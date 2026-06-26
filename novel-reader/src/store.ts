@@ -88,7 +88,6 @@ interface AppStore {
   setReadingMode: (m: ReadingMode) => void;
   books: BookData[];
   setBooks: (books: BookData[]) => void;
-  clearBooksCache: () => void;
   reading: boolean;
   currentBook: BookData | null;
   currentChapter: number;
@@ -132,6 +131,8 @@ interface AppStore {
   comics: ComicData[];
   setComics: (comics: ComicData[]) => void;
   comicsMeta: ComicMeta[];
+  seriesMap: Record<string, string[]>;
+  setSeriesMap: (m: Record<string, string[]>) => void;
   mangaReading: boolean;
   currentManga: ComicData | null;
   mangaCurrentPage: number;
@@ -172,16 +173,11 @@ export const useStore = create<AppStore>((set, get) => ({
   setBooks: (books) => {
     set({ books });
   },
-  // 清除 localStorage 缓存的书籍数据（修复：旧缓存 chapters 为空的问题）
-  clearBooksCache: () => {
-    set({ books: [] });
-  },
   reading: false,
   currentBook: null,
   currentChapter: 0,
   openReader: (book) => {
     const state = get();
-    // 从 store.books 中找到含完整 chapters 的书籍数据（sortedBooks 不携带 chapters）
     const fullBook = state.books.find(b => b.id === book.id) || book;
     set({
       reading: true,
@@ -193,8 +189,6 @@ export const useStore = create<AppStore>((set, get) => ({
   },
   closeReader: () => {
     set({ reading: false, sidebarOpen: false, settingsOpen: false });
-    // 不置空 currentBook/currentChapter，确保最后一个 update_progress 能读到 book.id
-    // 只触发小说库刷新，不刷新漫画库
     const { triggerNovelRefresh } = get();
     triggerNovelRefresh();
   },
@@ -271,15 +265,12 @@ export const useStore = create<AppStore>((set, get) => ({
   saveBookmarks: (bookId) => {
     localStorage.setItem(`nr-bookmarks-${bookId}`, JSON.stringify(get().bookmarks));
   },
-  // 持久化漫画列表（仅存 id / title / source_type / total_pages / current_page / direction / favorite / book_icon，不含 pages 和 image_dir）
   comicsMeta: JSON.parse(localStorage.getItem("nr-comics-meta") || "[]") as ComicMeta[],
-  // 系列映射：series_id → 排序后的 comic id 列表（纯前端，用于多章节）
   seriesMap: JSON.parse(localStorage.getItem("nr-comic-series") || "{}") as Record<string, string[]>,
   setSeriesMap: (m) => {
     localStorage.setItem("nr-comic-series", JSON.stringify(m));
     set({ seriesMap: m });
   },
-  // Manga state
   viewMode: (localStorage.getItem("nr-view-mode") as "library" | "manga") || "library",
   setViewMode: (m) => {
     localStorage.setItem("nr-view-mode", m);
@@ -307,8 +298,6 @@ export const useStore = create<AppStore>((set, get) => ({
     }),
   closeMangaReader: () => {
     set({ mangaReading: false });
-    // 不置空 currentManga/mangaCurrentPage，确保最后一个进度保存能读到 id
-    // 只触发漫画库刷新，不刷新小说库
     const { triggerComicRefresh } = get();
     triggerComicRefresh();
   },
@@ -320,13 +309,10 @@ export const useStore = create<AppStore>((set, get) => ({
   },
   mangaZoom: 1,
   setMangaZoom: (z) => set({ mangaZoom: Math.min(4, Math.max(0.25, z)) }),
-  // 导入进度
   importProgress: null,
   setImportProgress: (p) => set({ importProgress: p }),
-  // 扫描动画状态
   scanAnimating: false,
   setScanAnimating: (v) => set({ scanAnimating: v }),
-  // 扫描完成结果
   scanResult: null,
   setScanResult: (r) => set({ scanResult: r }),
   readerDoublePage: localStorage.getItem("nr-reader-double") === "true",

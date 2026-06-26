@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
-import { PackageIcon, BookIcon, RefreshIcon, SettingsIcon, ClipboardIcon, ImageIcon, ArtIcon } from "./FlatIcons";
 
 export interface LogEntry {
   id: number;

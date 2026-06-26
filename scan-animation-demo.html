@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>最终方案 Demo — 雷达扫描</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f2ed;
+  color: #2c2824;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px 24px;
+}
+h1 { font-weight: 500; font-size: 1.4rem; color: #4a3f35; }
+.sub { color: #8a7a6a; font-size: .85rem; margin: 8px 0 32px; text-align: center; line-height: 1.6; }
+
+.demo-area {
+  background: rgba(255,255,255,0.65);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 28px;
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.06);
+}
+
+.icon-container { position: relative; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; }
+.icon-container svg { position: absolute; }
+
+/* 空闲 — 完全静止 */
+.idle-group { opacity: 1; transition: opacity 0.4s ease; }
+.idle-group.hidden { opacity: 0; }
+
+/* 扫描 */
+@keyframes scan_spin { 0% { transform: rotate(45deg); } 100% { transform: rotate(405deg); } }
+@keyframes scan_breath { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+
+.scan-group { opacity: 0; transition: opacity 0.4s ease; pointer-events: none; }
+.scan-group.visible { opacity: 1; }
+.scan-spin { animation: scan_spin 2.4s linear infinite; transform-origin: 12px 12px; }
+
+.status-bar { display: flex; align-items: center; gap: 18px; font-size: .88rem; color: #4a3f35; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #b8895a; transition: opacity 0.4s ease; }
+
+.controls { display: flex; gap: 12px; margin-top: 8px; }
+.controls button { padding: 10px 32px; border: none; border-radius: 14px; font-size: .9rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+.btn-scan { background: #b8895a; color: #fff; }
+.btn-scan:hover { opacity: 0.85; }
+.btn-idle { background: rgba(0,0,0,0.06); color: #4a3f35; }
+.btn-idle:hover { background: rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+
+<h1>✦ 雷达扫描</h1>
+<p class="sub">放射线扇形光束 + 扫描线 + 中心光晕 · 统一朝向右上45°</p>
+
+<div class="demo-area">
+  <div class="icon-container">
+    <!-- ===== 空闲 — 完全静止 ===== -->
+    <svg width="72" height="72" viewBox="0 0 24 24" fill="none" class="idle-group" id="idleGroup">
+      <!-- 外圈虚线环 -->
+      <circle cx="12" cy="12" r="9" stroke="#b8895a" stroke-width="0.35" stroke-dasharray="2 6" opacity="0.15"/>
+      <!-- 扇形光束遮罩（半透明扇形）— 朝右上 45° -->
+      <g transform="rotate(45, 12, 12)">
+        <path d="M12 12 L12 2 A10 10 0 0 1 22 12 Z" fill="#b8895a" opacity="0.06"/>
+        <!-- 放射线（7条） -->
+        <line x1="12" y1="12" x2="21" y2="9" stroke="#b8895a" stroke-width="0.5" opacity="0.2"/>
+        <line x1="12" y1="12" x2="21.5" y2="10" stroke="#b8895a" stroke-width="0.7" opacity="0.3"/>
+        <line x1="12" y1="12" x2="21.5" y2="11" stroke="#b8895a" stroke-width="0.9" opacity="0.4"/>
+        <line x1="12" y1="12" x2="22" y2="12" stroke="#b8895a" stroke-width="1.2" opacity="0.55"/>
+        <line x1="12" y1="12" x2="21" y2="13" stroke="#b8895a" stroke-width="0.9" opacity="0.4"/>
+        <line x1="12" y1="12" x2="20" y2="14" stroke="#b8895a" stroke-width="0.7" opacity="0.3"/>
+        <line x1="12" y1="12" x2="18" y2="14.5" stroke="#b8895a" stroke-width="0.5" opacity="0.2"/>
+        <!-- 扫描线（最粗那条，代表当前扫描位置） -->
+        <line x1="12" y1="12" x2="22" y2="12" stroke="#b8895a" stroke-width="2.2" stroke-linecap="round" opacity="0.5"/>
+      </g>
+      <!-- 中心圆点 -->
+      <circle cx="12" cy="12" r="1.2" fill="#b8895a" opacity="0.45"/>
+    </svg>
+
+    <!-- ===== 扫描 ===== -->
+    <svg width="72" height="72" viewBox="0 0 24 24" fill="none" class="scan-group" id="scanGroup">
+      <!-- 外圈虚线环 -->
+      <circle cx="12" cy="12" r="9" stroke="#b8895a" stroke-width="0.4" stroke-dasharray="2 6" opacity="0.18"/>
+      <!-- 所有放射线旋转组（从45°开始） -->
+      <g class="scan-spin">
+        <!-- 扇形光束遮罩（更明显） -->
+        <path d="M12 12 L12 2 A10 10 0 0 1 22 12 Z" fill="#b8895a" opacity="0.1"/>
+        <!-- 放射线 × 7 -->
+        <line x1="12" y1="12" x2="21" y2="9" stroke="#b8895a" stroke-width="0.6" opacity="0.3"/>
+        <line x1="12" y1="12" x2="21.5" y2="10" stroke="#b8895a" stroke-width="0.8" opacity="0.4"/>
+        <line x1="12" y1="12" x2="21.5" y2="11" stroke="#b8895a" stroke-width="1" opacity="0.55"/>
+        <line x1="12" y1="12" x2="22" y2="12" stroke="#b8895a" stroke-width="1.5" opacity="0.75"/>
+        <line x1="12" y1="12" x2="21" y2="13" stroke="#b8895a" stroke-width="1" opacity="0.55"/>
+        <line x1="12" y1="12" x2="20" y2="14" stroke="#b8895a" stroke-width="0.8" opacity="0.4"/>
+        <line x1="12" y1="12" x2="18" y2="14.5" stroke="#b8895a" stroke-width="0.5" opacity="0.3"/>
+        <!-- 扫描主标识线（最粗最亮） -->
+        <line x1="12" y1="12" x2="22" y2="12" stroke="#b8895a" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+      </g>
+      <!-- 中心光晕呼吸 -->
+      <circle cx="12" cy="12" r="4.5" fill="none" stroke="#b8895a" stroke-width="0.4" style="animation: scan_breath 2.4s ease-in-out infinite"/>
+      <circle cx="12" cy="12" r="1.5" fill="#b8895a" style="animation: scan_breath 2.4s ease-in-out infinite"/>
+    </svg>
+  </div>
+
+  <div class="status-bar">
+    <span style="display:flex;align-items:center;gap:6px">
+      静止 <span class="status-dot" id="idleDot" style="opacity:1;background:#b8895a"></span>
+    </span>
+    <span style="color:#bbb">|</span>
+    <span style="display:flex;align-items:center;gap:6px">
+      扫描中 <span class="status-dot" id="scanDot" style="opacity:0.2;background:#999"></span>
+    </span>
+  </div>
+
+  <div class="controls">
+    <button class="btn-idle" onclick="switchToIdle()">静止</button>
+    <button class="btn-scan" onclick="switchToScan()">扫描中</button>
+  </div>
+</div>
+
+<script>
+function switchToScan() {
+  document.getElementById('idleGroup').classList.add('hidden');
+  document.getElementById('scanGroup').classList.add('visible');
+  document.getElementById('idleDot').style.opacity = '0.2';
+  document.getElementById('idleDot').style.background = '#999';
+  document.getElementById('scanDot').style.opacity = '1';
+  document.getElementById('scanDot').style.background = '#b8895a';
+}
+function switchToIdle() {
+  document.getElementById('idleGroup').classList.remove('hidden');
+  document.getElementById('scanGroup').classList.remove('visible');
+  document.getElementById('idleDot').style.opacity = '1';
+  document.getElementById('idleDot').style.background = '#b8895a';
+  document.getElementById('scanDot').style.opacity = '0.2';
+  document.getElementById('scanDot').style.background = '#999';
+}
+</script>
+</body>
+</html>

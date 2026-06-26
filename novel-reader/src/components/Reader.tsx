@@ -7,11 +7,10 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useChapterLoader } from '../hooks/useChapterLoader';
 import { useReadingProgress } from '../hooks/useReadingProgress';
 import { useWheelHandler } from '../hooks/useWheelHandler';
-import { useChapterTransition } from '../hooks/useChapterTransition';
 import { useReaderKeyboard } from '../hooks/useReaderKeyboard';
 import PageRenderer from './PageRenderer';
 import ChapterList from './ChapterList';
-import { BookmarkIcon, LayoutIcon, TextIcon, FontIcon, PaletteIcon, BoldIcon, ChevronRightIcon, MinusIcon, PlusIcon } from './FlatIcons';
+import { BookmarkIcon, LayoutIcon, TextIcon, FontIcon, PaletteIcon, BoldIcon, MinusIcon, PlusIcon } from './FlatIcons';
 
 const COLOR_PRESETS = [
   '#e8ddd0', '#d4a96a', '#c0392b', '#e67e22',
@@ -206,7 +205,6 @@ export default function Reader() {
   const chapterLoader = useChapterLoader();
   const readingProgress = useReadingProgress(book?.id);
   const wheelHandler = useWheelHandler();
-  const transition = useChapterTransition(chapters.length, currentChapter, setChapter);
 
   // ── Ref ──
   const bookIdRef = useRef(book?.id);
@@ -499,19 +497,31 @@ export default function Reader() {
   const switchChapter = useCallback((newIdx: number) => {
     // 同步从缓存取数据
     const cachedText = chapterLoader.textCache.current.get(newIdx);
-    const cachedPages = chapterLoader.paginationCache.current.get(newIdx);
+    const curConfig = {
+      font_size: fontSize,
+      line_height: 2.0,
+      container_width: readerDoublePage
+        ? Math.floor(window.innerWidth / 2) - 68
+        : contentWidth,
+      container_height: window.innerHeight,
+      double_page: readerDoublePage,
+    };
+    const cacheKey = `${newIdx}-${curConfig.font_size}-${curConfig.container_width}-${curConfig.container_height}-${curConfig.double_page}`;
+    const cachedPages = chapterLoader.paginationCache.current.get(cacheKey);
 
     if (cachedText && cachedPages) {
-      // 缓存命中：一口气设所有状态，零中间态，跳过章节加载 effect
       skipChapterLoadRef.current = true;
       setChapterText(cachedText.text);
       setPageBreaks(cachedPages.pages);
       setTotalPages(cachedPages.total_pages);
+      setPageIndex(0);
       const saved = readingProgress.restorePosition(newIdx);
-      setPageIndex(saved?.chapterIndex === newIdx ? saved.pageIndex : 0);
+      requestAnimationFrame(() => {
+        setPageIndex(saved?.chapterIndex === newIdx ? saved.pageIndex : 0);
+      });
       setChapter(newIdx);
     } else {
-      // 缓存未命中（预取都来不及，极低概率）：走正常异步流程
+      setPageBreaks([]);
       setChapter(newIdx);
     }
   }, [chapterLoader, readingProgress, setChapter]);
@@ -838,7 +848,7 @@ export default function Reader() {
         style={{
           flex: 1,
           overflow: 'hidden',
-          padding: '36px 10px 72px 16px',
+          padding: '36px 28px 72px 40px',
           width: '50%',
         }}
       >
@@ -881,7 +891,7 @@ export default function Reader() {
         style={{
           flex: 1,
           overflow: 'hidden',
-          padding: '36px 16px 72px 10px',
+          padding: '36px 40px 72px 28px',
           width: '50%',
         }}
       >
@@ -907,7 +917,7 @@ export default function Reader() {
       style={{
         flex: 1,
         overflowY: readingMode === 'page' ? 'hidden' : 'auto',
-        padding: '40px 16px 80px',
+        padding: '40px 48px 80px',
         maxWidth: contentWidth,
         margin: '0 auto',
         width: '100%',

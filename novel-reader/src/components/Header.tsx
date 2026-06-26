@@ -291,20 +291,11 @@ export default function Header() {
           {theme === "light" ? <SunIcon size={14} /> : <MoonIcon size={14} />}
         </button>
         <button className="btn btn-primary" onClick={handleScan} title={scanAnimating ? "扫描中…" : "扫描书库"} style={{ width: veryNarrow ? 30 : 36, height: veryNarrow ? 30 : 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 0 }}>
-          {scanAnimating ? (
-            <svg width={veryNarrow ? 14 : 18} height={veryNarrow ? 14 : 18} viewBox="0 0 24 24" fill="none" style={{ animation: "scanSpin 1.6s linear infinite" }}>
-              <path d="M12 2A10 10 0 0 1 22 12" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
-              <line x1="12" y1="12" x2="20" y2="12" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" opacity="0.9" />
-              <circle cx="12" cy="12" r="9" stroke="var(--accent)" strokeWidth="0.8" strokeDasharray="3 4" opacity="0.5" />
-              <circle cx="12" cy="12" r="1.5" fill="var(--accent)" />
-            </svg>
-          ) : (
-            <svg width={veryNarrow ? 14 : 18} height={veryNarrow ? 14 : 18} viewBox="0 0 24 24" fill="none">
-              <path d="M12 2A10 10 0 0 1 22 12" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" />
-              <line x1="12" y1="12" x2="20" y2="10.5" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-              <circle cx="12" cy="12" r="1.5" fill="var(--accent)" />
-            </svg>
-          )}
+          <svg width={veryNarrow ? 15 : 19} height={veryNarrow ? 15 : 19} viewBox="0 0 24 24" fill="none">
+            <circle cx="10.5" cy="10.5" r="7" stroke="white" strokeWidth="2.2" opacity="0.92"/>
+            <line x1="15.5" y1="15.5" x2="21" y2="21" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.92"/>
+            <circle cx="10.5" cy="10.5" r="2.5" fill="white" opacity="0.25"/>
+          </svg>
         </button>
         <button className="btn" onClick={() => setDebugPanelOpen(true)} title="设置 (字体/颜色/毛玻璃/日志)" style={{ width: veryNarrow ? 30 : 36, height: veryNarrow ? 30 : 36, borderRadius: "var(--radius-md)", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <SettingsIcon size={veryNarrow ? 14 : 18} />

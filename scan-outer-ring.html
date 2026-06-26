@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>外环旋转 + 内波脉冲方案</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f2ed;
+  color: #2c2824;
+  padding: 40px 24px;
+}
+h1 { text-align: center; font-weight: 500; font-size: 1.5rem; color: #4a3f35; margin-bottom: 4px; }
+.sub { text-align: center; color: #8a7a6a; font-size: .85rem; margin-bottom: 36px; }
+
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  justify-content: center;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.card {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 20px;
+  padding: 24px 20px 18px;
+  text-align: center;
+  width: 240px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+.card:hover { transform: translateY(-4px); box-shadow: 0 8px 40px rgba(0,0,0,0.08); }
+.card.selected { outline: 2px solid #b8895a; outline-offset: 3px; }
+
+.icon-box { width: 72px; height: 72px; margin: 0 auto; position: relative; display: flex; align-items: center; justify-content: center; }
+
+.card .label { font-size: .82rem; font-weight: 500; color: #4a3f35; margin-top: 10px; }
+.card .desc { font-size: .7rem; color: #8a7a6a; line-height: 1.4; margin-top: 4px; padding: 0 4px; }
+
+.state-tabs { display: flex; gap: 4px; justify-content: center; margin: 10px 0 2px; }
+.state-tab {
+  padding: 3px 12px; border-radius: 20px; font-size: .7rem; font-weight: 500;
+  border: none; cursor: pointer; transition: all 0.2s ease;
+  background: rgba(0,0,0,0.04); color: #8a7a6a;
+}
+.state-tab.active { background: #b8895a; color: #fff; }
+
+/* ===== 通用动画 ===== */
+@keyframes spin_cw  { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes pulse_op { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.8; } }
+@keyframes scale_pulse { 0%, 100% { transform: scale(0.3); opacity: 0.6; } 50% { transform: scale(1.6); opacity: 0; } }
+@keyframes scale_breath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.5); } }
+
+.idle-group { opacity: 1; transition: opacity 0.4s ease; }
+.idle-group.hidden { opacity: 0; }
+.scan-group { opacity: 0; transition: opacity 0.4s ease; pointer-events: none; }
+.scan-group.visible { opacity: 1; pointer-events: auto; }
+
+/* ===== 方案 1: 虚线环旋转 + 3层波纹脉冲 ===== */
+.s1-ring { animation: spin_cw 3s linear infinite; transform-origin: 36px 36px; will-change: transform; }
+.s1-wave1 { animation: scale_pulse 2.4s ease-out infinite; transform-origin: 36px 36px; }
+.s1-wave2 { animation: scale_pulse 2.4s ease-out 0.8s infinite; transform-origin: 36px 36px; }
+.s1-wave3 { animation: scale_pulse 2.4s ease-out 1.6s infinite; transform-origin: 36px 36px; }
+
+/* ===== 方案 2: 实线环旋转 + 中心呼吸 ===== */
+.s2-ring { animation: spin_cw 2.6s linear infinite; transform-origin: 36px 36px; will-change: transform; }
+.s2-breath { animation: scale_breath 2s ease-in-out infinite; transform-origin: 36px 36px; }
+
+/* ===== 方案 3: 双环同转 + 内圈涟漪 ===== */
+.s3-ring { animation: spin_cw 3.2s linear infinite; transform-origin: 36px 36px; will-change: transform; }
+.s3-ripple1 { animation: scale_pulse 2s ease-out infinite; transform-origin: 36px 36px; }
+.s3-ripple2 { animation: scale_pulse 2s ease-out 1s infinite; transform-origin: 36px 36px; }
+
+/* ===== 方案 4: 环分段旋转 + 水波环 ===== */
+@keyframes dot_pulse { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.7; } }
+.s4-ring { animation: spin_cw 2.2s linear infinite; transform-origin: 36px 36px; will-change: transform; }
+.s4-dot1 { animation: dot_pulse 1.8s ease-in-out infinite; }
+.s4-dot2 { animation: dot_pulse 1.8s ease-in-out 0.45s infinite; }
+.s4-dot3 { animation: dot_pulse 1.8s ease-in-out 0.9s infinite; }
+.s4-dot4 { animation: dot_pulse 1.8s ease-in-out 1.35s infinite; }
+
+/* ===== 方案 5: 环旋转 + 扇形内波 ===== */
+.s5-ring { animation: spin_cw 2.8s linear infinite; transform-origin: 36px 36px; will-change: transform; }
+.s5-glow { animation: pulse_op 1.6s ease-in-out infinite; }
+
+/* ===== 方案 6: 环旋转 + 中心十字脉冲 ===== */
+.s6-ring { animation: spin_cw 3s linear infinite; transform-origin: 36px 36px; will-change: transform; }
+.s6-cross { animation: scale_breath 2.2s ease-in-out infinite; transform-origin: 36px 36px; }
+
+.footer { text-align: center; margin-top: 40px; color: #8a7a6a; font-size: .8rem; }
+.footer button {
+  margin-top: 10px; padding: 10px 28px; border: none; border-radius: 12px;
+  background: #b8895a; color: #fff; font-size: .88rem; cursor: pointer;
+}
+.footer button:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<h1>✦ 外环旋转 + 内波脉冲</h1>
+<p class="sub">外围环持续旋转表示扫描进行中，内部波纹脉冲表示扫描检测</p>
+
+<div class="gallery">
+
+<!-- ===== 1. 虚线环 + 3层波纹 ===== -->
+<div class="card" data-id="1" onclick="select(this)">
+  <div class="icon-box">
+    <!-- 空闲 -->
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="idle-group" data-idle="1">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="1.5" stroke-dasharray="4 8" opacity="0.2"/>
+      <circle cx="36" cy="36" r="20" fill="none" stroke="#b8895a" stroke-width="0.3" opacity="0.08"/>
+      <circle cx="36" cy="36" r="4" fill="#b8895a" opacity="0.25"/>
+    </svg>
+    <!-- 扫描 -->
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="scan-group" data-scan="1" style="display:none">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="1.5" stroke-dasharray="4 8" class="s1-ring" opacity="0.4"/>
+      <!-- 3层波纹从中心向外扩散 -->
+      <circle cx="36" cy="36" r="4" fill="none" stroke="#b8895a" stroke-width="1.5" class="s1-wave1"/>
+      <circle cx="36" cy="36" r="4" fill="none" stroke="#b8895a" stroke-width="1.5" class="s1-wave2"/>
+      <circle cx="36" cy="36" r="4" fill="none" stroke="#b8895a" stroke-width="1.5" class="s1-wave3"/>
+      <circle cx="36" cy="36" r="3" fill="#b8895a" opacity="0.5"/>
+    </svg>
+  </div>
+  <div class="state-tabs"><button class="state-tab active" onclick="switchState(event,1,'idle')">静止</button><button class="state-tab" onclick="switchState(event,1,'scan')">扫描</button></div>
+  <div class="label">① 虚线环 + 3层波纹</div>
+  <div class="desc">虚线外环匀速旋转，内部3层波纹交错扩散</div>
+</div>
+
+<!-- ===== 2. 实线环 + 中心呼吸 ===== -->
+<div class="card" data-id="2" onclick="select(this)">
+  <div class="icon-box">
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="idle-group" data-idle="2">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="1.2" opacity="0.2"/>
+      <circle cx="36" cy="36" r="4" fill="#b8895a" opacity="0.25"/>
+    </svg>
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="scan-group" data-scan="2" style="display:none">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="1.2" class="s2-ring" opacity="0.35"/>
+      <circle cx="36" cy="36" r="20" fill="none" stroke="#b8895a" stroke-width="0.3" opacity="0.1"/>
+      <circle cx="36" cy="36" r="12" fill="none" stroke="#b8895a" stroke-width="0.5" opacity="0.15"/>
+      <circle cx="36" cy="36" r="5" fill="none" stroke="#b8895a" stroke-width="0.8" class="s2-breath"/>
+      <circle cx="36" cy="36" r="3" fill="#b8895a" class="s2-breath"/>
+    </svg>
+  </div>
+  <div class="state-tabs"><button class="state-tab active" onclick="switchState(event,2,'idle')">静止</button><button class="state-tab" onclick="switchState(event,2,'scan')">扫描</button></div>
+  <div class="label">② 实线环 + 中心呼吸</div>
+  <div class="desc">外环匀速旋转，内环+中心点同步呼吸缩放</div>
+</div>
+
+<!-- ===== 3. 双圈同转 + 涟漪 ===== -->
+<div class="card" data-id="3" onclick="select(this)">
+  <div class="icon-box">
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="idle-group" data-idle="3">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="0.8" stroke-dasharray="3 6" opacity="0.18"/>
+      <circle cx="36" cy="36" r="4" fill="#b8895a" opacity="0.25"/>
+    </svg>
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="scan-group" data-scan="3" style="display:none">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="0.8" stroke-dasharray="3 6" class="s3-ring" opacity="0.35"/>
+      <circle cx="36" cy="36" r="23" stroke="#b8895a" stroke-width="0.5" stroke-dasharray="2 5" class="s3-ring" opacity="0.2"/>
+      <!-- 2层涟漪 -->
+      <circle cx="36" cy="36" r="3" fill="none" stroke="#b8895a" stroke-width="1.2" class="s3-ripple1"/>
+      <circle cx="36" cy="36" r="3" fill="none" stroke="#b8895a" stroke-width="1.2" class="s3-ripple2"/>
+      <circle cx="36" cy="36" r="2.5" fill="#b8895a" opacity="0.45"/>
+    </svg>
+  </div>
+  <div class="state-tabs"><button class="state-tab active" onclick="switchState(event,3,'idle')">静止</button><button class="state-tab" onclick="switchState(event,3,'scan')">扫描</button></div>
+  <div class="label">③ 双圈同转 + 涟漪</div>
+  <div class="desc">内外双虚线环同向旋转，内部2层涟漪</div>
+</div>
+
+<!-- ===== 4. 环分段 + 4点脉冲 ===== -->
+<div class="card" data-id="4" onclick="select(this)">
+  <div class="icon-box">
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="idle-group" data-idle="4">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="1.5" stroke-dasharray="2 12" opacity="0.2"/>
+      <circle cx="36" cy="36" r="4" fill="#b8895a" opacity="0.25"/>
+    </svg>
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="scan-group" data-scan="4" style="display:none">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="1.5" stroke-dasharray="2 12" class="s4-ring" opacity="0.35"/>
+      <!-- 4个小点围绕中心排列 -->
+      <circle cx="36" cy="24" r="2.5" fill="#b8895a" class="s4-dot1"/>
+      <circle cx="36" cy="48" r="2.5" fill="#b8895a" class="s4-dot1"/>
+      <circle cx="24" cy="36" r="2.5" fill="#b8895a" class="s4-dot1"/>
+      <circle cx="48" cy="36" r="2.5" fill="#b8895a" class="s4-dot1"/>
+      <circle cx="36" cy="36" r="2" fill="#b8895a" opacity="0.4"/>
+    </svg>
+  </div>
+  <div class="state-tabs"><button class="state-tab active" onclick="switchState(event,4,'idle')">静止</button><button class="state-tab" onclick="switchState(event,4,'scan')">扫描</button></div>
+  <div class="label">④ 环分段 + 4点脉冲</div>
+  <div class="desc">段状外环旋转，内部4点交替闪烁</div>
+</div>
+
+<!-- ===== 5. 环旋转 + 扇形内波 ===== -->
+<div class="card" data-id="5" onclick="select(this)">
+  <div class="icon-box">
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="idle-group" data-idle="5">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="0.8" opacity="0.18"/>
+      <circle cx="36" cy="36" r="4" fill="#b8895a" opacity="0.25"/>
+    </svg>
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="scan-group" data-scan="5" style="display:none">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="0.8" class="s5-ring" opacity="0.35"/>
+      <!-- 扇形内部光晕 -->
+      <path d="M36 36 L36 8 A28 28 0 0 1 64 36 Z" fill="#b8895a" class="s5-glow" opacity="0.08"/>
+      <circle cx="36" cy="36" r="18" fill="none" stroke="#b8895a" stroke-width="0.3" opacity="0.1"/>
+      <circle cx="36" cy="36" r="10" fill="none" stroke="#b8895a" stroke-width="0.5" opacity="0.15"/>
+      <circle cx="36" cy="36" r="3" fill="#b8895a" class="s5-glow"/>
+    </svg>
+  </div>
+  <div class="state-tabs"><button class="state-tab active" onclick="switchState(event,5,'idle')">静止</button><button class="state-tab" onclick="switchState(event,5,'scan')">扫描</button></div>
+  <div class="label">⑤ 环旋转 + 扇形内波</div>
+  <div class="desc">外环旋转，内部扇形光晕+同心环+中心呼吸</div>
+</div>
+
+<!-- ===== 6. 环旋转 + 十字脉冲 ===== -->
+<div class="card" data-id="6" onclick="select(this)">
+  <div class="icon-box">
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="idle-group" data-idle="6">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="1" stroke-dasharray="1 4" opacity="0.18"/>
+      <circle cx="36" cy="36" r="4" fill="#b8895a" opacity="0.25"/>
+    </svg>
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" class="scan-group" data-scan="6" style="display:none">
+      <circle cx="36" cy="36" r="28" stroke="#b8895a" stroke-width="1" stroke-dasharray="1 4" class="s6-ring" opacity="0.35"/>
+      <g class="s6-cross">
+        <rect x="35" y="14" width="2" height="16" rx="1" fill="#b8895a" opacity="0.4"/>
+        <rect x="35" y="42" width="2" height="16" rx="1" fill="#b8895a" opacity="0.4"/>
+        <rect x="14" y="35" width="16" height="2" rx="1" fill="#b8895a" opacity="0.4"/>
+        <rect x="42" y="35" width="16" height="2" rx="1" fill="#b8895a" opacity="0.4"/>
+      </g>
+      <circle cx="36" cy="36" r="3" fill="#b8895a" opacity="0.45"/>
+    </svg>
+  </div>
+  <div class="state-tabs"><button class="state-tab active" onclick="switchState(event,6,'idle')">静止</button><button class="state-tab" onclick="switchState(event,6,'scan')">扫描</button></div>
+  <div class="label">⑥ 环旋转 + 十字脉冲</div>
+  <div class="desc">点状外环旋转，内部十字线缩放脉冲</div>
+</div>
+
+</div>
+
+<div class="footer">
+  <p>点击卡片选中 · 切换「静止」/「扫描」预览</p>
+  <button onclick="showSelected()">显示选中编号</button>
+</div>
+
+<script>
+let current = null;
+function select(el) {
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  current = el.dataset.id;
+}
+function switchState(evt, id, state) {
+  evt.stopPropagation();
+  const card = document.querySelector(`.card[data-id="${id}"]`);
+  card.querySelectorAll('.state-tab').forEach(t => t.classList.remove('active'));
+  evt.target.classList.add('active');
+  const idle = card.querySelector(`[data-idle="${id}"]`);
+  const scan = card.querySelector(`[data-scan="${id}"]`);
+  if (idle) idle.style.display = state === 'idle' ? '' : 'none';
+  if (scan) scan.style.display = state === 'scan' ? '' : 'none';
+  if (!current) { card.classList.add('selected'); current = String(id); }
+}
+function showSelected() {
+  if (current) alert('你选中了：第 ' + current + ' 号');
+  else alert('请先点击一个卡片');
+}
+</script>
+</body>
+</html>
