@@ -291,7 +291,7 @@ export default function DebugPanel() {
       <div style={{ width: "88vw", height: narrow ? "96vh" : "82vh", maxWidth: narrow ? "none" : 960, background: "var(--glass-bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", boxShadow: "0 16px 80px rgba(0,0,0,0.35)", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: "1px solid var(--border-glass)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: "1.15rem", fontWeight: 600, color: "var(--text)" }}>高级设置</span>
+            <span style={{ fontSize: "1.15rem", fontWeight: 600, color: "var(--text)" }}>设置</span>
             <span style={{ fontSize: ".7rem", color: "var(--text-dim)", opacity: 0.45 }}>Debug Panel</span>
           </div>
           <button className="btn" style={{ padding: "5px 10px", fontSize: ".85rem" }} onClick={() => setDebugPanelOpen(false)}>✕</button>
@@ -345,7 +345,7 @@ export default function DebugPanel() {
             {(["settings", "logs", "fonts"] as const).map((tab) => (
               <button key={tab} className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginBottom: 4, background: rightTab === tab ? "rgba(var(--accent-rgb),0.12)" : undefined, border: rightTab === tab ? "1px solid rgba(var(--accent-rgb),0.3)" : undefined }}
                 onClick={() => setRightTab(tab)}>
-                {tab === "settings" ? "设置" : tab === "logs" ? "日志" : "字体"}
+                {tab === "settings" ? "高级设置" : tab === "logs" ? "日志" : "字体"}
               </button>
             ))}
           </div>
@@ -432,7 +432,7 @@ export default function DebugPanel() {
                   <span>1</span><span>|</span><span>4</span><span>|</span><span>8</span><span>|</span><span>12</span><span>|</span><span>16</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "16px 0 4px" }}>
-                  <span style={{ color: "var(--text)" }}>毛玻璃强度</span>
+                  <span style={{ color: "var(--text)" }}>模糊</span>
                   <span style={{ color: "var(--accent)", fontWeight: 600 }}>{glassIntensity}px</span>
                 </div>
                 <input
@@ -449,9 +449,8 @@ export default function DebugPanel() {
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim)", marginTop: 0, padding: "0 2px", userSelect: "none" }}>
                   <span>4（清晰）</span><span>|</span><span>12</span><span>|</span><span>24</span><span>|</span><span>36</span><span>|</span><span>48（模糊）</span>
                 </div>
-                <div style={{ borderTop: "1px solid var(--border-glass)", margin: "16px 0 10px" }} />
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "0 0 4px" }}>
-                  <span style={{ color: "var(--text)" }}>圆角强度</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", margin: "16px 0 4px" }}>
+                  <span style={{ color: "var(--text)" }}>边角圆滑</span>
                   <span style={{ color: "var(--accent)", fontWeight: 600 }}>{radiusIntensity}px</span>
                 </div>
                 <input
@@ -482,7 +481,8 @@ export default function DebugPanel() {
                   const theme = useStore.getState().theme;
                   useStore.getState().setTheme(theme === "light" ? "dark" : "light");
                 }}>切换昼夜主题</button>
-                <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 16 }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>重置所有设置</button>
+                <div style={{ height: 1, background: "var(--border-glass)", margin: "6px 0" }} />
+                <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 10 }} onClick={async () => { try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_dpi", { dpi: 150 }); } catch {} setRenderDpi(150); try { localStorage.clear(); window.location.reload(); } catch {} }}>重置所有设置</button>
               </div>
             )}
             {rightTab === "logs" && (
