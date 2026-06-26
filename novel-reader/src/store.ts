@@ -104,6 +104,17 @@ interface AppStore {
   setReaderTextColor: (c: string) => void;
   readerBgColor: string;
   setReaderBgColor: (c: string) => void;
+  // 底部栏排版状态
+  lineHeight: number;
+  setLineHeight: (v: number) => void;
+  letterSpacing: number;
+  setLetterSpacing: (v: number) => void;
+  textIndent: number;
+  setTextIndent: (v: number) => void;
+  textAlign: "left" | "center" | "justify";
+  setTextAlign: (a: "left" | "center" | "justify") => void;
+  autoFlipInterval: number;
+  setAutoFlipInterval: (v: number) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (o: boolean) => void;
   settingsOpen: boolean;
@@ -215,6 +226,28 @@ export const useStore = create<AppStore>((set, get) => ({
     localStorage.setItem("nr-bg-color", c);
     set({ readerBgColor: c });
   },
+  lineHeight: parseFloat(localStorage.getItem("nr-line-height") || "2"),
+  setLineHeight: (v) => {
+    localStorage.setItem("nr-line-height", String(v));
+    set({ lineHeight: v });
+  },
+  letterSpacing: parseFloat(localStorage.getItem("nr-letter-spacing") || "0"),
+  setLetterSpacing: (v) => {
+    localStorage.setItem("nr-letter-spacing", String(v));
+    set({ letterSpacing: v });
+  },
+  textIndent: parseFloat(localStorage.getItem("nr-text-indent") || "2"),
+  setTextIndent: (v) => {
+    localStorage.setItem("nr-text-indent", String(v));
+    set({ textIndent: v });
+  },
+  textAlign: (localStorage.getItem("nr-text-align") || "justify") as "left" | "center" | "justify",
+  setTextAlign: (a) => {
+    localStorage.setItem("nr-text-align", a);
+    set({ textAlign: a });
+  },
+  autoFlipInterval: 0,
+  setAutoFlipInterval: (v) => set({ autoFlipInterval: v }),
   sidebarOpen: false,
   setSidebarOpen: (o) => set({ sidebarOpen: o }),
   settingsOpen: false,

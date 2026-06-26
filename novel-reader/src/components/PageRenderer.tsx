@@ -7,6 +7,12 @@ interface PageRendererProps {
   fontFamily: string;
   fontWeight: number;
   textColor: string;
+  /** 段落缩进，如 "2em" */
+  textIndent?: string;
+  /** 对齐方式 */
+  textAlign?: "left" | "center" | "justify";
+  /** 字间距 px */
+  letterSpacing?: number;
   /** 有书签的段落索引集合 */
   bookmarkParagraphIndices?: Set<number>;
   /** 段落偏移（分页模式下，全局段落索引 = paragraphOffset + 当前段索引） */
@@ -24,6 +30,9 @@ export default function PageRenderer({
   fontFamily,
   fontWeight,
   textColor,
+  textIndent = '2em',
+  textAlign = 'justify',
+  letterSpacing = 0,
   bookmarkParagraphIndices,
   paragraphOffset = 0,
 }: PageRendererProps) {
@@ -39,6 +48,8 @@ export default function PageRenderer({
         fontFamily,
         fontWeight,
         color: textColor || 'var(--text)',
+        textAlign,
+        letterSpacing: letterSpacing > 0 ? `${letterSpacing}px` : undefined,
         transition: 'color 0.3s ease',
       }}
     >
@@ -50,7 +61,7 @@ export default function PageRenderer({
             key={i}
             data-paragraph-index={globalIdx}
             style={{
-              textIndent: '2em',
+              textIndent,
               margin: 0,
               position: 'relative',
             }}

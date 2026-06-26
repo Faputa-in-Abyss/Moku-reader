@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import BottomBar from './BottomBar';
 import { useStore } from '../store';
 import SidebarHandle from './SidebarHandle';
 import WindowControls from './WindowControls';
-import { ContextMenu, GearIcon, MenuDivider, MenuItem, topbarGlassStyle, BackButton } from './SharedUI';
+import { ContextMenu, MenuDivider, MenuItem, topbarGlassStyle, BackButton } from './SharedUI';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useChapterLoader } from '../hooks/useChapterLoader';
 import { useReadingProgress } from '../hooks/useReadingProgress';
@@ -118,10 +119,15 @@ export default function Reader() {
   const setReaderTextColor = useStore((s) => s.setReaderTextColor);
   const readerBgColor = useStore((s) => s.readerBgColor);
   const setReaderBgColor = useStore((s) => s.setReaderBgColor);
+  const lineHeight = useStore((s) => s.lineHeight);
+  const letterSpacing = useStore((s) => s.letterSpacing);
+  const textIndent = useStore((s) => s.textIndent);
+  const textAlign = useStore((s) => s.textAlign);
+  const autoFlipInterval = useStore((s) => s.autoFlipInterval);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
-  const settingsOpen = useStore((s) => s.settingsOpen);
-  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
+  const settingsOpen = false;
+  const setSettingsOpen = () => {};
   const readingMode = useStore((s) => s.readingMode);
   const setReadingMode = useStore((s) => s.setReadingMode);
   const keybindings = useStore((s) => s.keybindings);
@@ -186,7 +192,7 @@ export default function Reader() {
   const wheelLockRef = useRef(false);
   const pendingCharOffsetRef = useRef<number | null>(null);
   sidebarOpenRef.current = sidebarOpen;
-  settingsOpenRef.current = settingsOpen;
+  
   const contentWidth = narrow ? Math.min(window.innerWidth - 32, 680) : ([408, 544, 680, 816, 952][windowSize] || 680);
   const pageFontFamily = readerFont || "'Georgia','Noto Serif SC',serif";
   useEffect(() => {
@@ -212,9 +218,12 @@ export default function Reader() {
     pageWidth,
     pageHeight,
     fontSize,
-    lineHeight: 2,
+    lineHeight,
     fontFamily: pageFontFamily,
     fontWeight: fontBold ? 700 : 400,
+    letterSpacing,
+    textIndent,
+    textAlign,
     enabled: readingMode === 'page' && vw > 0 && vh > 0,
   });
   useEffect(() => {
@@ -382,32 +391,32 @@ export default function Reader() {
   };
   const handleMouseMove = (e: React.MouseEvent) => {
     clearTimeout(topbarTimer.current);
-    if (narrow) return;
-    if (e.clientY < 80) { document.querySelector('.reader-topbar')?.classList.add('visible'); }
-    else {
-      const tb = document.querySelector('.reader-topbar');
-      if (!tb) return;
-      const rect = tb.getBoundingClientRect();
-      if (tb.classList.contains('visible') && e.clientY >= rect.top && e.clientY <= rect.bottom) return;
-      topbarTimer.current = window.setTimeout(() => { if (!sidebarOpenRef.current && !settingsOpenRef.current) { document.querySelector('.reader-topbar')?.classList.remove('visible'); } }, 300);
+    if (!narrow) {
+      if (e.clientY < 80) { document.querySelector('.reader-topbar')?.classList.add('visible'); }
+      else {
+        const tb = document.querySelector('.reader-topbar');
+        if (tb) {
+          const rect = tb.getBoundingClientRect();
+          if (!tb.classList.contains('visible') || e.clientY > rect.bottom) {
+            topbarTimer.current = window.setTimeout(() => {
+              if (!sidebarOpenRef.current) { document.querySelector('.reader-topbar')?.classList.remove('visible'); }
+            }, 300);
+          }
+        }
+      }
     }
-    setSidebarHint(e.clientX >= 28 && e.clientX < 100 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpen && !settingsOpen);
-    if (e.clientX < 15 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpenRef.current && !settingsOpenRef.current) { setSidebarOpen(true); }
-    else if (!settingsOpenRef.current && e.clientX >= 60) {
+    setSidebarHint(e.clientX >= 28 && e.clientX < 100 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpen);
+    if (e.clientX < 15 && e.clientY > 120 && e.clientY < window.innerHeight - 60 && !sidebarOpenRef.current) { setSidebarOpen(true); }
+    else if (e.clientX >= 60) {
       if (sidebarOpenRef.current) {
         if (e.clientX > 280) { if (!sideTimer.current) { sideTimer.current = window.setTimeout(() => { setSidebarOpen(false); sideTimer.current = 0; }, 500); } }
         else { if (sideTimer.current) { clearTimeout(sideTimer.current); sideTimer.current = 0; } }
       }
     }
-    if (settingsOpenRef.current && !sidebarOpenRef.current) {
-      const ww = window.innerWidth;
-      if (e.clientX < ww - 300) { if (!sideTimer.current) { sideTimer.current = window.setTimeout(() => { setSettingsOpen(false); sideTimer.current = 0; }, 500); } }
-      else { if (sideTimer.current) { clearTimeout(sideTimer.current); sideTimer.current = 0; } }
-    }
   };
   const handleMouseLeave = () => {
     clearTimeout(topbarTimer.current);
-    if (!sidebarOpenRef.current && !settingsOpenRef.current) { document.querySelector('.reader-topbar')?.classList.remove('visible'); }
+    if (!sidebarOpenRef.current) { document.querySelector('.reader-topbar')?.classList.remove('visible'); }
     if (sideTimer.current) { clearTimeout(sideTimer.current); sideTimer.current = 0; }
   };
   useEffect(() => {
@@ -446,6 +455,12 @@ export default function Reader() {
     animate();
     return () => { running = false; window.removeEventListener('resize', resize); };
   }, []);
+  // 自动翻页定时器
+  useEffect(() => {
+    if (autoFlipInterval <= 0) return;
+    const id = setInterval(() => { nextPage(); }, autoFlipInterval * 1000);
+    return () => clearInterval(id);
+  }, [autoFlipInterval, pageIndex, currentChapter]);
   useEffect(() => { return () => { clearTimeout(topbarTimer.current); clearTimeout(tipTimer.current); clearTimeout(sideTimer.current); }; }, []);
   const renderContent = () => {
     const curParas = new Set(bookmarks.filter(b => b.chapterIndex === currentChapter && b.paragraphIndex !== undefined).map(b => b.paragraphIndex!));
@@ -462,9 +477,10 @@ export default function Reader() {
         const end = pageParas[pageParas.length - 1] + 1;
         const sliceText = paras.slice(start, end).join('\n');
         return (
-          <PageRenderer text={sliceText} fontSize={fontSize} lineHeight={2} fontFamily={pageFontFamily}
+          <PageRenderer text={sliceText} fontSize={fontSize} lineHeight={lineHeight} fontFamily={pageFontFamily}
             fontWeight={fontBold ? 700 : 400} textColor={readerTextColor}
-            bookmarkParagraphIndices={curParas} paragraphOffset={start} />
+            bookmarkParagraphIndices={curParas} paragraphOffset={start}
+            textIndent={`${textIndent}em`} textAlign={textAlign} letterSpacing={letterSpacing} />
         );
       };
       const titleBlock = chapters?.[currentChapter]?.title && (
@@ -497,8 +513,9 @@ export default function Reader() {
     return (
       <div ref={contentRef} style={{ flex: 1, overflowY: 'auto', padding: '40px 48px 80px', maxWidth: contentWidth, margin: '0 auto', width: '100%' }}>
         {chapters?.[currentChapter]?.title && <div style={{ textAlign: 'center', marginBottom: 24, fontSize: '1.1rem', fontWeight: 600, color: 'var(--text)' }}>{chapters[currentChapter].title}</div>}
-        <PageRenderer text={chapterText} fontSize={fontSize} lineHeight={2} fontFamily={pageFontFamily}
-          fontWeight={fontBold ? 700 : 400} textColor={readerTextColor} bookmarkParagraphIndices={curParas} paragraphOffset={0} />
+        <PageRenderer text={chapterText} fontSize={fontSize} lineHeight={lineHeight} fontFamily={pageFontFamily}
+          fontWeight={fontBold ? 700 : 400} textColor={readerTextColor} bookmarkParagraphIndices={curParas} paragraphOffset={0}
+          textIndent={`${textIndent}em`} textAlign={textAlign} letterSpacing={letterSpacing} />
       </div>
     );
   };
@@ -507,6 +524,16 @@ export default function Reader() {
       <canvas id="reader-particle-canvas" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', zIndex: 199, pointerEvents: 'none' }} />
       <div className="reader-view" onContextMenu={(e) => e.preventDefault()}
         onMouseDown={(e) => {
+          if (e.button === 0) {
+            // 关闭右键菜单
+            setCtxMenu(null);
+            setCtxSubMenu(null);
+            // 收起顶部栏（点击顶栏外部时）
+            const tb = document.querySelector('.reader-topbar');
+            if (tb && !tb.contains(e.target as Node)) {
+              tb.classList.remove('visible');
+            }
+          }
           if (e.button === 2) {
             let pIdx;
             const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -547,7 +574,7 @@ export default function Reader() {
               style={{ fontSize: '.78rem', opacity: readingMode === 'page' && !narrow ? 1 : 0, maxWidth: readingMode === 'page' && !narrow ? 60 : 0, overflow: 'hidden', whiteSpace: 'nowrap', background: readerDoublePage ? 'rgba(var(--accent-rgb),0.12)' : undefined, borderColor: readerDoublePage ? 'var(--accent)' : undefined, transition: 'opacity 0.3s ease, max-width 0.3s ease' }}
             >{readerDoublePage ? '双页' : '单页'}</button>
             <button className="btn" style={{ fontSize: '.78rem', opacity: narrow ? 0 : 1, maxWidth: narrow ? 0 : 60, overflow: 'hidden', whiteSpace: 'nowrap', transition: 'opacity 0.3s ease, max-width 0.3s ease' }} onClick={() => setSidebarOpen(!sidebarOpen)}>目录</button>
-            <button className="btn" onClick={() => setSettingsOpen(!settingsOpen)} style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text)' }}><GearIcon /></button>
+
             <div data-tauri-no-drag><WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleWindowClose} maximized={maximized} /></div>
           </div>
         </div>
@@ -567,34 +594,8 @@ export default function Reader() {
             }
           }}
           onClose={() => setSidebarOpen(false)} onRemoveBookmark={removeBookmark} />
-        <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 300, background: 'var(--glass-bg)', backdropFilter: 'blur(var(--glass-blur)) saturate(var(--glass-saturate))', borderLeft: '1px solid var(--border-glass)', transform: settingsOpen ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.35s ease', zIndex: 400, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 600, color: 'var(--text)' }}>设置</span>
-            <button className="btn" style={{ padding: '2px 8px', fontSize: '.7rem' }} onClick={() => setSettingsOpen(false)}>{'✕'}</button>
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ color: 'var(--text-dim)', fontSize: '.78rem', marginBottom: 8 }}><LayoutIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />阅读模式</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {['page', 'scroll'].map((mode) => (
-                  <button key={mode} className="btn" style={{ flex: 1, padding: '8px 0', fontSize: '.82rem', background: readingMode === mode ? 'rgba(var(--accent-rgb),0.12)' : undefined, borderColor: readingMode === mode ? 'var(--accent)' : undefined }} onClick={() => setReadingMode(mode as any)}>{mode === 'page' ? '翻页' : '滚动'}</button>
-                ))}
-              </div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ color: 'var(--text-dim)', fontSize: '.78rem', marginBottom: 8 }}><TextIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />字号</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button className="btn" style={{ padding: '4px 10px', fontSize: '.7rem' }} onClick={() => setFontSize(fontSize - 0.1)}><MinusIcon size={14} /></button>
-                <span style={{ color: 'var(--text)', fontSize: '.85rem', minWidth: 36, textAlign: 'center' }}>{fontSize.toFixed(1)}</span>
-                <button className="btn" style={{ padding: '4px 10px', fontSize: '.7rem' }} onClick={() => setFontSize(fontSize + 0.1)}><PlusIcon size={14} /></button>
-              </div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ color: 'var(--text-dim)', fontSize: '.78rem', marginBottom: 8 }}><FontIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />字体</div>
-              <FontSearchDropdown fonts={FONT_LIST} current={readerFont} onSelect={setReaderFont} />
-            </div>
-          </div>
-        </div>
+
+        <BottomBar />
         {tip && <div style={{ position: 'fixed', bottom: 60, left: '50%', transform: 'translateX(-50%)', background: 'var(--glass-bg)', backdropFilter: 'blur(var(--glass-tip-blur))', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-full)', padding: '10px 24px', fontSize: '.85rem', color: 'var(--text)', zIndex: 500, animation: 'tipIn 0.3s ease' }}>{tip}</div>}
         {ctxMenu && !ctxSubMenu && (
           <ContextMenu x={ctxMenu.x} y={ctxMenu.y}>
@@ -613,12 +614,6 @@ export default function Reader() {
               }} />
             <MenuDivider />
             <MenuItem icon={<PaletteIcon size={16} />} label="主题颜色" onClick={() => setCtxSubMenu('colors')} />
-            <MenuItem icon={<FontIcon size={16} />} label="字体" onClick={() => setCtxSubMenu('font')} />
-            <MenuDivider />
-            <MenuItem icon={<BoldIcon size={16} />} label={fontBold ? '取消加粗' : '字体加粗'} onClick={() => { setFontBold(!fontBold); setCtxMenu(null); }} />
-            <MenuDivider />
-            <MenuItem icon={<MinusIcon size={16} />} label="缩小字号" onClick={() => { setFontSize(fontSize - 0.1); setCtxMenu(null); }} />
-            <MenuItem icon={<PlusIcon size={16} />} label="放大字号" onClick={() => { setFontSize(fontSize + 0.1); setCtxMenu(null); }} />
           </ContextMenu>
         )}
         {ctxMenu && ctxSubMenu === 'colors' && (
@@ -645,18 +640,7 @@ export default function Reader() {
             </div>
           </div>
         )}
-        {ctxMenu && ctxSubMenu === 'font' && (
-          <ContextMenu x={ctxMenu.x + 10} y={ctxMenu.y}>
-            <div style={{ padding: '8px 14px 4px', color: 'var(--text-dim)', fontSize: '.78rem', display: 'flex', justifyContent: 'space-between' }}>
-              <span><FontIcon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />字体</span>
-              <span style={{ cursor: 'pointer', color: 'var(--text-dim)', fontSize: '.8rem' }} onClick={() => { setCtxSubMenu(null); }}>{'←'} 返回</span>
-            </div>
-            {FONT_LIST_SHORT.map((f) => (
-              <MenuItem key={f.value} label={(readerFont || '') === f.value ? '✓ ' + f.label : f.label}
-                onClick={() => { setReaderFont(f.value); setCtxMenu(null); setCtxSubMenu(null); }} />
-            ))}
-          </ContextMenu>
-        )}
+
       </div>
     </>
   );

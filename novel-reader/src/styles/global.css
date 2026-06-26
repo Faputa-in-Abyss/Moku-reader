@@ -421,3 +421,70 @@ header:hover .light-follow { opacity: 1; }
   pointer-events: none;
   cursor: grabbing;
 }
+
+/* ===== 阅读器底部栏 ===== */
+.reader-bottombar {
+  --bb-popover-bg: var(--glass-bg, rgba(255,255,255,0.92));
+  --bb-popover-border: var(--border-glass, rgba(0,0,0,0.06));
+}
+
+/* 底部栏按钮 hover tooltip */
+.bb-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(44, 36, 22, 0.88);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 999;
+}
+.bb-btn:hover .bb-tooltip {
+  opacity: 1;
+}
+
+/* 底部栏 popover 弹出面板 */
+.bb-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bb-popover-bg);
+  backdrop-filter: blur(var(--glass-blur, 16px)) saturate(var(--glass-saturate, 1.8));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 16px)) saturate(var(--glass-saturate, 1.8));
+  border: 1px solid var(--bb-popover-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  z-index: 999;
+  min-width: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 底部栏预设按钮 */
+.bb-preset-btn:hover {
+  background: rgba(var(--accent-rgb, 199,81,46), 0.08) !important;
+  border-color: var(--accent) !important;
+}
+
+/* 底部栏隐藏/显示过渡 */
+.reader-bottombar {
+  opacity: 0;
+  transform: translateY(100%);
+  pointer-events: none;
+}
+.reader-bottombar.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
