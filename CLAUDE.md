@@ -1,5 +1,5 @@
 未经允许不可操作代码，当用户描述问题时，不要猜测或自行假设，直接追问具体细节和想要实现的目标。
 How to apply: 每次对话开始时先阅读此文件，先不要做修改，直接提问至少 1-2 个具体问题，直到对需求有清晰理解后再动手。
-不要操作 git（git checkout / reset / add / commit 等），映射层不支持 git 的原子文件操作，会导致 index.lock 残留或 index 损坏。涉及 git 的操作全部交给用户在 Windows 上手动完成。都在小说目录的git提交
+不要操作 git（git checkout / reset / add / commit 等），映射层不支持 git 的原子文件操作，会导致 index.lock 残留或 index 损坏。涉及 git 的操作全部交给用户在 Windows 上手动完成。都在小说目录cd C:\Users\Richard\Claude\Projects\本地小说 提交
 每次完成一个重要项目，都提示我保存到 git，并且一旦我保存了，就按照时间和进度还有 分支，git 版本号把做出的改动追加到记忆里。
 不要擅自修改和当前任务无关的组件代码和从git恢复，以最简单的实现方式去写代码

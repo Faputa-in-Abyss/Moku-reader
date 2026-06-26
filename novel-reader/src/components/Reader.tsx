@@ -332,12 +332,9 @@ export default function Reader() {
   useReaderKeyboard(keybindings, fontSize, setFontSize, prevPage, nextPage, recordingKey);
   useEffect(() => {
     if (!book?.id || !chapterText || readingMode !== 'page' || pages.length === 0) return;
-    const timer = setInterval(() => {
-      const topPara = pages[pageIndex]?.[0] ?? 0;
-      readingProgress.savePosition({ chapterIndex: currentChapter, charOffset: topPara, pageIndex, scrollOffset: 0 });
-    }, 800);
-    return () => clearInterval(timer);
-  }, [currentChapter, book?.id, chapterText, readingProgress, pages, pageIndex]);
+    const topPara = pages[pageIndex]?.[0] ?? 0;
+    readingProgress.savePosition({ chapterIndex: currentChapter, charOffset: topPara, pageIndex, scrollOffset: 0 });
+  }, [currentChapter, book?.id, readingMode, pageIndex, readingProgress]);
   useEffect(() => {
     if (readingMode !== 'scroll' || !book?.id) return;
     const el = contentRef.current;
@@ -589,9 +586,8 @@ export default function Reader() {
               disabled={window.innerWidth < 768}
               style={{ fontSize: '.78rem', opacity: readingMode === 'page' && !narrow ? 1 : 0, maxWidth: readingMode === 'page' && !narrow ? 60 : 0, overflow: 'hidden', whiteSpace: 'nowrap', background: readerDoublePage ? 'rgba(var(--accent-rgb),0.12)' : undefined, borderColor: readerDoublePage ? 'var(--accent)' : undefined, transition: 'opacity 0.3s ease, max-width 0.3s ease' }}
             >{readerDoublePage ? '双页' : '单页'}</button>
-            <button className="btn" style={{ fontSize: '.78rem', opacity: narrow ? 0 : 1, maxWidth: narrow ? 0 : 60, overflow: 'hidden', whiteSpace: 'nowrap', transition: 'opacity 0.3s ease, max-width 0.3s ease' }} onClick={() => setSidebarOpen(!sidebarOpen)}>目录</button>
 
-            <div data-tauri-no-drag><WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleWindowClose} maximized={maximized} /></div>
+            <div data-tauri-no-drag><WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleWindowClose} maximized={maximized} foldable={false} /></div>
           </div>
         </div>
         {renderContent()}
