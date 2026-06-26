@@ -466,9 +466,9 @@ header:hover .light-follow { opacity: 1; }
   z-index: 999;
   min-width: 100px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* 底部栏预设按钮 */
