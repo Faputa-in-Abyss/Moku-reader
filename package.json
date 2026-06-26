@@ -1,0 +1,13 @@
+{
+  "name": "moku-reader",
+  "version": "1.0.3",
+  "private": true,
+  "scripts": {
+    "dev": "cd novel-reader && npm run dev",
+    "build": "cd novel-reader && npm run build",
+    "preview": "cd novel-reader && npm run preview",
+    "tauri": "cd novel-reader && npm run tauri",
+    "tauri:dev": "cd novel-reader && npm run tauri dev",
+    "tauri:build": "cd novel-reader && npm run tauri build"
+  }
+}
