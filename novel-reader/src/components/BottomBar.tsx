@@ -4,7 +4,8 @@ import {
   MinusIcon, PlusIcon, BoldIcon, FontIcon,
   LineHeightIcon, LetterSpacingIcon, IndentIcon,
   AlignLeftIcon, AlignCenterIcon, AlignJustifyIcon,
-  ContentWidthIcon, PlayIcon, PageModeIcon, ScrollModeIcon,
+  ContentWidthIcon, FlipPageIcon, PageModeIcon, ScrollModeIcon,
+  SinglePageIcon,
   PaletteIcon,
 } from './FlatIcons';
 
@@ -79,7 +80,8 @@ export default function BottomBar() {
   const { readingMode, setReadingMode, fontSize, setFontSize, fontBold, setFontBold,
     readerFont, setReaderFont, lineHeight, setLineHeight, letterSpacing, setLetterSpacing,
     textIndent, setTextIndent, textAlign, setTextAlign, windowSize, setWindowSize,
-    autoFlipInterval, setAutoFlipInterval, readerTextColor, setReaderTextColor, readerBgColor, setReaderBgColor,
+    readerDoublePage, setReaderDoublePage,
+    readerTextColor, setReaderTextColor, readerBgColor, setReaderBgColor,
   } = useStore();
 
   const [visible, setVisible] = useState(false);
@@ -133,8 +135,19 @@ export default function BottomBar() {
       opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(100%)', pointerEvents: visible ? 'auto' : 'none', transition: 'opacity 0.25s ease, transform 0.25s ease',
     }}>
       <Btn tip={readingMode === 'page' ? '翻页模式' : '滚动模式'} onClick={() => { setReadingMode(readingMode === 'page' ? 'scroll' : 'page'); setOpenPopover(null); }}>
-        {readingMode === 'page' ? <PageModeIcon size={18} /> : <ScrollModeIcon size={18} />}
+        <span key={readingMode} style={{ display: 'inline-flex', animation: 'iconFlip 0.3s ease' }}>
+          {readingMode === 'page' ? <FlipPageIcon size={18} /> : <ScrollModeIcon size={18} />}
+        </span>
       </Btn>
+      <div style={{ opacity: readingMode === 'page' ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+        <Btn tip={readingMode === 'page' ? (readerDoublePage ? '切换为单页' : '切换为双页') : '滚动模式下不可用'}
+          active={readerDoublePage}
+          onClick={() => { if (window.innerWidth < 768) { return; } setReaderDoublePage(!readerDoublePage); }}>
+          <span key={String(readerDoublePage)} style={{ display: 'inline-flex', animation: 'iconFlip 0.3s ease' }}>
+            {readerDoublePage ? <PageModeIcon size={18} /> : <SinglePageIcon size={18} />}
+          </span>
+        </Btn>
+      </div>
       <Div />
       <Btn tip="缩小字号" onClick={() => setFontSize(fontSize - 0.1)}><MinusIcon size={16} /></Btn>
       <span onClick={() => setFontSize(1.2)} style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--text)', minWidth: 28, textAlign: 'center', cursor: 'pointer', flexShrink: 0 }} title="点击重置为默认">{fontSize.toFixed(1)}</span>
@@ -255,13 +268,7 @@ export default function BottomBar() {
         )}
       </BtnAnchor>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', flexShrink: 0 }}>
-        <PlayIcon size={16} style={{ color: autoFlipInterval > 0 ? 'var(--accent)' : 'var(--text-dim)', flexShrink: 0 }} />
-        <input type="range" min={0} max={300} value={autoFlipInterval} onChange={(e) => setAutoFlipInterval(Number(e.target.value))} title={`自动翻页: ${autoFlipInterval === 0 ? '关' : autoFlipInterval + '秒'}`} style={{ width: 64, accentColor: 'var(--accent)', height: 4, flexShrink: 0 }} />
-        <span style={{ fontSize: '.65rem', color: autoFlipInterval > 0 ? 'var(--accent)' : 'var(--text-dim)', minWidth: 24, textAlign: 'right', flexShrink: 0 }}>
-          {autoFlipInterval === 0 ? '关' : autoFlipInterval + 's'}
-        </span>
-      </div>
+
     </div>
   );
 }

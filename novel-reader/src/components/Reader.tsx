@@ -123,7 +123,6 @@ export default function Reader() {
   const letterSpacing = useStore((s) => s.letterSpacing);
   const textIndent = useStore((s) => s.textIndent);
   const textAlign = useStore((s) => s.textAlign);
-  const autoFlipInterval = useStore((s) => s.autoFlipInterval);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
   const settingsOpen = false;
@@ -478,12 +477,7 @@ export default function Reader() {
     animate();
     return () => { running = false; window.removeEventListener('resize', resize); };
   }, []);
-  // 自动翻页定时器
-  useEffect(() => {
-    if (autoFlipInterval <= 0) return;
-    const id = setInterval(() => { nextPage(); }, autoFlipInterval * 1000);
-    return () => clearInterval(id);
-  }, [autoFlipInterval, pageIndex, currentChapter]);
+
   useEffect(() => { return () => { clearTimeout(topbarTimer.current); clearTimeout(tipTimer.current); clearTimeout(sideTimer.current); }; }, []);
   const renderContent = () => {
     const curParas = new Set(bookmarks.filter(b => b.chapterIndex === currentChapter && b.paragraphIndex !== undefined).map(b => b.paragraphIndex!));
@@ -592,11 +586,6 @@ export default function Reader() {
             <span style={{ fontFamily: 'var(--font-title)', fontWeight: 500, maxWidth: narrow ? (veryNarrow ? 0 : 120) : 240, opacity: veryNarrow ? 0 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'max-width 0.3s ease, opacity 0.3s ease' }}>{book?.title}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, position: 'relative', zIndex: 1, alignItems: 'center' }}>
-            <button className="btn" onClick={() => { if (window.innerWidth < 768) { showTip('窗口过窄无法开启双页模式'); return; } setReaderDoublePage(!readerDoublePage); }}
-              disabled={window.innerWidth < 768}
-              style={{ fontSize: '.78rem', opacity: readingMode === 'page' && !narrow ? 1 : 0, maxWidth: readingMode === 'page' && !narrow ? 60 : 0, overflow: 'hidden', whiteSpace: 'nowrap', background: readerDoublePage ? 'rgba(var(--accent-rgb),0.12)' : undefined, borderColor: readerDoublePage ? 'var(--accent)' : undefined, transition: 'opacity 0.3s ease, max-width 0.3s ease' }}
-            >{readerDoublePage ? '双页' : '单页'}</button>
-            <button className="btn" style={{ fontSize: '.78rem', opacity: narrow ? 0 : 1, maxWidth: narrow ? 0 : 60, overflow: 'hidden', whiteSpace: 'nowrap', transition: 'opacity 0.3s ease, max-width 0.3s ease' }} onClick={() => setSidebarOpen(!sidebarOpen)}>目录</button>
 
             <div data-tauri-no-drag><WindowControls onMinimize={handleMinimize} onMaximize={handleMaximizeToggle} onClose={handleWindowClose} maximized={maximized} /></div>
           </div>
