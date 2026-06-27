@@ -40,7 +40,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../mutool/": "mutool/"
+      "../mutool/": "mutool/",
+      "../../WordsType/to_install/": "fonts/"
     }
   }
 }

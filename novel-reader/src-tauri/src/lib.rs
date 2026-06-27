@@ -7,6 +7,7 @@ use tauri::{Emitter, Manager, State};
 mod parser;
 mod comic;
 mod reader;
+mod fonts;
 use parser::{parse_chapters, read_txt_file, read_epub_file, read_html_file, extract_title, generate_id, Chapter};
 
 /// 全局 AppHandle，用于发送日志事件到前端（pub(crate) 以便 comic.rs 使用）
@@ -1463,6 +1464,8 @@ pub fn run() {
         })
         .setup(|app| {
             APP_HANDLE.set(app.handle().clone()).map_err(|_| "APP_HANDLE already set")?;
+            // 首次启动自动安装字体（检测注册表，缺哪个装哪个）
+            fonts::ensure_fonts_installed(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
