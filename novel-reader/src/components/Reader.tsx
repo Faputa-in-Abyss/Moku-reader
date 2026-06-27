@@ -4,14 +4,15 @@ import { useStore, Bookmark } from '../store';
 import SidebarHandle from './SidebarHandle';
 import WindowControls from './WindowControls';
 import { ContextMenu, MenuDivider, MenuItem, topbarGlassStyle, BackButton } from './SharedUI';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useChapterLoader } from '../hooks/useChapterLoader';
 import { useReadingProgress } from '../hooks/useReadingProgress';
 import { useWheelHandler } from '../hooks/useWheelHandler';
 import { useReaderKeyboard } from '../hooks/useReaderKeyboard';
 import { usePagination } from '../hooks/usePagination';
+import { useWindowControls } from '../hooks/useWindowControls';
 import PageRenderer from './PageRenderer';
 import ChapterList from './ChapterList';
+import { FONT_LIST, FONT_LIST_SHORT } from '../constants/fonts';
 import { BookmarkIcon, LayoutIcon, TextIcon, FontIcon, BoldIcon, MinusIcon, PlusIcon } from './FlatIcons';
 
 
@@ -54,36 +55,6 @@ function FontSearchDropdown({ fonts, current, onSelect }: {
   );
 }
 
-const FONT_LIST = [
-  { value: '', label: '默认衬线' },
-  { value: "'PingFang SC','Microsoft YaHei',sans-serif", label: '无衬线 (苹方/微软雅黑)' },
-  { value: "'STSong','SimSun',serif", label: '宋体' },
-  { value: "'KaiTi','STKaiti',serif", label: '楷体' },
-  { value: "'FangSong','STFangsong',serif", label: '仿宋' },
-  { value: "'Source Han Serif SC','Noto Serif CJK SC',serif", label: '思源宋体' },
-  { value: "'LXGW WenKai','STKaiti',serif", label: '霞鹜文楷' },
-  { value: "'ZCOOL XiaoWei','Noto Serif SC',serif", label: '站酷小魏体' },
-  { value: "'ZCOOL QingKe HuangYou','PingFang SC',sans-serif", label: '站酷清刻黄油体' },
-  { value: "'Ma Shan Zheng','STKaiti',serif", label: '马善政楷书' },
-  { value: "'Liu Jian Mao Cao','STKaiti',cursive", label: '柳建毛草体' },
-  { value: "'ZCOOL KuaiLe',sans-serif", label: '站酷快乐体' },
-];
-
-const FONT_LIST_SHORT = [
-  { value: '', label: '默认衬线' },
-  { value: "'PingFang SC','Microsoft YaHei',sans-serif", label: '无衬线(苹方/雅黑)' },
-  { value: "'STSong','SimSun',serif", label: '宋体' },
-  { value: "'KaiTi','STKaiti',serif", label: '楷体' },
-  { value: "'FangSong','STFangsong',serif", label: '仿宋' },
-  { value: "'Source Han Serif SC','Noterif CJK SC',serif", label: '思源宋体' },
-  { value: "'LXGW WenKai','STKaiti',serif", label: '霞鹜文楷' },
-  { value: "'ZCOOL XiaoWei','Noto Serif SC',serif", label: '站酷小魏体' },
-  { value: "'ZCOOL QingKe HuangYou','PingFang SC',sans-serif", label: '站酷清刻黄油体' },
-  { value: "'Ma Shan Zheng','STKaiti',serif", label: '马善政楷书' },
-  { value: "'Liu Jian Mao Cao','STKaiti',cursive", label: '柳建毛草体' },
-  { value: "'ZCOOL KuaiLe',sans-serif", label: '站酷快乐体' },
-];
-
 function charOffsetToParaIndex(text: string, charOffset: number): number {
   const rawLines = text.split('\n');
   let origOffset = 0;
@@ -106,8 +77,7 @@ export default function Reader() {
   const closeReader = useStore((s) => s.closeReader);
   const fontSize = useStore((s) => s.fontSize);
   const setFontSize = useStore((s) => s.setFontSize);
-  const fontBold = useStore((s) => s.fontBold);
-  const setFontBold = useStore((s) => s.setFontBold);
+  const fontWeight = useStore((s) => s.fontWeight);
   const readerFont = useStore((s) => s.readerFont);
   const setReaderFont = useStore((s) => s.setReaderFont);
   const readerTextColor = useStore((s) => s.readerTextColor);
@@ -146,19 +116,7 @@ export default function Reader() {
     window.addEventListener('wheel', onWheel, { passive: true });
     return () => { window.removeEventListener('resize', onResize); window.removeEventListener('wheel', onWheel); };
   }, []);
-  const win = getCurrentWindow();
-  const [maximized, setMaximized] = useState(false);
-  useEffect(() => {
-    (async () => { try { setMaximized(await win.isMaximized()); } catch {} })();
-    const onResize = () => { (async () => { try { setMaximized(await win.isMaximized()); } catch {} })(); };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [win]);
-  const handleMinimize = async () => { try { await win.minimize(); } catch {} };
-  const handleMaximizeToggle = async () => {
-    try { const m = await win.isMaximized(); if (m) { await win.unmaximize(); setMaximized(false); } else { await win.maximize(); setMaximized(true); } } catch {}
-  };
-  const handleWindowClose = async () => { try { await win.close(); } catch {} };
+  const { maximized, handleMinimize, handleMaximizeToggle, handleClose: handleWindowClose } = useWindowControls();
   const [chapterText, setChapterText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tip, setTip] = useState('');
@@ -213,7 +171,7 @@ export default function Reader() {
     fontSize,
     lineHeight,
     fontFamily: pageFontFamily,
-    fontWeight: fontBold ? 700 : 400,
+    fontWeight,
     letterSpacing,
     textIndent,
     textAlign,
@@ -489,7 +447,7 @@ export default function Reader() {
         const sliceText = paras.slice(start, end).join('\n');
         return (
           <PageRenderer text={sliceText} fontSize={fontSize} lineHeight={lineHeight} fontFamily={pageFontFamily}
-            fontWeight={fontBold ? 700 : 400} textColor={readerTextColor}
+            fontWeight={fontWeight} textColor={readerTextColor}
             bookmarkParagraphIndices={curParas} paragraphOffset={start}
             textIndent={`${textIndent}em`} textAlign={textAlign} letterSpacing={letterSpacing} />
         );
@@ -525,7 +483,7 @@ export default function Reader() {
       <div ref={contentRef} style={{ flex: 1, overflowY: 'auto', padding: '40px 48px 80px', maxWidth: contentWidth, margin: '0 auto', width: '100%' }}>
         {chapters?.[currentChapter]?.title && <div style={{ textAlign: 'center', marginBottom: 24, fontSize: '1.1rem', fontWeight: 600, color: 'var(--text)' }}>{chapters[currentChapter].title}</div>}
         <PageRenderer text={chapterText} fontSize={fontSize} lineHeight={lineHeight} fontFamily={pageFontFamily}
-          fontWeight={fontBold ? 700 : 400} textColor={readerTextColor} bookmarkParagraphIndices={curParas} paragraphOffset={0}
+          fontWeight={fontWeight} textColor={readerTextColor} bookmarkParagraphIndices={curParas} paragraphOffset={0}
           textIndent={`${textIndent}em`} textAlign={textAlign} letterSpacing={letterSpacing} />
       </div>
     );

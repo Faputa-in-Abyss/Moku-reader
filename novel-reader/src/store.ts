@@ -96,8 +96,8 @@ interface AppStore {
   setChapter: (idx: number) => void;
   fontSize: number;
   setFontSize: (s: number) => void;
-  fontBold: boolean;
-  setFontBold: (b: boolean) => void;
+  fontWeight: number;
+  setFontWeight: (w: number) => void;
   readerFont: string;
   setReaderFont: (f: string) => void;
   readerTextColor: string;
@@ -207,10 +207,10 @@ export const useStore = create<AppStore>((set, get) => ({
   setChapter: (idx) => set({ currentChapter: idx }),
   fontSize: 1.2,
   setFontSize: (s) => set({ fontSize: Math.min(2.5, Math.max(0.6, s)) }),
-  fontBold: false,
-  setFontBold: (b) => {
-    localStorage.setItem("nr-font-bold", String(b));
-    set({ fontBold: b });
+  fontWeight: 400,
+  setFontWeight: (w) => {
+    localStorage.setItem("nr-font-weight", String(w));
+    set({ fontWeight: w });
   },
   readerFont: localStorage.getItem("nr-reader-font") || "",
   setReaderFont: (f) => {

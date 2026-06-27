@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
+import { FONT_LIST } from '../constants/fonts';
 import {
   MinusIcon, PlusIcon, BoldIcon, FontIcon,
   LineHeightIcon, LetterSpacingIcon, IndentIcon,
@@ -8,21 +9,6 @@ import {
   SinglePageIcon,
   PaletteIcon,
 } from './FlatIcons';
-
-const FONT_LIST = [
-  { value: '', label: '默认衬线' },
-  { value: "'PingFang SC','Microsoft YaHei',sans-serif", label: '无衬线 (苹方/雅黑)' },
-  { value: "'STSong','SimSun',serif", label: '宋体' },
-  { value: "'KaiTi','STKaiti',serif", label: '楷体' },
-  { value: "'FangSong','STFangsong',serif", label: '仿宋' },
-  { value: "'Source Han Serif SC','Noto Serif CJK SC',serif", label: '思源宋体' },
-  { value: "'LXGW WenKai','STKaiti',serif", label: '霞鹜文楷' },
-  { value: "'ZCOOL XiaoWei','Noto Serif SC',serif", label: '站酷小魏体' },
-  { value: "'ZCOOL QingKe HuangYou','PingFang SC',sans-serif", label: '站酷清刻黄油体' },
-  { value: "'Ma Shan Zheng','STKaiti',serif", label: '马善政楷书' },
-  { value: "'Liu Jian Mao Cao','STKaiti',cursive", label: '柳建毛草体' },
-  { value: "'ZCOOL KuaiLe',sans-serif", label: '站酷快乐体' },
-];
 
 const LINE_HEIGHT_PRESETS = [1.2, 1.5, 1.8, 2.0, 2.5, 3.0];
 const WIDTH_PRESETS = [
@@ -77,7 +63,7 @@ function PresetGroup({ options, current, onChange }: { options: { label: string;
 }
 
 export default function BottomBar() {
-  const { readingMode, setReadingMode, fontSize, setFontSize, fontBold, setFontBold,
+  const { readingMode, setReadingMode, fontSize, setFontSize, fontWeight, setFontWeight,
     readerFont, setReaderFont, lineHeight, setLineHeight, letterSpacing, setLetterSpacing,
     textIndent, setTextIndent, textAlign, setTextAlign, windowSize, setWindowSize,
     readerDoublePage, setReaderDoublePage,
@@ -218,7 +204,24 @@ export default function BottomBar() {
           </Popover>
         )}
       </BtnAnchor>
-      <Btn tip={fontBold ? '取消粗体' : '粗体'} active={fontBold} onClick={() => setFontBold(!fontBold)}><BoldIcon size={18} /></Btn>
+      <BtnAnchor>
+        <Btn tip="字重" onClick={() => togglePopover('fontWeight')}><BoldIcon size={18} /></Btn>
+        {openPopover === 'fontWeight' && (
+          <Popover>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontSize: '.7rem', color: 'var(--text-dim)' }}>字重</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="range" min={0} max={2} step={1} value={[400, 700, 900].indexOf(fontWeight) >= 0 ? [400, 700, 900].indexOf(fontWeight) : 1}
+                  onChange={(e) => { const v = [400, 700, 900][Number(e.target.value)]; if (v) setFontWeight(v); }}
+                  style={{ width: 100, accentColor: 'var(--accent)' }} />
+                <span style={{ fontSize: '.75rem', color: 'var(--accent)', fontWeight: 600, minWidth: 28 }}>
+                  {['常规', '粗体', '特粗'][[400, 700, 900].indexOf(fontWeight)] || '常规'}
+                </span>
+              </div>
+            </div>
+          </Popover>
+        )}
+      </BtnAnchor>
       <Div />
 
       <BtnAnchor>

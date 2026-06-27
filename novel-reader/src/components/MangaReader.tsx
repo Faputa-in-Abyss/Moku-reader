@@ -5,6 +5,7 @@ import { useStore, ComicData } from "../store";
 import SidebarHandle from "./SidebarHandle";
 import WindowControls from "./WindowControls";
 import { topbarGlassStyle, BackButton } from "./SharedUI";
+import { useWindowControls } from "../hooks/useWindowControls";
 
 export default function MangaReader() {
   const currentManga = useStore((s) => s.currentManga);
@@ -35,30 +36,18 @@ export default function MangaReader() {
   const [showAllSidebar, setShowAllSidebar] = useState(false);
   const [narrow, setNarrow] = useState(window.innerWidth < 420);
   const [veryNarrow, setVeryNarrow] = useState(window.innerWidth < 360);
-  const win = getCurrentWindow();
-  const [maximized, setMaximized] = useState(false);
 
   // 合并窗口大小和最大化状态的 resize 监听
   useEffect(() => {
     const check = () => {
       setNarrow(window.innerWidth < 420);
       setVeryNarrow(window.innerWidth < 360);
-      win.isMaximized().then(setMaximized).catch(() => {});
     };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
-  }, [win]);
-
-  const handleMinimize = async () => { try { await win.minimize(); } catch {} };
-  const handleMaximizeToggle = async () => {
-    try {
-      const m = await win.isMaximized();
-      if (m) { await win.unmaximize(); setMaximized(false); }
-      else { await win.maximize(); setMaximized(true); }
-    } catch {}
-  };
-  const handleClose = async () => { try { await win.close(); } catch {} };
+  }, []);
+  const { maximized, handleMinimize, handleMaximizeToggle, handleClose } = useWindowControls();
 
   // D6: Lazy init — call useStore.getState() once at mount, not on every render
   const [sidebarComics, setSidebarComics] = useState(() => useStore.getState().comics);

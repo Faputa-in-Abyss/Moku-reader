@@ -1,9 +1,9 @@
 import React from "react";
 import { useStore } from "../store";
 import { flashThemeFade } from "../App";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SunIcon, MoonIcon, SettingsIcon, BookIcon, ArtIcon } from "./FlatIcons";
 import WindowControls from "./WindowControls";
+import { useWindowControls } from "../hooks/useWindowControls";
 
 export default function Header() {
   const theme = useStore((s) => s.theme);
@@ -27,21 +27,7 @@ export default function Header() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  const win = getCurrentWindow();
-  const [maximized, setMaximized] = React.useState(false);
-
-  React.useEffect(() => {
-    (async () => {
-      try { setMaximized(await win.isMaximized()); } catch {}
-    })();
-    const onResize = () => {
-      (async () => {
-        try { setMaximized(await win.isMaximized()); } catch {}
-      })();
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [win]);
+  const { maximized, handleMinimize, handleMaximizeToggle, handleClose } = useWindowControls();
 
   // 扫描完成监听（放在 Header 独一份）
   React.useEffect(() => {
@@ -58,16 +44,6 @@ export default function Header() {
     })();
     return () => { unlisten?.(); };
   }, []);
-
-  const handleMinimize = async () => { try { await win.minimize(); } catch {} };
-  const handleMaximizeToggle = async () => {
-    try {
-      const m = await win.isMaximized();
-      if (m) { await win.unmaximize(); setMaximized(false); }
-      else { await win.maximize(); setMaximized(true); }
-    } catch {}
-  };
-  const handleClose = async () => { try { await win.close(); } catch {} };
 
   const switchViewMode = (m: "library" | "manga") => {
     if (viewMode === m) return;

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
+import { FONT_OPTIONS, FONT_SIZES } from "../constants/fonts";
 
 export interface LogEntry {
   id: number;
@@ -539,30 +540,6 @@ export default function DebugPanel() {
   );
 }
 
-// ===== FontSettings — 字体设置子面板（普通 select，不折腾） =====
-const FONT_OPTIONS = [
-  { value: "", label: "默认衬线" },
-  { value: "'PingFang SC','Microsoft YaHei',sans-serif", label: "无衬线" },
-  { value: "'STSong','SimSun',serif", label: "宋体" },
-  { value: "'KaiTi','STKaiti',serif", label: "楷体" },
-  { value: "'FangSong','STFangsong',serif", label: "仿宋" },
-  { value: "'Source Han Serif SC','Noto Serif CJK SC',serif", label: "思源宋体" },
-  { value: "'LXGW WenKai','STKaiti',serif", label: "霞鹜文楷" },
-  { value: "'ZCOOL XiaoWei','Noto Serif SC',serif", label: "站酷小魏体" },
-  { value: "'ZCOOL QingKe HuangYou','PingFang SC',sans-serif", label: "站酷清刻黄油体" },
-  { value: "'Ma Shan Zheng','STKaiti',serif", label: "马善政楷书" },
-  { value: "'Liu Jian Mao Cao','STKaiti',cursive", label: "柳建毛草体" },
-  { value: "'ZCOOL KuaiLe',sans-serif", label: "站酷快乐体" },
-];
-const FONT_SIZES = [
-  { value: ".5rem", label: "八号" },    { value: ".55rem", label: "七号" },
-  { value: ".63rem", label: "小六" },   { value: ".7rem",  label: "六号" },
-  { value: ".75rem", label: "小五" },   { value: ".8rem",  label: "五号" },
-  { value: ".88rem", label: "小四" },   { value: ".94rem", label: "四号" },
-  { value: "1rem",   label: "小三" },   { value: "1.06rem",label: "三号" },
-  { value: "1.2rem", label: "小二号" }, { value: "1.38rem",label: "二号" },
-  { value: "1.5rem", label: "小一号" }, { value: "1.75rem",label: "一号" },
-];
 
 function FontSettings() {
   const storeReaderFont = useStore((s) => s.readerFont);
