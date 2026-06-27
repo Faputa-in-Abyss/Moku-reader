@@ -11,6 +11,9 @@ dist3/
 dist4/
 dist5/
 
+# 字体包（不上传 GitHub 节省流量）
+WordsType/to_install/
+
 # 安装包
 Download-package/
 
@@ -25,3 +28,10 @@ vite.config.ts.timestamp-*
 Thumbs.db
 *.log
 .vite/
+W o r d s T y p e / * . z i p 
+ 
+ W o r d s T y p e / * . z i p 
+ 
+ W o r d s T y p e / * . z i p 
+ 
+ 
