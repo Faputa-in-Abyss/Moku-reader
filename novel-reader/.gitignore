@@ -22,3 +22,7 @@ vite.config.ts.timestamp-*
 Thumbs.db
 *.log
 .vite/
+
+# macOS 资源叉文件
+__MACOSX/
+._*
