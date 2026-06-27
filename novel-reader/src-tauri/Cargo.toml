@@ -1,6 +1,6 @@
 [package]
 name = "novel-reader"
-version = "1.0.3"
+version = "1.0.4"
 description = "墨读 - 本地小说阅读器"
 authors = ["novel-reader"]
 edition = "2021"
