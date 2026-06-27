@@ -340,6 +340,8 @@ export default function Reader() {
   const handleClose = () => { readingProgress.saveNow(); chapterLoader.closeCache(); closeReader(); };
   const handleWheel = (e: React.WheelEvent) => {
     if (!chapterText || chapterText === '(没有章节内容)' || chapterText.startsWith('(读取章节失败') || chapterText === '') return;
+    const target = e.target as HTMLElement;
+    if (target.closest('input[type="range"], .reader-bottombar')) return;
     if (readingMode === 'page') {
       if (wheelLockRef.current) return;
       if (e.deltaY > 0) nextPage(); else if (e.deltaY < 0) prevPage();

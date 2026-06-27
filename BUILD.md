@@ -14,30 +14,38 @@
 
 **双击** `build.bat`，等待完成即可。
 
-构建完成后安装包在：
+构建完成后安装包输出到项目根目录下的 `Download-package/`：
+
 ```
-src-tauri\target\release\bundle\msi\    ← .msi 安装包
-src-tauri\target\release\bundle\nsis\   ← .exe 安装包
+Download-package/
+├── 墨读_1.0.3_x64-setup.exe     ← NSIS 安装包
+└── 墨读_v1.0.3_便携版.exe        ← 绿色便携版（解压即用）
 ```
+
+> 旧版本的安装包会被自动清理，避免残留。
+
+## 外部资源
+
+构建时会自动检测以下目录并打包到安装包中（不存在则跳过，不报错）：
+
+- `WordsType/to_install/` — 附加字体文件
+- `mutool/` — mutool 工具（漫画 PDF 渲染）
 
 ## 手动构建
 
 ```bash
-npm install          # 安装前端依赖
-npm run build        # 构建前端
-npm run tauri build  # 构建安装包
+cd novel-reader
+npm install                       # 安装前端依赖
+npx vite build                    # 构建前端
+npx @tauri-apps/cli build         # 编译 Rust + 打包（按 tauri.conf.json targets 输出）
 ```
 
-## 输出说明
+## 常见问题
 
-| 格式 | 位置 | 说明 |
-|------|------|------|
-| `.msi` | `bundle/msi/` | Windows Installer，推荐 |
-| `.exe` (NSIS) | `bundle/nsis/` | 轻量安装程序 |
-| 便携版 | `bundle/msi/` 中提取 | 解压即用 |
-
-## 问题排查
-
-- **构建时下载 crates 慢**：设置 Rust 镜像 `set CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse`
-- **WebView2 错误**：安装 WebView2 运行时
-- **mutool 找不到**：漫画 PDF 导入会报错，不影响小说阅读功能
+- **编译慢**：首次需下载 Rust crate，可设置镜像加速：
+  ```
+  set CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+  ```
+- **linker 错误**：Visual Studio Build Tools "使用 C++ 的桌面开发"未勾选
+- **"unexpected argument 'nsis'"**：不要给 `tauri build` 传 `--bundles` 参数，在 `tauri.conf.json` 的 `bundle.targets` 中配置即可
+- **mutool 缺失**：漫画 PDF 渲染不可用，不影响小说阅读功能
