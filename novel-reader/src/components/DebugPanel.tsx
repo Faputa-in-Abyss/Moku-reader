@@ -491,6 +491,9 @@ export default function DebugPanel() {
                   try { const { invoke } = await import("@tauri-apps/api/core"); const dir: string = await invoke("get_comics_dir"); await invoke("open_file_location", { path: dir }); } catch {}
                 }}>打开渲染目录</button>
                 <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 8 }} onClick={async () => {
+                  try { const { invoke } = await import("@tauri-apps/api/core"); const dir: string = await invoke("get_fonts_dir"); await invoke("open_file_location", { path: dir }); } catch {}
+                }}>打开字体目录</button>
+                <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 8 }} onClick={async () => {
                   const theme = useStore.getState().theme;
                   useStore.getState().setTheme(theme === "light" ? "dark" : "light");
                 }}>切换昼夜主题</button>

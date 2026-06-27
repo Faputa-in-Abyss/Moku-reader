@@ -6,20 +6,6 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-/// 需要安装的字体列表（文件名 → 注册表名）
-const FONTS_TO_CHECK: &[(&str, &str)] = &[
-    ("HarmonyOS_SansSC_Regular.ttf",   "HarmonyOS Sans SC (TrueType)"),
-    ("HarmonyOS_SansSC_Medium.ttf",    "HarmonyOS Sans SC Medium (TrueType)"),
-    ("HarmonyOS_SansSC_Bold.ttf",      "HarmonyOS Sans SC Bold (TrueType)"),
-    ("NotoSerifCJKsc-Regular.otf",     "Noto Serif CJK SC (OpenType)"),
-    ("NotoSerifCJKsc-Medium.otf",      "Noto Serif CJK SC Medium (OpenType)"),
-    ("NotoSerifCJKsc-Bold.otf",        "Noto Serif CJK SC Bold (OpenType)"),
-    ("LXGWWenKai-Regular.ttf",         "LXGW WenKai (TrueType)"),
-    ("LXGWWenKai-Medium.ttf",          "LXGW WenKai Medium (TrueType)"),
-    ("LXGWMarkerGothic-Regular.ttf",   "LXGW Marker Gothic (TrueType)"),
-    ("SmileySans-Oblique.ttf",         "Smiley Sans Oblique (TrueType)"),
-];
-
 /// 确保字体已安装（首次启动时复制到用户字体目录）
 pub fn ensure_fonts_installed(app_handle: &tauri::AppHandle) {
     #[cfg(target_os = "windows")]
@@ -35,46 +21,103 @@ fn ensure_fonts_installed_impl(app_handle: &tauri::AppHandle) {
         let _ = std::fs::create_dir_all(&font_dir);
     }
 
-    // 从资源包中解析字体文件路径
-    let resource_dir = app_handle.path().resource_dir();
-    if resource_dir.is_err() { return; }
-    let resource_dir = resource_dir.unwrap().join("fonts");
+    // 标记文件存在于 user_font_dir，说明历史字体已全部装过
+    let sentinel = font_dir.join(".moku_fonts_done");
+    let sentinel_exists = sentinel.exists();
 
-    if !resource_dir.exists() { return; }
-
+    // 扫描所有来源，只安装新字体
     let mut installed = 0;
-    for (filename, reg_name) in FONTS_TO_CHECK {
-        // 检查注册表是否已安装
-        if is_font_installed(reg_name) {
-            continue;
+
+    // 来源 1：内嵌资源包（如果标记文件存在则跳过 — 这些固定字体不会变）
+    if !sentinel_exists {
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let bundled = resource_dir.join("fonts");
+            if bundled.exists() {
+                installed += install_fonts_from_dir(&bundled, &font_dir);
+            }
         }
+    }
 
-        let src = resource_dir.join(filename);
-        if !src.exists() { continue; }
-
-        let dst = font_dir.join(filename);
-        // 复制到用户字体目录
-        if let Err(e) = std::fs::copy(&src, &dst) {
-            println!("[字体] 复制失败 {}: {}", filename, e);
-            continue;
+    // 来源 2：用户字体目录 WordsType
+    let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    if !local_appdata.is_empty() {
+        let data_dir = std::path::Path::new(&local_appdata).join("novel-reader").join("WordsType");
+        if data_dir.exists() {
+            installed += install_fonts_from_dir(&data_dir, &font_dir);
         }
+    }
 
-        // 写注册表（HKCU 无需管理员）
-        if let Err(e) = register_user_font(reg_name, filename) {
-            println!("[字体] 注册失败 {}: {}", filename, e);
-            let _ = std::fs::remove_file(&dst);
-            continue;
+    // 来源 3：开发环境项目根目录
+    if let Ok(exe_dir) = std::env::current_dir() {
+        let dev_dir = exe_dir.join("WordsType");
+        if dev_dir.exists() {
+            installed += install_fonts_from_dir(&dev_dir, &font_dir);
         }
-
-        installed += 1;
     }
 
     if installed > 0 {
         println!("[字体] 本次新安装 {} 个字体", installed);
         notify_font_change();
-    } else {
-        println!("[字体] 所有字体已存在，跳过");
+        // 写入标记（只标记内置字体装完，用户字体每次仍需扫描）
+        if !sentinel_exists {
+            let _ = std::fs::write(&sentinel, "");
+        }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn install_fonts_from_dir(src: &std::path::Path, font_dir: &std::path::Path) -> usize {
+    let mut count = 0;
+    let entries = match std::fs::read_dir(src) {
+        Ok(e) => e,
+        Err(_) => return 0,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let ext = path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        if ext != "ttf" && ext != "otf" { continue; }
+        if ext == "ttf" && !path.to_string_lossy().to_lowercase().ends_with(".ttf") { continue; }
+        if ext == "otf" && !path.to_string_lossy().to_lowercase().ends_with(".otf") { continue; }
+
+        let filename = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        let reg_name = reg_name_for(filename);
+
+        if is_font_installed(&reg_name) { continue; }
+
+        let dst = font_dir.join(filename);
+        if let Err(e) = std::fs::copy(&path, &dst) {
+            println!("[字体] 复制失败 {}: {}", filename, e);
+            continue;
+        }
+        if let Err(e) = register_user_font(&reg_name, filename) {
+            println!("[字体] 注册失败 {}: {}", filename, e);
+            let _ = std::fs::remove_file(&dst);
+            continue;
+        }
+        count += 1;
+        println!("[字体] 已安装: {}", filename);
+    }
+    count
+}
+
+/// 根据文件名推断注册表名（不带扩展名 + (TrueType)/(OpenType)）
+#[cfg(target_os = "windows")]
+fn reg_name_for(filename: &str) -> String {
+    let ext = std::path::Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    let base = std::path::Path::new(filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(filename);
+    // 去掉可能的后缀如 -Regular, -Bold 等让注册表名更通用
+    let type_tag = if ext == "otf" { " (OpenType)" } else { " (TrueType)" };
+    format!("{}{}", base, type_tag)
 }
 
 #[cfg(target_os = "windows")]

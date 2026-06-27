@@ -674,6 +674,42 @@ fn get_comics_dir() -> String {
     path
 }
 
+#[tauri::command]
+fn get_fonts_dir(state: State<AppState>) -> Result<String, String> {
+    let path = state.data_dir.join("WordsType");
+    fs::create_dir_all(&path).map_err(|e| format!("{:?}", e))?;
+    // 确保 README 存在
+    let readme = path.join("README.txt");
+    if !readme.exists() {
+        let _ = fs::write(&readme, "# 用户字体目录 WordsType
+
+把 .ttf 或 .otf 字体文件放到此目录，
+重启墨读后检测到新字体会自动安装到系统。
+");
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn scan_user_fonts(state: State<AppState>) -> Result<Vec<String>, String> {
+    let fonts_dir = state.data_dir.join("WordsType");
+    let mut fonts = Vec::new();
+    if !fonts_dir.exists() { return Ok(fonts); }
+    let entries = std::fs::read_dir(&fonts_dir).map_err(|e| format!("{:?}", e))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let ext = path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        if ext != "ttf" && ext != "otf" { continue; }
+        if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+            fonts.push(name.to_string());
+        }
+    }
+    fonts.sort();
+    Ok(fonts)
+}
+
 // ===== 阅读引擎命令 (reader.rs) =====
 
 #[tauri::command]
@@ -1517,6 +1553,8 @@ pub fn run() {
             scan_library,
             cancel_scan,
             get_comics_dir,
+            get_fonts_dir,
+            scan_user_fonts,
             // reader engine commands
             open_book_cache,
             close_book_cache,

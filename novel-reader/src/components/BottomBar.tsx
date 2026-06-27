@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../store';
 import { FONT_LIST } from '../constants/fonts';
+import { invoke } from '@tauri-apps/api/core';
 import {
   MinusIcon, PlusIcon, BoldIcon, FontIcon,
   LineHeightIcon, LetterSpacingIcon, IndentIcon,
@@ -72,7 +73,18 @@ export default function BottomBar() {
 
   const [visible, setVisible] = useState(false);
   const [openPopover, setOpenPopover] = useState<string | null>(null);
+  const [userFonts, setUserFonts] = useState<{ value: string; label: string }[]>([]);
   const barRef = useRef<HTMLDivElement>(null);
+
+  // 扫描用户字体目录
+  useEffect(() => {
+    (async () => {
+      try {
+        const names: string[] = await invoke("scan_user_fonts");
+        setUserFonts(names.map((n) => ({ value: `'${n}',sans-serif`, label: n })));
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -230,12 +242,21 @@ export default function BottomBar() {
           <Popover>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ fontSize: '.7rem', color: 'var(--text-dim)' }}>字体</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 216, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 162, overflowY: 'auto' }}>
                 {FONT_LIST.map((f) => (
                   <button key={f.value} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setReaderFont(f.value); setOpenPopover(null); }}
                     style={{ padding: '4px 8px', border: 'none', borderRadius: 'var(--radius-sm)', background: (readerFont || '') === f.value ? 'rgba(var(--accent-rgb),0.12)' : 'transparent', color: (readerFont || '') === f.value ? 'var(--accent)' : 'var(--text)', fontSize: '.75rem', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: f.value || 'serif' }}
                   >{(readerFont || '') === f.value ? '✓ ' : ''}{f.label}</button>
                 ))}
+                {userFonts.length > 0 && (
+                  <><div style={{ width: '100%', height: 1, background: 'var(--border-glass)', margin: '4px 0' }} />
+                  <div style={{ padding: '2px 8px', fontSize: '.68rem', color: 'var(--text-dim)', width: '100%' }}>用户字体</div>
+                  {userFonts.map((f) => (
+                    <button key={f.value} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setReaderFont(f.value); setOpenPopover(null); }}
+                      style={{ padding: '4px 8px', border: 'none', borderRadius: 'var(--radius-sm)', background: (readerFont || '') === f.value ? 'rgba(var(--accent-rgb),0.12)' : 'transparent', color: (readerFont || '') === f.value ? 'var(--accent)' : 'var(--text)', fontSize: '.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >{(readerFont || '') === f.value ? '✓ ' : ''}{f.label}</button>
+                  ))}</>
+                )}
               </div>
             </div>
           </Popover>
