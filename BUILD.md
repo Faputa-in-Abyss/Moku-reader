@@ -18,11 +18,10 @@
 
 ```
 Download-package/
-├── 墨读_1.0.3_x64-setup.exe     ← NSIS 安装包
-└── 墨读_v1.0.3_便携版.exe        ← 绿色便携版（解压即用）
+├── 墨读_1.0.3_full_x64-setup.exe     ← NSIS 安装包
+└── 墨读_v1.0.3_lite_setup.exe       
 ```
 
-> 旧版本的安装包会被自动清理，避免残留。
 
 ## 外部资源
 
