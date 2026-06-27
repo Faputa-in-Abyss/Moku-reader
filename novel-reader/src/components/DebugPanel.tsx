@@ -90,6 +90,9 @@ export default function DebugPanel() {
   const [dpiEditing, setDpiEditing] = useState(false);
   const [dpiEditValue, setDpiEditValue] = useState("150");
   const dpiInputRef = useRef<HTMLInputElement>(null);
+  const dpiTimerRef = useRef<number>(0);
+  const threadTimerRef = useRef<number>(0);
+  const dpiCommittingRef = useRef(false);
   const [renderThreads, setRenderThreads] = useState(1);
   const [threadEditing, setThreadEditing] = useState(false);
   const [threadEditValue, setThreadEditValue] = useState("1");
@@ -198,13 +201,13 @@ export default function DebugPanel() {
     if (autoScroll && logEndRef.current) logEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [logs, autoScroll]);
 
-  // 监听扫描完成事件（放在 initDebugCapture 中避免 StrictMode 重复注册）
-  if (!(window as any).__scanCompleteInit) {
-    (window as any).__scanCompleteInit = true;
+  // 监听扫描完成事件（放在 useEffect 中确保清理）
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
     (async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        await listen<any>("scan-complete", (event) => {
+        unlisten = await listen<any>("scan-complete", (event) => {
           const r = event.payload;
           console.log("[墨读] 扫描完成:", `${r.novels_imported}本小说/${r.comics_imported}本漫画`);
           if (r.errors?.length > 0) {
@@ -214,7 +217,8 @@ export default function DebugPanel() {
         });
       } catch {}
     })();
-  }
+    return () => { unlisten?.(); };
+  }, []); // empty deps — only register once
 
   // 输入框聚焦时全选
   useEffect(() => {
@@ -225,6 +229,8 @@ export default function DebugPanel() {
   }, [dpiEditing]);
 
   const commitDpi = async () => {
+    if (dpiCommittingRef.current) return;
+    dpiCommittingRef.current = true;
     const v = Math.min(300, Math.max(72, Math.round(Number(dpiEditValue)) || 150));
     setRenderDpi(v);
     setDpiEditValue(String(v));
@@ -236,6 +242,7 @@ export default function DebugPanel() {
     } catch (err) {
       console.error("[墨读] 设置渲染精度失败:", err);
     }
+    dpiCommittingRef.current = false;
   };
 
   const handleImportFolder = async () => {
@@ -374,17 +381,20 @@ export default function DebugPanel() {
                 </div>
                 <input
                   type="range" min={72} max={300} step={1} value={renderDpi}
-                  onChange={async (e) => {
+                  onChange={(e) => {
                     const v = Number(e.target.value);
                     setRenderDpi(v);
                     setDpiEditValue(String(v));
-                    try {
-                      const { invoke } = await import("@tauri-apps/api/core");
-                      await invoke("set_render_dpi", { dpi: v });
-                      console.log(`[墨读] 渲染精度已设为 ${v} DPI（重启后生效，仅新导入）`);
-                    } catch (err) {
-                      console.error("[墨读] 设置渲染精度失败:", err);
-                    }
+                    clearTimeout(dpiTimerRef.current);
+                    dpiTimerRef.current = window.setTimeout(async () => {
+                      try {
+                        const { invoke } = await import("@tauri-apps/api/core");
+                        await invoke("set_render_dpi", { dpi: v });
+                        console.log(`[墨读] 渲染精度已设为 ${v} DPI（重启后生效，仅新导入）`);
+                      } catch (err) {
+                        console.error("[墨读] 设置渲染精度失败:", err);
+                      }
+                    }, 300);
                   }}
                   style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
                 />
@@ -419,11 +429,14 @@ export default function DebugPanel() {
                 </div>
                 <input
                   type="range" min={1} max={16} step={1} value={renderThreads}
-                  onChange={async (e) => {
+                  onChange={(e) => {
                     const v = Number(e.target.value);
                     setRenderThreads(v);
                     setThreadEditValue(String(v));
-                    try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_threads", { threads: v }); console.log(`[墨读] 渲染线程已设为 ${v}`); } catch {}
+                    clearTimeout(threadTimerRef.current);
+                    threadTimerRef.current = window.setTimeout(async () => {
+                      try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("set_render_threads", { threads: v }); console.log(`[墨读] 渲染线程已设为 ${v}`); } catch {}
+                    }, 300);
                   }}
                   style={{ width: "100%", cursor: "pointer", accentColor: "var(--accent)" }}
                 />

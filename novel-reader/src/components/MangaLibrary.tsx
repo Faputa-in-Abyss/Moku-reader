@@ -497,14 +497,8 @@ if (sortField === field) {
                   return;
                 }
                 // lazy load single comic
-                try {
-                  const { invoke } = await import("@tauri-apps/api/core");
-                  const lib: ComicData[] = await invoke("get_comic_library");
-                  const t3 = performance.now();
-                  console.log(`[perf] handleOpen: get_comic_library 耗时 ${(t3 - t1).toFixed(1)}ms`);
-                  const found = lib.find(c => c.id === comic.id);
-                  if (found) openMangaReader(found);
-                } catch {}
+                const fromStore = useStore.getState().comics.find(c => c.id === comic.id);
+                if (fromStore) openMangaReader(fromStore);
               };
               return (
               <div
@@ -525,7 +519,7 @@ if (sortField === field) {
                 <div className={`book-cover${selectedIds.has(comic.id) ? " cover-selected" : ""}`}>
                   <FavStar show={!!(optimisticFav[comic.id] ?? comic.favorite)} bursting={bursting.has(comic.id)} />
                   <MangaCardCover comicId={comic.id} hasIcon={!!comic.book_icon} />
-                  <div className="book-cover-icon">{comic.book_icon || getMangaIcon(comic)}</div>
+                  <div className="book-cover-icon">{comic.book_icon}</div>
                   <div className="book-title">{comic.title}</div>
                   <ProgressBar pct={comic.total_pages > 0 ? (comic.current_page / comic.total_pages) * 100 : 0} />
                   <div style={{ fontSize: ".68rem", color: "var(--text-dim)", marginTop: 2, textAlign: "center" }}>
@@ -977,9 +971,6 @@ function coverCacheSet(id: string, val: string) {
   }
   coverCache.set(id, val);
 }
-function coverCacheHas(id: string): boolean {
-  return coverCache.get(id) !== undefined;
-}
 
 function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolean }) {
   const [cover, setCover] = useState<string | null>(() => {
@@ -987,7 +978,7 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
     return coverCacheGet(comicId) ?? null;
   });
   const ref = useRef<HTMLDivElement>(null);
-  const loadedRef = useRef(coverCacheHas(comicId));
+  const loadedRef = useRef(coverCache.has(comicId));
 
   useEffect(() => {
     // 用户设置了 emoji 图标时，不显示第一页封面
@@ -997,7 +988,7 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
     }
 
     // 内存中已有缓存，无需任何操作
-    if (coverCacheHas(comicId)) {
+    if (coverCache.has(comicId)) {
       loadedRef.current = true;
       return;
     }
@@ -1064,10 +1055,4 @@ function MangaCardCover({ comicId, hasIcon }: { comicId: string; hasIcon: boolea
   }
 
   return <div ref={ref} style={{ position: 'absolute', inset: 0, zIndex: 1 }} />;
-}
-
-function getMangaIcon(comic: ComicMeta): string {
-  if (comic.book_icon) return comic.book_icon;
-  if (comic.source_type === "pdf") return "";
-  return "";
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { useStore } from "../store";
+import { useStore, ComicData } from "../store";
 import SidebarHandle from "./SidebarHandle";
 import WindowControls from "./WindowControls";
 import { topbarGlassStyle, BackButton } from "./SharedUI";
@@ -64,13 +64,14 @@ export default function MangaReader() {
   const [sidebarComics, setSidebarComics] = useState(() => useStore.getState().comics);
   const [comicSearch, setComicSearch] = useState("");
   // 同系列章节列表
+  const comics = useStore((s) => s.comics);
   const seriesChapters = useMemo(() => {
     if (!manga || !manga.series_id) return [];
     const ids = seriesMap[manga.series_id] || [];
     return ids
-      .map((id) => useStore.getState().comics.find((c) => c.id === id))
+      .map((id) => comics.find((c) => c.id === id))
       .filter((c): c is typeof manga => c != null);
-  }, [manga, seriesMap]);
+  }, [manga, seriesMap, comics]);
   const currentSeriesIdx = useMemo(() => {
     if (!manga || !manga.series_id) return -1;
     return seriesChapters.findIndex((c) => c.id === manga.id);
@@ -114,6 +115,9 @@ export default function MangaReader() {
       newPages[idx] = getPageUrl(manga, idx);
     }
     setLoadedPages((prev) => ({ ...prev, ...newPages }));
+    return () => {
+      if (manga?.id) setLoadedPages({});
+    };
   }, [manga?.id, mangaCurrentPage, mangaViewMode, totalPages]);
 
   // 滚动模式：按可见区域加载，直接构造 URL
@@ -264,7 +268,7 @@ export default function MangaReader() {
     setIsDragging(false);
   }, []);
 
-  const goToChapter = useCallback((comic: any, page: number, label: string) => {
+  const goToChapter = useCallback((comic: ComicData, page: number, label: string) => {
     useStore.setState({ currentManga: comic, mangaCurrentPage: page });
     setLoadedPages({});
     showTip(`${label}：${comic.title}`);
@@ -664,7 +668,7 @@ export default function MangaReader() {
                   border: "1px solid transparent",
                 }}>
                   <SidebarCover comicId={c.id} />
-                  {c.book_icon || getMangaIcon(c)}
+                  {c.book_icon}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: ".78rem", color: c.id === manga?.id ? "var(--accent)" : "var(--text)", fontWeight: c.id === manga?.id ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>
@@ -772,10 +776,4 @@ function PageImg({ src, style, mangaId, pageIdx: pageIndex, sourceType }: { src?
     return <div style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(var(--accent-rgb),0.03)", borderRadius: 2, color: "var(--text-dim)", fontSize: ".75rem" }}>渲染中…</div>;
   }
   return <img src={imgSrc} alt="page" style={{ ...style, display: "block", borderRadius: 2 }} draggable={false} onError={handleError} />;
-}
-
-function getMangaIcon(c: { book_icon?: string; source_type?: string }): string {
-  if (c.book_icon) return c.book_icon;
-  if (c.source_type === "pdf") return "";
-  return "";
 }

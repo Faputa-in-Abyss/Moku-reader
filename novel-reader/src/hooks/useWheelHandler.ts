@@ -3,7 +3,7 @@ import { useRef, useCallback } from 'react';
 type WheelState = 'idle' | 'accumulating' | 'animating';
 
 const THRESHOLD = 120;
-const ANIMATION_DURATION = 280;
+const ANIMATION_DURATION = 30;
 
 export function useWheelHandler() {
   const stateRef = useRef<WheelState>('idle');
@@ -38,7 +38,7 @@ export function useWheelHandler() {
         accumRef.current = 0;
         // 动画：平移+淡出
         if (containerEl) {
-          containerEl.style.transition = 'transform 0.25s cubic-bezier(.25,.46,.45,.94)';
+          containerEl.style.transition = 'transform 0.03s ease';
           containerEl.style.transform = 'translateY(60px)';
         }
         clearTimeout(animTimerRef.current);
@@ -59,7 +59,7 @@ export function useWheelHandler() {
         stateRef.current = 'animating';
         accumRef.current = 0;
         if (containerEl) {
-          containerEl.style.transition = 'transform 0.25s cubic-bezier(.25,.46,.45,.94)';
+          containerEl.style.transition = 'transform 0.03s ease';
           containerEl.style.transform = 'translateY(-60px)';
         }
         clearTimeout(animTimerRef.current);

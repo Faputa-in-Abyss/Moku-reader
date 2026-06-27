@@ -387,7 +387,7 @@ export default function Reader() {
       if (e.deltaY > 0) nextPage(); else if (e.deltaY < 0) prevPage();
       if (e.deltaY !== 0) {
         wheelLockRef.current = true;
-        setTimeout(() => { wheelLockRef.current = false; }, 220);
+        setTimeout(() => { wheelLockRef.current = false; }, 30);
       }
       return;
     }
