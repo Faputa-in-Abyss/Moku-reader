@@ -325,19 +325,15 @@ export default function DebugPanel() {
               </div>
             </div>
             <div style={{ fontWeight: 600, marginTop: 18, marginBottom: 10, color: "var(--text)", fontSize: ".88rem" }}>系统资源</div>
-            {/* 应用占用内存 */}
+            {/* 后端占用内存 */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
-                <span>应用占用内存</span>
+                <span>后端占用内存</span>
                 <span>{procMem > 0 ? fmtBytes(procMem * 1024 * 1024) : "—"}</span>
               </div>
             </div>
             {/* 本地存储 */}
             <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
-                <span>应用本身</span>
-                <span>{storageApp > 0 ? fmtMB(storageApp) : "—"}</span>
-              </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--text-dim)", marginBottom: 4 }}>
                 <span>小说漫画</span>
                 <span>{storageContent > 0 ? fmtMB(storageContent) : "—"}</span>
@@ -489,10 +485,10 @@ export default function DebugPanel() {
                 </div>
                 <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 12 }} onClick={async () => {
                   try { const { invoke } = await import("@tauri-apps/api/core"); const dir: string = await invoke("get_comics_dir"); await invoke("open_file_location", { path: dir }); } catch {}
-                }}>打开渲染目录</button>
+                }}>渲染目录</button>
                 <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 8 }} onClick={async () => {
                   try { const { invoke } = await import("@tauri-apps/api/core"); const dir: string = await invoke("get_fonts_dir"); await invoke("open_file_location", { path: dir }); } catch {}
-                }}>打开字体目录</button>
+                }}>导入字体</button>
                 <button className="btn" style={{ width: "100%", justifyContent: "center", fontSize: ".78rem", marginTop: 8 }} onClick={async () => {
                   const theme = useStore.getState().theme;
                   useStore.getState().setTheme(theme === "light" ? "dark" : "light");
